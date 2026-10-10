@@ -13,7 +13,7 @@ set -e
 SRC_DIR=$(cd "$(dirname "$0")" && pwd)
 KERNEL=${1:-kernel8-32.img}
 OUT=$SRC_DIR/sdcard_out
-VERSION=$(git -C "$SRC_DIR" describe --tags --always --dirty 2>/dev/null || echo dev)
+VERSION=$("$SRC_DIR/tools/version.sh")
 
 if [ ! -f "$SRC_DIR/$KERNEL" ] && [ ! -f "$KERNEL" ]
 then

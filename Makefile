@@ -14,7 +14,7 @@ endif
 
 include third_party/circle-stdlib/Config.mk
 
-BMA800XL_VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+BMA800XL_VERSION ?= $(shell tools/version.sh)
 A8_DIR := third_party/atari800/src
 A8_VERSION := $(shell grep -m1 '^AC_INIT' third_party/atari800/configure.ac | cut -d, -f2 | tr -d ' []')
 
