@@ -1,0 +1,21 @@
+# Build output
+build/
+*.o
+*.d
+*.a
+*.elf
+*.lst
+*.map
+*.img
+.board
+
+# SD card staging and release archives
+sdcard_out/
+bma800xl-*.zip
+
+# PC test harness
+tools/hostsim/build/
+tools/hostsim/out/
+
+# Raspberry Pi firmware shipped on the SD card
+!sdcard/firmware/start.elf

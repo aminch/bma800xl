@@ -1,0 +1,99 @@
+# BMA800XL
+
+BMA800XL is a bare metal Atari 800XL emulator for the Raspberry Pi 3. It runs
+the [atari800](https://github.com/atari800/atari800) emulator directly on the
+hardware, with no Linux underneath, using the same approach as
+[BMC64](https://github.com/randyrossi/bmc64) does for the Commodore 64.
+
+- Boots straight into Atari BASIC
+- Frames locked to the display's refresh for perfectly smooth scrolling (50 Hz
+  for PAL, 60 Hz for NTSC), with the sound kept in step
+- Low latency between input and picture/sound
+- No shutdown needed: just switch it off (disk writes are flushed every second)
+- Runs without any ROM files, using the free Altirra OS and BASIC built into
+  atari800; real Atari ROMs can be added
+- Emulates the 400/800, 1200XL, 800XL, 130XE, 320XE, XEGS and 5200
+- Disk images (ATR, ATX, XFD, DCM, PRO), programs (XEX, COM, EXE, BAS),
+  cartridges (CAR, ROM, BIN) and tapes (CAS)
+- USB keyboards and gamepads, the numeric keypad as a joystick, and real
+  Atari joysticks wired to the GPIO header
+- atari800's built in menus for everything else: press F1
+
+## Supported hardware
+
+Raspberry Pi 3 Model B, B+ and A+, and the Raspberry Pi Zero 2 W (all use the
+same kernel, `kernel8-32.img`). Video and sound go out over HDMI; sound can also
+go to the 3.5mm jack.
+
+## Getting started
+
+1. Format an SD card as FAT32.
+2. Copy the contents of a release zip (or of `sdcard_out/` after building) to
+   the root of the card.
+3. Put your Atari files on the card. The `disks`, `programs`, `carts` and
+   `tapes` folders are there for them, but any folder works.
+4. Boot the Pi with a USB keyboard connected. You get the BASIC `READY`
+   prompt. Press **F1** for the menu, then *Run Atari Program* or *Disk
+   Management* to load something.
+
+The display is set to 720p at 50 Hz to suit a PAL Atari, which is the default.
+For an NTSC Atari, see the [User Guide](docs/USER_GUIDE.md#pal-and-ntsc).
+
+## Keys
+
+| Key            | Does                                                 |
+|----------------|------------------------------------------------------|
+| F1             | Menu                                                 |
+| F2 / F3 / F4   | Option / Select / Start                              |
+| F5             | Reset (Shift+F5: power off and on)                   |
+| F6             | Help                                                 |
+| F7, Pause      | Break                                                |
+| F11            | On-screen keyboard                                   |
+| F12            | Turbo on/off                                         |
+| Alt+D, Alt+C, Alt+R, Alt+S, Alt+L | Disks, Cartridge, Run program, Save state, Load state |
+| Numeric keypad | Joystick 1 (8/2/4/6 and diagonals, 0 or 5 to fire)   |
+| ` (backtick) or Windows key | Atari (inverse video) key               |
+
+Gamepads are joysticks 1 to 4: the D-pad or left stick moves, **A** fires,
+**B** is Space, **Y** is Return, **X** is Option, **Select**/**Start** are the
+Atari's Select/Start. **Home**, or **Select+Start** together, opens the menu,
+where the D-pad moves, **A** chooses and **B** goes back.
+
+See the [User Guide](docs/USER_GUIDE.md) for all the details, including the
+options in `cmdline.txt` and the GPIO joystick wiring.
+
+## Building
+
+```
+./build.sh
+```
+
+builds everything and puts the SD card files in `sdcard_out/`. See
+[docs/BUILDING.md](docs/BUILDING.md).
+
+## Updating atari800
+
+The atari800 sources are used unmodified, from a git submodule pinned to a
+release tag. Everything specific to BMA800XL lives in `src/`, so moving to a
+new atari800 release is usually a matter of changing the submodule and
+rebuilding. See [docs/UPDATING.md](docs/UPDATING.md).
+
+## How it fits together
+
+```
+src/main.cpp, kernel.cpp   Circle kernel: USB, GPIO, SD card; runs atari800 on core 1
+src/fbl.cpp                Display (dispmanx layer, optional CRT shader), from BMC64
+src/vchiqsound*.cpp        Sound over HDMI or the headphone jack, from BMC64
+src/host.h                 What the kernel offers the emulator
+src/port/                  atari800's platform layer (PLATFORM_* functions),
+                           its config.h and the list of atari800 sources
+third_party/atari800       atari800, unmodified (submodule)
+third_party/circle-stdlib  Circle and newlib (submodule)
+tools/hostsim              Runs the emulator port on a PC for testing
+```
+
+## Licence
+
+BMA800XL is free software under the GNU General Public License version 3; see
+[LICENSE](LICENSE). It includes software from other projects under their own
+licences; see [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).

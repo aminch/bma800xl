@@ -1,0 +1,154 @@
+//
+// kernel.h
+//
+// The Circle kernel for BMA800XL: brings up the hardware, then runs the
+// atari800 emulator on core 1 while core 0 services USB.
+//
+// This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
+// Raspberry Pi. See LICENSE for licensing details.
+//
+
+#ifndef BMA800XL_KERNEL_H_
+#define BMA800XL_KERNEL_H_
+
+#include <SDCard/emmc.h>
+#include <circle/actled.h>
+#include <circle/devicenameservice.h>
+#include <circle/exceptionhandler.h>
+#include <circle/gpiomanager.h>
+#include <circle/gpiopin.h>
+#include <circle/input/console.h>
+#include <circle/interrupt.h>
+#include <circle/koptions.h>
+#include <circle/logger.h>
+#include <circle/memory.h>
+#include <circle/multicore.h>
+#include <circle/nulldevice.h>
+#include <circle/sched/scheduler.h>
+#include <circle/serial.h>
+#include <circle/spinlock.h>
+#include <circle/timer.h>
+#include <circle/types.h>
+#include <circle/usb/usbgamepad.h>
+#include <circle/usb/usbhcidevice.h>
+#include <circle/usb/usbkeyboard.h>
+#include <fatfs/ff.h>
+#include <vc4/vchiq/vchiqdevice.h>
+
+#include "fbl.h"
+#include "host.h"
+#include "options.h"
+#include "vchiqsound.h"
+
+#define MAX_KEYBOARDS 4
+
+enum TShutdownMode { ShutdownNone, ShutdownHalt, ShutdownReboot };
+
+// Runs the emulator on core 1. Cores 2 and 3 are left idle.
+class CEmulatorCore : public CMultiCoreSupport {
+public:
+  CEmulatorCore(CMemorySystem *pMemorySystem);
+  void Run(unsigned nCore) override;
+  void Launch(void);
+
+private:
+  volatile bool m_bLaunch;
+};
+
+class CKernel {
+public:
+  CKernel(void);
+  ~CKernel(void);
+
+  bool Initialize(void);
+  TShutdownMode Run(void);
+
+  // Called (through host.h) from the emulator on core 1.
+  int VideoInit(int width, int height, uint8_t **pixels, int *pitch);
+  void VideoSetView(int x, int y, int w, int h, double aspect);
+  void VideoSetPalette(int index, uint32_t rgb);
+  void VideoUpdatePalette(void);
+  void VideoPresent(int wait_vsync);
+  unsigned SoundOpen(unsigned freq, int channels, unsigned latency_frames);
+  void SoundClose(void);
+  unsigned SoundFreeFrames(void);
+  void SoundWrite(const int16_t *samples, unsigned frames);
+  int KeyEvent(int *usage, int *pressed);
+  int KeyDown(int usage);
+  unsigned KeyModifiers(void);
+  int PadState(int pad);
+  int GpioJoystick(int port);
+  double Time(void);
+  void Reboot(void);
+
+  static CKernel *Get(void) { return s_pThis; }
+
+private:
+  static void KeyStatusHandlerRaw(unsigned char ucModifiers,
+                                  const unsigned char RawKeys[6], void *pArg);
+  static void KeyboardRemovedHandler(CDevice *pDevice, void *pContext);
+  static void GamePadStatusHandler(unsigned nDeviceIndex,
+                                   const TGamePadState *pState);
+  static void GamePadRemovedHandler(CDevice *pDevice, void *pContext);
+
+  void SetupUSBKeyboards(void);
+  void SetupUSBGamePads(void);
+  void SetupGPIOJoysticks(void);
+  void PushKeyEvent(int usage, int pressed);
+  void UpdateMergedKeys(void);
+
+private:
+  // Order matters: members are constructed in this order.
+  CActLED mActLED;
+  CKernelOptions mKernelOptions;
+  Options mOptions;
+  CDeviceNameService mDeviceNameService;
+  CNullDevice mNullDevice;
+  CExceptionHandler mExceptionHandler;
+  CInterruptSystem mInterrupt;
+  CSerialDevice mSerial;
+  CTimer mTimer;
+  CLogger mLogger;
+  CScheduler mScheduler;
+  CGPIOManager mGPIOManager;
+  CVCHIQDevice mVCHIQ;
+  CEMMCDevice mEMMC;
+  FATFS mFileSystem;
+  CUSBHCIDevice mUSBHCI;
+  CConsole mConsole;
+  CEmulatorCore mEmulatorCore;
+
+  FrameBufferLayer mFrameBuffer;
+  VchiqSound *mSound;
+  int mSoundChannels;
+  int mVolume;
+  TVCHIQSoundDestination mAudioOut;
+
+  // Keyboards. Each reports its own set of pressed keys; the emulator sees
+  // the union of all of them.
+  CUSBKeyboardDevice *m_pKeyboard[MAX_KEYBOARDS];
+  unsigned m_KeyboardIndex[MAX_KEYBOARDS];
+  unsigned char m_KeyboardModifiers[MAX_KEYBOARDS];
+  unsigned char m_KeyboardKeys[MAX_KEYBOARDS][6];
+  unsigned char m_KeyDown[256];
+  unsigned char m_MergedModifiers;
+
+  // Keyboard events from the USB interrupt (core 0) to the emulator (core 1).
+  // Single producer, single consumer.
+  enum { KEY_QUEUE_SIZE = 128 };
+  volatile unsigned m_KeyQueueHead;
+  volatile unsigned m_KeyQueueTail;
+  unsigned short m_KeyQueue[KEY_QUEUE_SIZE];
+
+  CUSBGamePadDevice *m_pGamePad[HOST_PADS];
+  volatile int m_PadState[HOST_PADS];
+
+  bool m_bGPIOJoysticks;
+  CGPIOPin *m_pJoyPins[2][5];
+
+  CSpinLock m_Lock;
+
+  static CKernel *s_pThis;
+};
+
+#endif

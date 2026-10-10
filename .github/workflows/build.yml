@@ -1,0 +1,38 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends texinfo zip imagemagick python3-pil
+
+      - name: Cache Arm GNU Toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bma800xl/toolchains
+          key: arm-gnu-toolchain-15.2.rel1
+
+      - name: Test the emulator port on the PC
+        run: tools/hostsim/run_tests.sh
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Upload SD card files
+        uses: actions/upload-artifact@v4
+        with:
+          name: bma800xl-sdcard
+          path: sdcard_out/
