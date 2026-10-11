@@ -1,6 +1,6 @@
 # BMA800XL
 
-BMA800XL is a bare metal Atari 800XL emulator for the Raspberry Pi 3. It runs
+BMA800XL is a bare metal Atari 800XL emulator for the Raspberry Pi 2 and 3. It runs
 the [atari800](https://github.com/atari800/atari800) emulator directly on the
 hardware, with no Linux underneath, using the same approach as
 [BMC64](https://github.com/randyrossi/bmc64) does for the Commodore 64.
@@ -24,8 +24,10 @@ hardware, with no Linux underneath, using the same approach as
 
 ## Supported hardware
 
-Raspberry Pi 3 Model B, B+ and A+, and the Raspberry Pi Zero 2 W (all use the
-same kernel, `kernel8-32.img`). Video and sound go out over HDMI; sound can also
+Raspberry Pi 3 Model B, B+ and A+, and the Raspberry Pi Zero 2 W
+(`kernel8-32.img`), and the Raspberry Pi 2 Model B (`kernel7.img`). The card
+has both kernels and each Pi starts its own. Video and sound go out over
+HDMI; sound can also
 go to the 3.5mm jack.
 
 ## Getting started
@@ -73,7 +75,8 @@ options in `cmdline.txt` and the GPIO joystick wiring.
 ./build_sdcard.sh
 ```
 
-builds everything and stages the SD card files in `build/sdcard/`. See
+builds everything (the kernels for both boards; `./build_sdcard.sh pi3` or
+`pi2` builds one) and stages the SD card files in `build/sdcard/`. See
 [docs/BUILDING.md](docs/BUILDING.md).
 
 ## Updating atari800

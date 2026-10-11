@@ -1,14 +1,17 @@
 #!/bin/bash
 #
 # Builds the third party libraries (circle-stdlib: Circle and newlib, and the
-# Circle addons) and then the BMA800XL kernel, kernel8-32.img.
+# Circle addons) and then the BMA800XL kernel for one board:
 #
-#   ./make_all.sh [pi3] [--skip-patches]
+#   ./make_all.sh [pi2|pi3] [--skip-patches]
 #
-# The Pi 3 kernel also runs on the Pi Zero 2 W. --skip-patches leaves Circle
-# and atari800 as they are instead of resetting them and applying
-# src/patches/ again.
-# Run clean_all.sh first for a completely fresh build.
+#   pi3 (default)  kernel8-32.img: Pi 3 and Pi Zero 2 W
+#   pi2            kernel7.img: Pi 2
+#
+# --skip-patches leaves Circle and atari800 as they are instead of resetting
+# them and applying src/patches/ again.
+# Run clean_all.sh first for a completely fresh build, and before building
+# for a different board: the libraries are built for one board at a time.
 #
 
 set -e
@@ -23,13 +26,17 @@ SKIP_PATCHES=0
 for arg in "$@"
 do
     case "$arg" in
-        pi3) BOARD=$arg ;;
+        pi2|pi3) BOARD=$arg ;;
         --skip-patches) SKIP_PATCHES=1 ;;
-        *) echo "Usage: $0 [pi3] [--skip-patches]" >&2; exit 1 ;;
+        *) echo "Usage: $0 [pi2|pi3] [--skip-patches]" >&2; exit 1 ;;
     esac
 done
 BOARD=${BOARD:-pi3}
-RASPI=3
+RASPI=${BOARD#pi}
+case "$RASPI" in
+    2) KERNEL=kernel7.img ;;
+    3) KERNEL=kernel8-32.img ;;
+esac
 
 if [ ! -f "$SRC_DIR/sdcard/config.txt" ]
 then
@@ -45,6 +52,14 @@ do
         exit 1
     fi
 done
+
+# newlib and the addons would keep objects built for the other board.
+BUILT_FOR=$(sed -n 's/^RASPPI = //p' "$CIRCLE_STDLIB/Config.mk" 2>/dev/null || true)
+if [ -n "$BUILT_FOR" ] && [ "$BUILT_FOR" != "$RASPI" ]
+then
+    echo "circle-stdlib is built for the Pi $BUILT_FOR. Run ./clean_all.sh first." >&2
+    exit 1
+fi
 
 source "$SRC_DIR/get_gnu_toolchain.sh"
 
@@ -105,4 +120,4 @@ cd "$SRC_DIR"
 make clean >/dev/null
 make -j"$(nproc)"
 echo
-echo "Built kernel8-32.img for $BOARD"
+echo "Built $KERNEL for $BOARD"

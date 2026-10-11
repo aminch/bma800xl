@@ -33,28 +33,36 @@ or, in an existing clone, `git submodule update --init --recursive`.
 ```
 
 builds everything from clean and stages the boot partition in
-`build/sdcard`. Copy the contents of that folder to the root of a FAT32
+`build/sdcard`, with a kernel for each board: `kernel8-32.img` for the Pi 3
+and Pi Zero 2 W, `kernel7.img` for the Pi 2. `./build_sdcard.sh pi3` or
+`./build_sdcard.sh pi2` builds just one. Copy the contents of that folder to the root of a FAT32
 formatted SD card.
 
 While developing, `./build_sdcard.sh --skip-patches` keeps the third party
 libraries already built and only rebuilds the kernel, which takes seconds.
-With [networking](USER_GUIDE.md#networking-and-the-web-ui) on, a new
-`kernel8-32.img` can then be uploaded to the Pi from the web UI and the Pi
+The libraries are built for one board at a time, so without a board it
+rebuilds the kernel for the board built last; a board they aren't built for
+is built from clean. With
+[networking](USER_GUIDE.md#networking-and-the-web-ui) on, a new kernel can
+then be uploaded to the Pi from the web UI and the Pi
 rebooted from there, without touching the SD card.
 
 ## The individual steps
 
 1. `./clean_all.sh` cleans everything, including the third party builds,
    and resets Circle to its pinned revision.
-2. `./make_all.sh [pi3] [--skip-patches]` applies `src/patches/` to Circle,
-   builds circle-stdlib (Circle and newlib) and the Circle addons, then the
-   kernel, `kernel8-32.img`. It only needs running again after
-   `clean_all.sh` or a change to the patches or circle-stdlib.
+2. `./make_all.sh [pi2|pi3] [--skip-patches]` applies `src/patches/` to
+   Circle, builds circle-stdlib (Circle and newlib) and the Circle addons
+   for one board (pi3 if none is given), then the kernel: `kernel8-32.img`
+   for pi3, `kernel7.img` for pi2. It only needs running again after
+   `clean_all.sh` or a change to the patches or circle-stdlib. To change
+   board, run `clean_all.sh` first (make_all.sh refuses otherwise).
 3. `source get_gnu_toolchain.sh && make` rebuilds just the kernel.
 4. `./make_wifi_firmware.sh DIR` puts the Wi-Fi firmware in `DIR/firmware`
    (`build_sdcard.sh` does this).
 
-The Pi 3 kernel also runs on the Pi Zero 2 W.
+The Pi 3 kernel also runs on the Pi Zero 2 W. `config.txt` has a section
+per board that picks its kernel.
 
 ## Testing on a PC
 

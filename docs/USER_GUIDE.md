@@ -4,7 +4,7 @@
 
 | File or folder   | What it is                                                 |
 |------------------|------------------------------------------------------------|
-| `kernel8-32.img` | The emulator                                               |
+| `kernel8-32.img`, `kernel7.img` | The emulator for the Pi 3 and Zero 2 W, and for the Pi 2 |
 | `bootcode.bin`, `start.elf`, `fixup.dat` | Raspberry Pi firmware              |
 | `config.txt`     | Raspberry Pi settings: video mode                          |
 | `cmdline.txt`    | Emulator options (see below)                               |
@@ -211,7 +211,7 @@ The web UI has:
 
 Uploads can't overwrite `cmdline.txt`, `config.txt` or `wpa_supplicant.conf`
 (edit them instead), or anything in `firmware`. Everything else, including
-`kernel8-32.img`, can be replaced, so a new build of BMA800XL can be
+the kernels, can be replaced, so a new build of BMA800XL can be
 uploaded and started with **Reboot**. A mistake in `cmdline.txt` or
 `config.txt` can stop the Pi starting, and then needs the card in a computer
 (the `.bak` copy makes that easy).

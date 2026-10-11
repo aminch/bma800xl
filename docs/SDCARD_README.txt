@@ -1,8 +1,8 @@
-BMA800XL - bare metal Atari 800XL emulator for the Raspberry Pi 3
-==================================================================
+BMA800XL - bare metal Atari 800XL emulator for the Raspberry Pi 2 and 3
+========================================================================
 
 Copy everything here to the root of a FAT32 SD card and boot a Raspberry
-Pi 3 (or Zero 2 W) from it, with a USB keyboard or gamepad connected.
+Pi 3, Zero 2 W or Pi 2 from it, with a USB keyboard or gamepad connected.
 
 It starts in Atari BASIC. Press F1 for the BMA800XL menu: network,
 controllers, video and sound settings, and the Emulator Menu (atari800's),

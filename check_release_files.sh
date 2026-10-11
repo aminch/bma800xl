@@ -10,15 +10,21 @@
 
 SRC_DIR=$(cd "$(dirname "$0")" && pwd)
 
+# The kernels, one per board. A release has them all; a card built for one
+# board (build_sdcard.sh pi3) needs only one.
+KERNELS=(
+    "kernel7.img"       # Pi 2
+    "kernel8-32.img"    # Pi 3, Pi Zero 2 W
+)
+
 # Files that must be there and not empty.
 REQUIRED_FILES=(
-    # Raspberry Pi firmware and the kernel
+    # Raspberry Pi firmware
     "bootcode.bin"
     "start.elf"
     "fixup.dat"
     "config.txt"
     "cmdline.txt"
-    "kernel8-32.img"
 
     # Documents and settings examples
     "LICENSE.txt"
@@ -88,18 +94,37 @@ do
     fi
 done
 
-# The kernel must be this version (and for a release, built from committed
+# The kernels must be this version (and for a release, built from committed
 # files).
 version="BMA800XL $("$SRC_DIR/tools/version.sh" --semver) ($("$SRC_DIR/tools/version.sh" --git),"
-kernel="$RELEASE_DIRECTORY/kernel8-32.img"
-if [ -f "$kernel" ] && ! grep -qaF "$version" "$kernel"
+kernels_found=0
+for kernel in "${KERNELS[@]}"
+do
+    path="$RELEASE_DIRECTORY/$kernel"
+    if [ ! -s "$path" ]
+    then
+        if [ "$RELEASE" -eq 1 ]
+        then
+            echo "Missing or empty: $kernel"
+            problems=1
+        fi
+        continue
+    fi
+    kernels_found=$((kernels_found + 1))
+    if ! grep -qaF "$version" "$path"
+    then
+        echo "$kernel is not \"$version ...\": rebuild it"
+        problems=1
+    fi
+    if [ "$RELEASE" -eq 1 ] && grep -qaE "BMA800XL [^ ]+ \([0-9a-f]+-dirty," "$path"
+    then
+        echo "$kernel was built with uncommitted changes (-dirty)"
+        problems=1
+    fi
+done
+if [ "$kernels_found" -eq 0 ]
 then
-    echo "kernel8-32.img is not \"$version ...\": rebuild it"
-    problems=1
-fi
-if [ "$RELEASE" -eq 1 ] && [ -f "$kernel" ] && grep -qaE "BMA800XL [^ ]+ \([0-9a-f]+-dirty," "$kernel"
-then
-    echo "kernel8-32.img was built with uncommitted changes (-dirty)"
+    echo "Missing: a kernel (${KERNELS[*]})"
     problems=1
 fi
 

@@ -2,7 +2,8 @@
 
 ## What you need
 
-- A Raspberry Pi 3 Model B, B+ or A+, or a Raspberry Pi Zero 2 W
+- A Raspberry Pi 3 Model B, B+ or A+, a Raspberry Pi Zero 2 W, or a
+  Raspberry Pi 2 Model B
 - A microSD card (any size; BMA800XL itself needs only a few MB)
 - An HDMI display, ideally one that accepts 720p at 50 Hz
 - A USB keyboard and/or USB gamepad
@@ -13,8 +14,9 @@
    [releases page](https://github.com/aminch/bma800xl/releases), or build
    it yourself (see [BUILDING.md](BUILDING.md)) and use `build/sdcard/`.
 2. Format the SD card as FAT32.
-3. Extract the zip to the root of the card, so that `kernel8-32.img` and
-   `config.txt` are at the top level, not in a folder.
+3. Extract the zip to the root of the card, so that the kernels
+   (`kernel8-32.img`, `kernel7.img`) and `config.txt` are at the top level,
+   not in a folder.
 4. Copy your Atari files to the card. The `disks`, `programs`, `carts` and
    `tapes` folders are there for them, but any folder works.
 5. Put the card in the Pi, connect the display and keyboard, and switch on.
@@ -73,9 +75,11 @@ networks in range and asks for the password. See
 Copy the new release's files over the old ones, except for files you have
 changed: `config.txt` and `cmdline.txt` if you edited them. Your settings
 (`bma800xl.cfg`, `atari800.cfg`, `wpa_supplicant.conf`), ROMs and Atari
-files are not in the release zip and stay as they are.
+files are not in the release zip and stay as they are. To move the card to
+a Pi 2, the `config.txt` must have the `[pi2]` section that picks
+`kernel7.img`; releases before Pi 2 support don't.
 
-With networking on, a new `kernel8-32.img` can also be uploaded in the web
-UI's file manager and started with **Reboot**. Updates that change other
-files (the Pi firmware in the root or in `firmware/`) need the card in a
-computer.
+With networking on, a new kernel (`kernel8-32.img` for a Pi 3 or Zero 2 W,
+`kernel7.img` for a Pi 2) can also be uploaded in the web UI's file manager
+and started with **Reboot**. Updates that change other files (the Pi
+firmware in the root or in `firmware/`) need the card in a computer.

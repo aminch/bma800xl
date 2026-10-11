@@ -1,12 +1,18 @@
 #
-# BMA800XL - bare metal Atari 800XL emulator for the Raspberry Pi 3
+# BMA800XL - bare metal Atari 800XL emulator for the Raspberry Pi 2 and 3
 #
 # Raspberry Pi firmware settings. Emulator options are in cmdline.txt.
 #
 
-# BMA800XL runs in 32 bit mode.
+# BMA800XL runs in 32 bit mode, with a kernel for each board.
 arm_64bit=0
+[pi2]
+kernel=kernel7.img
+[pi3]
 kernel=kernel8-32.img
+[pi02]
+kernel=kernel8-32.img
+[all]
 
 # Video: 1280x720 at 50 Hz, the right rate for a PAL Atari (the default).
 # For an NTSC Atari use 60 Hz instead: hdmi_mode=4
