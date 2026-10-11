@@ -1,17 +1,45 @@
-# Third party software
+# Third-Party Software
 
-BMA800XL is made from these projects. Thanks to everyone who worked on them.
+BMA800XL incorporates software and other materials from third-party projects. Third-party components remain subject to their respective copyright and license terms.
 
-| Component | Where | Licence |
-|-----------|-------|---------|
-| [atari800](https://github.com/atari800/atari800), the Atari 8-bit emulator | `third_party/atari800` (submodule) | GPL version 2 or later |
-| Altirra OS and Altirra BASIC ROM replacements by Avery Lee, included in atari800 | `third_party/atari800/src/roms` | Free to copy and distribute with the copyright notice (see each file) |
-| [Circle](https://github.com/rsta2/circle), bare metal environment for the Raspberry Pi, by Rene Stange | `third_party/circle-stdlib/libs/circle` | GPL version 3 |
-| [circle-stdlib](https://github.com/smuehlst/circle-stdlib), Circle with newlib, by Stephan Mühlstrasser | `third_party/circle-stdlib` | GPL version 3 |
-| newlib C library | `third_party/circle-stdlib/libs/circle-newlib` | BSD style licences (see its COPYING.NEWLIB) |
-| [BMC64](https://github.com/randyrossi/bmc64) by Randy Rossi and contributors: display layer, CRT shaders, VCHIQ sound, networking and web UI, SD card helpers, Circle patches, build scripts, GPIO joystick wiring | `src/fbl.*`, `src/crt_pi_*`, `src/vchiqsound*`, `src/network*`, `src/webui/`, `src/sdcard/`, `src/patches/`, `tools/gen_webui_assets.py`, `make_wifi_firmware.sh` | Apache License 2.0 (file headers); BMC64 as a whole is GPL version 3 |
-| Raspberry Pi firmware (`bootcode.bin`, `start.elf`, `fixup.dat`) | `sdcard/firmware` | Broadcom's redistributable binary licence, from the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware) |
-| Wi-Fi firmware for the Pi's wireless chip, fetched at build time | `firmware/` on the SD card | Broadcom, Cypress and Synaptics redistributable licences, copied next to the firmware |
+The original copyright, license, and attribution notices supplied with these components are retained with their source where applicable.
 
-Because it combines GPL version 2 or later and GPL version 3 code, BMA800XL
-as a whole is distributed under the GNU General Public License version 3.
+## atari800
+
+BMA800XL incorporates the [atari800 project](https://github.com/atari800/atari800), version 7.2.1.
+
+See [`third_party/atari800/`](https://github.com/atari800/atari800/tree/ATARI800_7_2_1) for the version used by BMA800XL and its accompanying copyright and license information.
+
+## Altirra OS and Altirra BASIC
+
+BMA800XL incorporates the Altirra OS and Altirra BASIC ROM replacements by Avery Lee, as included with atari800.
+
+See [`src/roms/`](https://github.com/atari800/atari800/tree/ATARI800_7_2_1/src/roms) in atari800 for the files and their accompanying copyright and license information.
+
+## circle-stdlib
+
+BMA800XL uses the [circle-stdlib project](https://github.com/smuehlst/circle-stdlib), v21, which includes [Circle](https://github.com/rsta2/circle) by Rene Stange and the newlib C library.
+
+See [`third_party/circle-stdlib/`](https://github.com/smuehlst/circle-stdlib/tree/v21) for the version used by BMA800XL and its accompanying copyright and license information.
+
+## BMC64
+
+BMA800XL incorporates source code from the [BMC64 project](https://github.com/randyrossi/bmc64) by Randy Rossi and contributors.
+
+See [BMC64](https://github.com/randyrossi/bmc64) for its source and its accompanying copyright and license information.
+
+## Raspberry Pi Firmware
+
+BMA800XL includes the Raspberry Pi boot firmware (`bootcode.bin`, `start.elf`, `fixup.dat`) from the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware).
+
+See the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware/tree/master/boot) for its accompanying copyright and license information.
+
+## Wi-Fi Firmware
+
+BMA800XL includes the Wi-Fi firmware for the Raspberry Pi's wireless chip from the [RPi-Distro firmware-nonfree repository](https://github.com/RPi-Distro/firmware-nonfree), downloaded when BMA800XL is built.
+
+See the `firmware/` folder on the SD card for the Broadcom, Cypress and Synaptics licenses that accompany it.
+
+## Other Third-Party Components
+
+Additional third-party components and supporting materials may be present in the BMA800XL source tree. Where such material is accompanied by its own copyright, license, or attribution notices, those notices and terms continue to apply.
