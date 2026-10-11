@@ -1,6 +1,7 @@
 [submodule "third_party/circle-stdlib"]
 	path = third_party/circle-stdlib
 	url = https://github.com/smuehlst/circle-stdlib
+	ignore = dirty
 [submodule "third_party/atari800"]
 	path = third_party/atari800
 	url = https://github.com/atari800/atari800
