@@ -8,6 +8,7 @@
 //
 
 #include "kernel.h"
+#include "network.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -131,13 +132,18 @@ bool CKernel::Initialize(void) {
     mLogger.Write(FromKernel, LogError, "Cannot mount the SD card");
     return false;
   }
-  if (!mUSBHCI.Initialize()) {
-    return false;
-  }
   if (!mConsole.Initialize()) {
     return false;
   }
   CGlueStdioInit(mConsole);
+
+  // Before USB, as BMC64 does: the Pi 3's Ethernet is a USB device and
+  // joins the network stack once USB finds it.
+  NetworkInitialize(&mOptions);
+
+  if (!mUSBHCI.Initialize()) {
+    return false;
+  }
 
   const char *audio_out = mOptions.Get("audio_out", "auto");
   if (strcmp(audio_out, "hdmi") == 0) {
@@ -581,6 +587,13 @@ void CKernel::Reboot(void) {
   reboot();
 }
 
+void CKernel::PowerOff(void) {
+  mLogger.Write(FromKernel, LogNotice, "Halting; safe to switch off");
+  // Blank the picture so it is clear the Pi has stopped.
+  mFrameBuffer.Hide();
+  halt();
+}
+
 //
 // host.h: C entry points for the emulator.
 //
@@ -667,6 +680,14 @@ int host_pad_state(int pad) { return CKernel::Get()->PadState(pad); }
 int host_gpio_joystick(int port) { return CKernel::Get()->GpioJoystick(port); }
 
 void host_reboot(void) { CKernel::Get()->Reboot(); }
+
+void host_power_off(void) { CKernel::Get()->PowerOff(); }
+
+extern int circle_get_network_ip_address(char *address, unsigned int size);
+
+int host_network_address(char *address, unsigned size) {
+  return circle_get_network_ip_address(address, size);
+}
 
 void host_log(const char *message) {
   CLogger::Get()->Write(FromKernel, LogNotice, "%s", message);

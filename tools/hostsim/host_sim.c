@@ -379,6 +379,21 @@ void host_reboot(void)
 	exit(0);
 }
 
+void host_power_off(void)
+{
+	fprintf(stderr, "[sim] power off requested at frame %ld\n", frame);
+	exit(0);
+}
+
+int host_network_address(char *address, unsigned size)
+{
+	const char *ip = getenv("BMA_IP");
+	if (ip == NULL || frame < 100)
+		return 0;
+	snprintf(address, size, "%s", ip);
+	return 1;
+}
+
 void host_log(const char *message)
 {
 	fprintf(stderr, "[log] %s\n", message);

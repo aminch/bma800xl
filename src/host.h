@@ -101,6 +101,9 @@ int host_gpio_joystick(int port);
 /* ---- System -------------------------------------------------------------- */
 
 void host_reboot(void);
+void host_power_off(void);
+/* The Pi's IP address as text, when the network is up. Returns 0 if not. */
+int host_network_address(char *address, unsigned size);
 /* Shows a line of text on the boot log (serial and, early on, the screen). */
 void host_log(const char *message);
 

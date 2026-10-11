@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BMA800XL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%236d5cf6'/%3E%3Cpath d='M4 13 7 3h2l3 10h-2l-1-3H7l-1 3z' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+<!-- Fetch every module up front: it saves a round trip per import level on the device. -->
+<link rel="modulepreload" href="/js/util.js">
+<link rel="modulepreload" href="/js/api.js">
+<link rel="modulepreload" href="/js/dashboard.js">
+<link rel="modulepreload" href="/js/editor.js">
+<link rel="modulepreload" href="/js/files.js">
+<link rel="modulepreload" href="/js/menu.js">
+</head>
+<body>
+<div id="app">
+  <aside class="sidebar">
+    <div class="sidebar-mark sidebar-name">BMA800XL</div>
+    <nav class="nav">
+      <a class="nav-item" href="#/dashboard" data-view="dashboard"><span class="ni-ico">▦</span>Dashboard</a>
+      <a class="nav-item" href="#/files" data-view="files"><span class="ni-ico">▤</span>Files</a>
+    </nav>
+    <label class="up-drop side-drop" id="fb-drop" hidden>
+      <input type="file" id="fb-drop-file" multiple hidden>
+      <span>Drop files here to upload to <b id="fb-drop-dest">/</b></span>
+    </label>
+    <div class="sys-card">
+      <div class="sys-head"><span class="dot" id="sys-dot"></span><span id="sys-state">Connecting…</span></div>
+      <dl>
+        <dt>Uptime</dt><dd id="sc-uptime">—</dd>
+        <dt>IP Address</dt><dd id="sc-ip">—</dd>
+        <dt>Version</dt><dd id="sc-ver">—</dd>
+      </dl>
+    </div>
+    <div class="nav nav-bottom">
+      <button class="nav-item" id="nav-reboot"><span class="ni-ico">⟳</span>Reboot</button>
+      <button class="nav-item" id="nav-shutdown"><span class="ni-ico">⏻</span>Shut Down</button>
+    </div>
+    <div class="rainbow"></div>
+  </aside>
+
+  <main class="main">
+    <section class="view" id="view-dashboard">
+      <div class="welcome-row">
+        <div>
+          <h1 class="welcome welcome-text">BMA800XL</h1>
+        </div>
+        <div class="motto">
+          <span>Retro computing.<br>Modern control.</span>
+          <span class="rainbow-sm"></span>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card qa-card">
+          <h2><span class="c-ico">⚡</span>Quick Actions</h2>
+          <div class="tiles">
+            <button class="tile tile-blue" id="qa-files">
+              <span class="tile-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M8.5 7.5h7M8.5 11h7M8.5 14.5h7M8.5 18h4"/></svg></span><span class="tile-t">Browse Files</span><span class="tile-s">SD card</span>
+            </button>
+            <button class="tile tile-purple" id="qa-reset">
+              <span class="tile-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.34-5.66"/><path d="M4 4v5h5"/></svg></span><span class="tile-t">Hard Reset</span><span class="tile-s" id="qa-reset-sub">Reset the machine</span>
+            </button>
+            <button class="tile tile-pink" id="qa-reboot">
+              <span class="tile-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg></span><span class="tile-t">Reboot</span><span class="tile-s">Restart BMA800XL</span>
+            </button>
+            <button class="tile tile-red" id="qa-shutdown">
+              <span class="tile-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M6.7 7a7.5 7.5 0 1 0 10.6 0"/></svg></span><span class="tile-t">Shut Down</span><span class="tile-s">Power off BMA800XL</span>
+            </button>
+            <button class="tile tile-amber" id="qa-disable">
+              <span class="tile-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M6 18 18 6"/></svg></span><span class="tile-t">Disable Web UI</span><span class="tile-s">Stop until reboot</span>
+            </button>
+          </div>
+          <p class="msg" id="action-msg"></p>
+        </div>
+
+        <div class="card">
+          <h2><span class="c-ico">ⓘ</span>System Information</h2>
+          <dl class="kv">
+            <dt>Hostname</dt><dd id="i-host">—</dd>
+            <dt>IP Address</dt><dd id="i-ip">—</dd>
+            <dt>Machine</dt><dd id="i-machine">—</dd>
+            <dt>Model</dt><dd id="i-model">—</dd>
+            <dt>Network</dt><dd id="i-net">—</dd>
+            <dt>Firmware</dt><dd id="i-ver">—</dd>
+            <dt>Uptime</dt><dd id="i-uptime">—</dd>
+          </dl>
+        </div>
+
+        <div class="card">
+          <h2><span class="c-ico">◴</span>Hardware Status</h2>
+          <dl class="kv">
+            <dt>Under-voltage</dt><dd id="d-uv">—</dd>
+            <dt>Under-voltage since boot</dt><dd id="d-uv-boot">—</dd>
+            <dt>CPU throttled</dt><dd id="d-thr">—</dd>
+            <dt>Throttled since boot</dt><dd id="d-thr-boot">—</dd>
+          </dl>
+          <div class="meter" id="d-tempmeter" hidden>
+            <div class="meter-top"><span>SoC temperature</span><span id="d-temp">—</span></div>
+            <div class="bar"><div class="bar-fill" id="d-temp-bar"></div></div>
+          </div>
+          <div class="meter" id="d-storage" hidden>
+            <div class="meter-top"><span>SD storage</span><span id="d-storage-txt">—</span></div>
+            <div class="bar"><div class="bar-fill" id="d-storage-bar"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-files" hidden>
+      <div class="card fb-card" id="fb-card">
+        <h2><span class="c-ico">▤</span>Files</h2>
+        <div class="fb-bar">
+          <button class="btn" id="fb-up">↑ Up</button>
+          <div class="crumbs" id="fb-crumbs"></div>
+          <button class="btn" id="fb-mkdir">New folder…</button>
+          <label class="btn" id="fb-upload-btn">Upload…<input type="file" id="fb-upload" multiple hidden></label>
+          <button class="btn" id="fb-refresh" title="Refresh">⟳</button>
+        </div>
+        <p class="fb-note">Uploads write to this folder on the SD card. Don't overwrite a disk image the emulator currently has attached.</p>
+        <p class="msg" id="fb-status"></p>
+        <div class="fb-scroll">
+          <table class="fb-table">
+            <thead><tr><th>Name</th><th class="col-size">Size</th><th class="col-mod">Modified</th><th></th></tr></thead>
+            <tbody id="fb-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>BMA800XL &nbsp;·&nbsp; Bare Metal Atari 800XL</span>
+      <span class="rainbow-sm"></span>
+    </footer>
+  </main>
+</div>
+
+<div class="overlay" id="editor" role="dialog" aria-modal="true" aria-labelledby="ed-title" hidden>
+  <div class="ed-dialog">
+    <div class="ed-head">
+      <div>
+        <h2 id="ed-title"></h2>
+        <span class="ed-path" id="ed-path"></span>
+      </div>
+      <button class="ed-close" id="ed-close" aria-label="Close" title="Close">✕</button>
+    </div>
+    <p class="ed-hint" id="ed-hint"></p>
+    <div class="ed-name" id="ed-name-row" hidden>
+      <label for="ed-name">File name</label>
+      <input id="ed-name" spellcheck="false" autocomplete="off" autocapitalize="off">
+    </div>
+    <textarea class="ed-text" id="ed-text" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="File contents"></textarea>
+    <div class="ed-foot">
+      <p class="msg ed-msg" id="ed-msg"></p>
+      <div class="ed-btns">
+        <button class="btn" id="ed-cancel">Cancel</button>
+        <button class="btn btn-primary" id="ed-save">Save</button>
+        <button class="btn btn-reboot" id="ed-save-reboot">Save &amp; Reboot</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

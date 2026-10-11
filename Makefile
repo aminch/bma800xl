@@ -1,15 +1,15 @@
 #
 # Makefile for the BMA800XL kernel image.
 #
-# Run ./build_deps.sh once first; it builds circle-stdlib for the board.
-# Then "make" produces the kernel image (kernel8-32.img for the Pi 3) and
-# "make sdcard" a folder to copy onto a FAT32 SD card.
+# Run ./make_all.sh once first; it builds circle-stdlib and then this.
+# After that "make" rebuilds the kernel image, kernel8-32.img.
+# ./build_sdcard.sh stages everything for the SD card in build/sdcard.
 #
 
 ROOT := $(CURDIR)
 
 ifeq ($(wildcard third_party/circle-stdlib/Config.mk),)
-$(error circle-stdlib is not configured. Run ./build_deps.sh first)
+$(error circle-stdlib is not configured. Run ./make_all.sh first)
 endif
 
 include third_party/circle-stdlib/Config.mk
@@ -26,7 +26,11 @@ A8_LIB := $(BUILD)/libatari800.a
 
 OBJS = src/main.o src/kernel.o src/options.o src/fbl.o src/crt_pi_idx.o \
        src/crt_pi_rgb.o src/vchiqsound.o src/vchiqsoundbasedevice.o \
-       src/port/platform.o src/port/keyboard.o src/port/fswrap.o
+       src/port/platform.o src/port/keyboard.o src/port/fswrap.o \
+       src/network.o src/network_time_sync.o \
+       src/webui/webui.o src/webui/webui_http.o src/webui/webui_fs.o \
+       src/webui/webui_machine.o src/webui/webui_assets.o \
+       src/sdcard/sd_fs_fatfs.o src/sdcard/sd_fs_file.o
 
 include $(CIRCLEHOME)/Rules.mk
 
@@ -56,6 +60,12 @@ $(A8_LIB): $(A8_OBJS)
 	@rm -f $@
 	@$(AR) cr $@ $(A8_OBJS)
 
+# The web UI's pages are compiled in. Regenerate them when they change.
+WEBUI_ASSETS = $(shell find src/webui/assets -type f)
+src/webui/webui_assets.c: $(WEBUI_ASSETS) tools/gen_webui_assets.py
+	@echo "  GEN   $@"
+	@python3 tools/gen_webui_assets.py
+
 # atari800's configure writes src/config.h, which would be picked up instead
 # of src/port/config.h. It must not exist in the submodule.
 check-submodule:
@@ -75,6 +85,9 @@ LIBS := $(A8_LIB) \
 	$(CIRCLEHOME)/lib/input/libinput.a \
 	$(CIRCLEHOME)/addon/fatfs/libfatfs.a \
 	$(CIRCLEHOME)/lib/fs/libfs.a \
+	$(CIRCLEHOME)/lib/net/libnet.a \
+	$(CIRCLEHOME)/addon/wlan/hostap/wpa_supplicant/libwpa_supplicant.a \
+	$(CIRCLEHOME)/addon/wlan/libwlan.a \
 	$(CIRCLEHOME)/addon/vc4/vchiq/libvchiq.a \
 	$(CIRCLEHOME)/addon/vc4/interface/bcm_host/libbcm_host.a \
 	$(CIRCLEHOME)/addon/vc4/interface/khronos/libkhrn_client.a \
@@ -85,14 +98,10 @@ LIBS := $(A8_LIB) \
 	$(CIRCLEHOME)/lib/sched/libsched.a \
 	$(CIRCLEHOME)/lib/libcircle.a
 
-EXTRACLEAN += $(OBJS) src/port/*.d src/*.d
-.PHONY: check-submodule sdcard distclean
-
-# A folder with everything that goes on the SD card.
-sdcard: $(TARGET).img
-	@./make_sdcard.sh $(TARGET).img
+EXTRACLEAN += $(OBJS) src/port/*.d src/*.d src/webui/*.d src/sdcard/*.d
+.PHONY: check-submodule distclean
 
 distclean: clean
-	rm -rf $(BUILD) sdcard_out
+	rm -rf $(BUILD)
 
 -include $(DEPS)

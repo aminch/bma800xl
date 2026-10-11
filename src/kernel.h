@@ -80,6 +80,7 @@ public:
   int GpioJoystick(int port);
   double Time(void);
   void Reboot(void);
+  void PowerOff(void);
 
   static CKernel *Get(void) { return s_pThis; }
 

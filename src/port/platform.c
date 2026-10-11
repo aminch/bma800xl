@@ -24,6 +24,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "afile.h"
 #include "akey.h"
 #include "atari.h"
 #include "colours.h"
@@ -39,6 +40,10 @@
 
 #include "../host.h"
 #include "bma800xl.h"
+
+/* On-screen message (see below). */
+static int message_frames;
+static void draw_message(void);
 
 /* ---- Display --------------------------------------------------------------- */
 
@@ -301,6 +306,11 @@ void PLATFORM_DisplayScreen(void)
 		restart_sound();
 	}
 
+	if (message_frames > 0 && !UI_is_active) {
+		message_frames--;
+		draw_message();
+	}
+
 	if (!draw_direct) {
 		const UBYTE *src = (const UBYTE *) Screen_atari;
 		uint8_t *dst = fb_pixels;
@@ -369,6 +379,129 @@ void PLATFORM_ConfigSave(FILE *fp)
 	fprintf(fp, "BMA800XL_BORDER=%d\n", view_mode);
 	fprintf(fp, "BMA800XL_KEYPAD_JOYSTICK=%d\n", BMA_keypad_joystick);
 	fprintf(fp, "BMA800XL_ARROW_JOYSTICK=%d\n", BMA_arrow_joystick);
+}
+
+/* ---- Requests from the web UI ----------------------------------------------- */
+
+/* The web UI's server runs as a Circle task, which only runs when the
+   emulator yields, so these are only ever set between emulation steps. They
+   are acted on at the start of the next frame. */
+static volatile int request_power = -1;   /* 0 reboot, 1 power off */
+static volatile int request_coldstart = FALSE;
+static volatile int request_autostart = FALSE;
+static char autostart_path[FILENAME_MAX];
+
+void bma_request_power(int power_off)
+{
+	request_power = power_off ? 1 : 0;
+}
+
+void bma_request_coldstart(void)
+{
+	request_coldstart = TRUE;
+}
+
+/* Name kept from BMC64, whose web UI code calls it. */
+void emu_autostart_interrupt(const char *path)
+{
+	Util_strlcpy(autostart_path, path, sizeof(autostart_path));
+	request_autostart = TRUE;
+}
+
+static void handle_requests(void)
+{
+	if (request_autostart) {
+		request_autostart = FALSE;
+		Log_print("Web UI: starting %s", autostart_path);
+		if (AFILE_OpenFile(autostart_path, TRUE, 1, FALSE) == AFILE_ERROR)
+			Log_print("Cannot start %s", autostart_path);
+	}
+	if (request_coldstart) {
+		request_coldstart = FALSE;
+		Atari800_Coldstart();
+	}
+	if (request_power >= 0) {
+		int power_off = request_power;
+		request_power = -1;
+		/* Shuts atari800 down, which closes the disk images. */
+		Atari800_Exit(FALSE);
+		sync_files();
+		if (power_off)
+			host_power_off();
+		else
+			host_reboot();
+	}
+}
+
+/* ---- On-screen message ------------------------------------------------------ */
+
+/* A small 5x7 font for the web UI's address, which atari800's own status
+   line can't show (it has no '.' or ':'). Only the characters used. */
+static const struct { char c; const char *rows[7]; } msg_font[] = {
+	{'0', {".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."}},
+	{'1', {"..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."}},
+	{'2', {".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"}},
+	{'3', {"####.", "....#", "....#", ".###.", "....#", "....#", "####."}},
+	{'4', {"...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."}},
+	{'5', {"#####", "#....", "####.", "....#", "....#", "#...#", ".###."}},
+	{'6', {".###.", "#....", "#....", "####.", "#...#", "#...#", ".###."}},
+	{'7', {"#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."}},
+	{'8', {".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."}},
+	{'9', {".###.", "#...#", "#...#", ".####", "....#", "....#", ".###."}},
+	{'.', {".....", ".....", ".....", ".....", ".....", ".##..", ".##.."}},
+	{':', {".....", ".##..", ".##..", ".....", ".##..", ".##..", "....."}},
+	{'/', {"....#", "....#", "...#.", "..#..", ".#...", "#....", "#...."}},
+	{'B', {"####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."}},
+	{'E', {"#####", "#....", "#....", "####.", "#....", "#....", "#####"}},
+	{'H', {"#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"}},
+	{'I', {".###.", "..#..", "..#..", "..#..", "..#..", "..#..", ".###."}},
+	{'P', {"####.", "#...#", "#...#", "####.", "#....", "#....", "#...."}},
+	{'T', {"#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."}},
+	{'U', {"#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."}},
+	{'W', {"#...#", "#...#", "#...#", "#.#.#", "#.#.#", "##.##", "#...#"}},
+};
+
+static char message[48];
+
+/* Draws MESSAGE centred near the bottom of the visible screen. */
+static void draw_message(void)
+{
+	int len = (int) strlen(message);
+	int width = len * 6 + 2;
+	int x0 = (Screen_visible_x1 + Screen_visible_x2 - width) / 2;
+	int y0 = Screen_visible_y2 - 14;
+	UBYTE *screen = (UBYTE *) Screen_atari;
+	int i, x, y;
+
+	if (x0 < 0)
+		x0 = 0;
+	for (y = 0; y < 11; y++)
+		memset(screen + (y0 + y) * Screen_WIDTH + x0, 0x00, width);
+	for (i = 0; i < len; i++) {
+		unsigned k;
+		for (k = 0; k < sizeof(msg_font) / sizeof(msg_font[0]); k++)
+			if (msg_font[k].c == message[i])
+				break;
+		if (k == sizeof(msg_font) / sizeof(msg_font[0]))
+			continue; /* space or unknown */
+		for (y = 0; y < 7; y++)
+			for (x = 0; x < 5; x++)
+				if (msg_font[k].rows[y][x] == '#')
+					screen[(y0 + 2 + y) * Screen_WIDTH + x0 + 2 + i * 6 + x] = 0x0f;
+	}
+}
+
+/* Shows the web UI's address on screen once the network is up. */
+static void show_network_address(void)
+{
+	static int shown = FALSE;
+	char ip[32];
+	if (shown || !host_network_address(ip, sizeof(ip)))
+		return;
+	shown = TRUE;
+	snprintf(message, sizeof(message), "WEB UI: HTTP://%s/", ip);
+	message_frames = 15 * 50;
+	Log_print("Web UI: http://%s/", ip);
 }
 
 /* ---- Start up and shut down ------------------------------------------------- */
@@ -549,6 +682,8 @@ void bma800xl_main(void)
 		if (++frames_since_sync >= 50) {
 			frames_since_sync = 0;
 			sync_files();
+			show_network_address();
 		}
+		handle_requests();
 	}
 }

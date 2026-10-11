@@ -20,5 +20,9 @@ anywhere). Real Atari ROMs can go in the ROM folder; they are optional.
 Video is 720p at 50 Hz for a PAL Atari. For NTSC, set hdmi_mode=4 in
 config.txt and choose NTSC in the menu's System Settings.
 
+Networking: add network=ethernet (or network=wifi, with your network in
+wpa_supplicant.conf) to cmdline.txt, then open the address shown on screen
+in a browser to manage the files on this card.
+
 Emulator options are in cmdline.txt. Full documentation:
 https://github.com/aminch/bma800xl/blob/main/docs/USER_GUIDE.md

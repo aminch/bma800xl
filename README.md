@@ -18,6 +18,8 @@ hardware, with no Linux underneath, using the same approach as
 - USB keyboards and gamepads, the numeric keypad as a joystick, and real
   Atari joysticks wired to the GPIO header
 - atari800's built in menus for everything else: press F1
+- Optional Ethernet or Wi-Fi with BMC64's web UI: manage the SD card from a
+  browser (upload, download, edit config files, start programs, reboot)
 
 ## Supported hardware
 
@@ -28,7 +30,7 @@ go to the 3.5mm jack.
 ## Getting started
 
 1. Format an SD card as FAT32.
-2. Copy the contents of a release zip (or of `sdcard_out/` after building) to
+2. Copy the contents of a release zip (or of `build/sdcard/` after building) to
    the root of the card.
 3. Put your Atari files on the card. The `disks`, `programs`, `carts` and
    `tapes` folders are there for them, but any folder works.
@@ -65,10 +67,10 @@ options in `cmdline.txt` and the GPIO joystick wiring.
 ## Building
 
 ```
-./build.sh
+./build_sdcard.sh
 ```
 
-builds everything and puts the SD card files in `sdcard_out/`. See
+builds everything and stages the SD card files in `build/sdcard/`. See
 [docs/BUILDING.md](docs/BUILDING.md).
 
 ## Updating atari800
@@ -84,6 +86,7 @@ rebuilding. See [docs/UPDATING.md](docs/UPDATING.md).
 src/main.cpp, kernel.cpp   Circle kernel: USB, GPIO, SD card; runs atari800 on core 1
 src/fbl.cpp                Display (dispmanx layer, optional CRT shader), from BMC64
 src/vchiqsound*.cpp        Sound over HDMI or the headphone jack, from BMC64
+src/network.cpp, webui/    Ethernet / Wi-Fi and the web UI, from BMC64
 src/host.h                 What the kernel offers the emulator
 src/port/                  atari800's platform layer (PLATFORM_* functions),
                            its config.h and the list of atari800 sources

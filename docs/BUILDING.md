@@ -1,23 +1,24 @@
-# Building BMA800XL
+# Build Instructions
 
-BMA800XL builds on Linux (or WSL) for the Raspberry Pi 3.
+These instructions have been tested on Debian and Ubuntu (and WSL). On other
+distributions, adjust the package commands.
 
-## What you need
-
-- git, make, python3, curl, xz-utils
-- `texinfo` (newlib's build runs `makeinfo`)
-- The Arm GNU Toolchain 15.2.rel1 (`arm-none-eabi`). `get_toolchain.sh`
-  downloads it into `~/.cache/bma800xl/toolchains` the first time.
-- Optional: `zip` (release archive), a C compiler and ImageMagick for the PC
-  tests
-
-On Debian or Ubuntu:
+## Prerequisites
 
 ```
-sudo apt-get install build-essential git python3 curl xz-utils texinfo zip imagemagick
+sudo apt-get install build-essential git python3 curl wget xz-utils texinfo imagemagick python3-pil
 ```
 
-## Getting the source
+`texinfo` is needed because newlib's build runs `makeinfo`; `wget` fetches
+the Wi-Fi firmware; ImageMagick and Pillow are only used by the PC tests.
+
+The Arm GNU Toolchain 15.2.rel1 (`arm-none-eabi`) is downloaded into
+`~/.cache/bma800xl/toolchains` the first time a build needs it
+(`get_gnu_toolchain.sh`). If it can't be downloaded,
+`BMA800XL_ALLOW_ANY_TOOLCHAIN=1` lets the build use whatever
+`arm-none-eabi-gcc` is on the PATH.
+
+## Downloading the files
 
 ```
 git clone --recursive https://github.com/aminch/bma800xl
@@ -25,31 +26,35 @@ git clone --recursive https://github.com/aminch/bma800xl
 
 or, in an existing clone, `git submodule update --init --recursive`.
 
-## Building
-
-The quick way:
+## Building an SD card
 
 ```
-./build.sh
+./build_sdcard.sh
 ```
 
-does all of the steps below and leaves the SD card files in `sdcard_out/` and
-a `bma800xl-<version>.zip`.
+builds everything from clean and stages the boot partition in
+`build/sdcard`. Copy the contents of that folder to the root of a FAT32
+formatted SD card.
 
-Step by step:
+While developing, `./build_sdcard.sh --skip-patches` keeps the third party
+libraries already built and only rebuilds the kernel, which takes seconds.
+With [networking](USER_GUIDE.md#networking-and-the-web-ui) on, a new
+`kernel8-32.img` can then be uploaded to the Pi from the web UI and the Pi
+rebooted from there, without touching the SD card.
 
-1. `./build_deps.sh pi3` patches and builds circle-stdlib (Circle and newlib)
-   and the Circle addons. It takes a few minutes and only needs running again
-   after updating circle-stdlib.
-2. `source get_toolchain.sh && make` builds `kernel8-32.img`.
-3. `make sdcard` (or `./make_sdcard.sh`) collects the SD card files.
+## The individual steps
 
-`make clean` removes the kernel's objects; `make distclean` also removes the
-compiled atari800 library and the SD card staging folder.
+1. `./clean_all.sh` cleans everything, including the third party builds,
+   and resets Circle to its pinned revision.
+2. `./make_all.sh [pi3] [--skip-patches]` applies `src/patches/` to Circle,
+   builds circle-stdlib (Circle and newlib) and the Circle addons, then the
+   kernel, `kernel8-32.img`. It only needs running again after
+   `clean_all.sh` or a change to the patches or circle-stdlib.
+3. `source get_gnu_toolchain.sh && make` rebuilds just the kernel.
+4. `./make_wifi_firmware.sh DIR` puts the Wi-Fi firmware in `DIR/firmware`
+   (`build_sdcard.sh` does this).
 
-If the pinned toolchain can't be downloaded, `BMA800XL_ALLOW_ANY_TOOLCHAIN=1`
-lets the build use whatever `arm-none-eabi-gcc` is on the PATH (for example
-Ubuntu's `gcc-arm-none-eabi` package, version 13.2).
+The Pi 3 kernel also runs on the Pi Zero 2 W.
 
 ## Testing on a PC
 
@@ -62,14 +67,24 @@ loading a program, and checking the sound stays in step with the display.
 tools/hostsim/run_tests.sh
 ```
 
-It needs a C compiler and, to compare screenshots, ImageMagick's `compare`.
-Screenshots are written to `tools/hostsim/out/`.
+Screenshots are written to `tools/hostsim/out/` and compared with
+`tools/hostsim/expected/`; `--update` replaces the reference images.
+
+## The web UI
+
+The web UI's pages are in `src/webui/assets/`. They are compiled into the
+kernel through `src/webui/webui_assets.c`, which the Makefile regenerates
+with `tools/gen_webui_assets.py` whenever an asset changes.
 
 ## Layout
 
 | Path                         | What                                        |
 |------------------------------|---------------------------------------------|
 | `src/main.cpp`, `kernel.*`   | Circle kernel; USB, GPIO, SD card, cores    |
+| `src/network.*`              | Ethernet / Wi-Fi start up (from BMC64)      |
+| `src/network_time_sync.*`    | Clock from the network (from BMC64)         |
+| `src/webui/`                 | Web UI server, file manager and pages (from BMC64) |
+| `src/sdcard/`                | SD card helpers used by the web UI (from BMC64) |
 | `src/fbl.*`, `crt_pi_*`      | Display layer and CRT shaders (from BMC64)  |
 | `src/vchiqsound*`            | Sound through the VideoCore (from BMC64)    |
 | `src/options.*`              | `cmdline.txt` options                       |
@@ -78,7 +93,7 @@ Screenshots are written to `tools/hostsim/out/`.
 | `src/port/keyboard.c`        | Keyboard, gamepads, joysticks               |
 | `src/port/config.h`          | atari800's build configuration              |
 | `src/port/atari800.mk`       | Which atari800 sources are built            |
-| `patches/`                   | Changes applied to Circle by `build_deps.sh` |
+| `src/patches/`               | Changes applied to Circle by `make_all.sh`  |
 | `sdcard/`                    | Files for the SD card                       |
 | `third_party/atari800`       | atari800 (submodule, unmodified)            |
 | `third_party/circle-stdlib`  | Circle and newlib (submodule)               |

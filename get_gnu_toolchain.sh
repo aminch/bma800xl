@@ -2,7 +2,7 @@
 #
 # Source this file to put the Arm GNU Toolchain used by BMA800XL on PATH.
 #
-#   source ./get_toolchain.sh
+#   source ./get_gnu_toolchain.sh
 #
 # The pinned release is downloaded into ~/.cache/bma800xl/toolchains the
 # first time. A matching toolchain already on PATH, or in $ARM_HOME, is used

@@ -9,8 +9,7 @@ build/
 *.img
 .board
 
-# SD card staging and release archives
-sdcard_out/
+# Release archives
 bma800xl-*.zip
 
 # PC test harness

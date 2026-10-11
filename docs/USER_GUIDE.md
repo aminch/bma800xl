@@ -142,6 +142,54 @@ If the display and the Atari don't match (a PAL Atari on a 60 Hz display),
 the emulator still runs at the right speed but frames can't be locked to the
 display, so scrolling isn't as smooth.
 
+## Networking and the web UI
+
+BMA800XL can join your network over Ethernet or Wi-Fi and serve a web page
+for managing the SD card from any browser on the same network, so files can
+be copied to and from the Pi without taking the card out. It is the web UI
+from BMC64.
+
+Turn it on in `cmdline.txt` (on the same single line as the other options):
+
+- Ethernet: `network=ethernet`
+- Wi-Fi: `network=wifi`, and copy `wpa_supplicant.conf.example` to
+  `wpa_supplicant.conf` in the root of the card with your network's name,
+  password and country. Wi-Fi needs the files in the `firmware` folder,
+  which `build_sdcard.sh` puts there.
+
+Once the Pi has an address, it is shown at the bottom of the screen for a
+few seconds (`WEB UI: HTTP://192.168.1.50/`) and written to the serial log.
+Open that address in a browser.
+
+The web UI has:
+
+- **Dashboard**: the Pi's model, address, uptime, temperature, power and
+  throttling warnings and free space on the card. Buttons to **Hard Reset**
+  the Atari (power it off and on), **Reboot** BMA800XL, **Shut Down** (the
+  Pi halts; switch it off, then on again to restart), and **Disable Web UI**
+  until the next reboot.
+- **Files**: browse the SD card; upload (or drag and drop) files into a
+  folder, download, rename, delete, and create folders. Clicking a disk
+  image, program, cartridge or tape **starts it** on the Atari, the same as
+  *Run Atari Program*. `cmdline.txt`, `config.txt`, `atari800.cfg` and
+  `wpa_supplicant.conf` can be **edited** in the browser; changes take
+  effect after a reboot, and the previous version is kept as `.bak`.
+
+Uploads can't overwrite `cmdline.txt`, `config.txt` or `wpa_supplicant.conf`
+(edit them instead), or anything in `firmware`. Everything else, including
+`kernel8-32.img`, can be replaced, so a new build of BMA800XL can be
+uploaded and started with **Reboot**. A mistake in `cmdline.txt` or
+`config.txt` can stop the Pi starting, and then needs the card in a computer
+(the `.bak` copy makes that easy).
+
+The web UI is open to anyone on your network. To protect it with a PIN, set
+`webui_pin=1234` in `cmdline.txt`; the browser then asks for a user name
+(anything) and the PIN. To network without the web UI, set `webui=0`.
+
+The network also sets the Pi's clock, so files saved on the card get the
+right date and time. Set `timezone` to your offset from UTC in minutes, for
+example `timezone=600` for UTC+10.
+
 ## cmdline.txt options
 
 `cmdline.txt` is a single line of `name=value` options separated by spaces.
@@ -168,6 +216,10 @@ display, so scrolling isn't as smooth.
 | `arrow_joystick`    | `0`, `1`                     | `0`      | Arrow keys as joystick 1 |
 | `gpio_joysticks`    | `0`, `1`                     | `0`      | Real joysticks on the GPIO header |
 | `serial_monitor`    | `0`, `1`                     | `0`      | Allow atari800's monitor over the serial port (GPIO14/15, 115200 baud) |
+| `network`           | `off`, `ethernet`, `wifi`    | `off`    | Networking (see Networking and the web UI) |
+| `webui`             | `0`, `1`                     | `1`      | Web UI when networking is on |
+| `webui_pin`         | digits                       | none     | PIN for the web UI |
+| `timezone`          | minutes east of UTC          | `0`      | Time zone for the network clock |
 | `usbpowerdelay`     | milliseconds                 | `1000`   | Circle: wait for USB devices to power up |
 
 The border, keypad and arrow joystick settings are also kept in

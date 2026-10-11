@@ -56,7 +56,7 @@ BMA800XL's own code is in `src/`. The connection points are:
 
    ```
    tools/hostsim/run_tests.sh      # on the PC
-   ./build.sh                      # the Pi kernel
+   ./build_sdcard.sh               # the Pi kernel and SD card
    ```
 
    If the screenshots differ only because the new release looks different
@@ -74,7 +74,7 @@ BMA800XL's own code is in `src/`. The connection points are:
 ## circle-stdlib (Circle and newlib)
 
 circle-stdlib is a submodule in `third_party/circle-stdlib`, pinned to the
-same revision BMC64 uses. `build_deps.sh` applies the patches in `patches/`
+same revision BMC64 uses. `make_all.sh` applies the patches in `src/patches/`
 to Circle before building:
 
 - `circle_sysconfig_patch.diff` enables multi-core and the USB FIQ
@@ -85,7 +85,7 @@ to Circle before building:
   (from BMC64)
 
 To update, move the submodule to a new circle-stdlib release, run
-`git submodule update --init --recursive`, then `./build_deps.sh pi3`. If a
+`git submodule update --init --recursive`, then `./build_sdcard.sh`. If a
 patch no longer applies, update it from the matching BMC64 patch or by
 hand. `src/fbl.cpp` and `src/vchiqsoundbasedevice.cpp` use Circle's VC4
 addon and may need the same changes BMC64 makes when it updates Circle.
