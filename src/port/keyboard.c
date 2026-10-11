@@ -12,6 +12,7 @@
 
 #include "config.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "akey.h"
@@ -121,6 +122,66 @@ static unsigned char virtual_down[256];
 /* Pad buttons that just turned into an Atari console key press. */
 static int pad_consol = INPUT_CONSOL_NONE;
 
+/* Which USB gamepad drives each Atari joystick port, or -1. Some USB devices
+   (the 8BitDo Retro Keyboard's receiver, for one) also appear as a gamepad
+   that never sends anything, so pads are not tied to ports by their USB
+   number: a pad takes the first free port the first time it is used. Set
+   joy1_pad=N (and joy2_pad...) in cmdline.txt to fix the assignment. */
+static int port_pad[HOST_PADS] = {-1, -1, -1, -1};
+static int pad_prev[HOST_PADS] = {-1, -1, -1, -1};
+static int fixed_ports = FALSE;
+
+static void init_pad_ports(void)
+{
+	static const char *const names[HOST_PADS] = {"joy1_pad", "joy2_pad", "joy3_pad", "joy4_pad"};
+	int port;
+	for (port = 0; port < HOST_PADS; port++) {
+		int pad = host_option_int(names[port], 0);
+		port_pad[port] = -1;
+		pad_prev[port] = -1;
+		if (pad >= 1 && pad <= HOST_PADS) {
+			port_pad[port] = pad - 1;
+			fixed_ports = TRUE;
+		}
+	}
+}
+
+static void update_pad_ports(void)
+{
+	int pad, port;
+	for (pad = 0; pad < HOST_PADS; pad++) {
+		int s = host_pad_state(pad);
+		int prev = pad_prev[pad];
+		pad_prev[pad] = s;
+		if (fixed_ports)
+			continue;
+		if (s < 0) {
+			/* Unplugged: free its port. */
+			for (port = 0; port < HOST_PADS; port++)
+				if (port_pad[port] == pad)
+					port_pad[port] = -1;
+			continue;
+		}
+		/* Claim a port when the pad goes from idle to pressed. */
+		if (prev != 0 || s == 0)
+			continue;
+		for (port = 0; port < HOST_PADS; port++)
+			if (port_pad[port] == pad)
+				break;
+		if (port < HOST_PADS)
+			continue;
+		for (port = 0; port < HOST_PADS; port++) {
+			if (port_pad[port] < 0) {
+				char msg[48];
+				port_pad[port] = pad;
+				snprintf(msg, sizeof(msg), "Gamepad %d is joystick %d", pad + 1, port + 1);
+				host_log(msg);
+				break;
+			}
+		}
+	}
+}
+
 void BMA_KeyboardInit(void)
 {
 	const char *name = host_option("keyboard", "us");
@@ -131,6 +192,7 @@ void BMA_KeyboardInit(void)
 	BMA_keypad_joystick = host_option_int("keypad_joystick", BMA_keypad_joystick);
 	BMA_arrow_joystick = host_option_int("arrow_joystick", BMA_arrow_joystick);
 	memset(virtual_down, 0, sizeof(virtual_down));
+	init_pad_ports();
 }
 
 static int key_is_down(int usage)
@@ -249,6 +311,8 @@ int PLATFORM_Keyboard(void)
 	int shiftctrl = 0;
 	int usage, pressed;
 	int event_found = FALSE;
+
+	update_pad_ports();
 
 	/* Caps Lock gives a single key press. */
 	if (lastkey == K_CAPSLOCK && key_pressed) {
@@ -516,7 +580,7 @@ int BMA_CharToAkey(int c, int shiftctrl)
 static int joystick_state(int port)
 {
 	int state = 0;
-	int pad = host_pad_state(port);
+	int pad = port_pad[port] >= 0 ? host_pad_state(port_pad[port]) : -1;
 
 	if (pad > 0) {
 		if (pad & HOST_PAD_UP) state |= HOST_JOY_UP;

@@ -125,6 +125,31 @@ EOF
 run xex 50 "autostart=red.xex" '200 shot red.ppm\n210 quit\n'
 check_image xex red
 
+echo "Gamepad in a game, with an idle extra pad in slot 1"
+mkdir -p "$OUT/joy"
+python3 - "$OUT/joy/joy.xex" <<'EOF'
+import sys
+# Background colour from joystick 1: STICK0 * 16, or red while fire is held.
+code = bytes([
+    0xAD, 0x78, 0x02,        # loop: LDA STICK0
+    0x0A, 0x0A, 0x0A, 0x0A,  #       ASL x4
+    0xAE, 0x84, 0x02,        #       LDX STRIG0
+    0xD0, 0x02,              #       BNE store
+    0xA9, 0x34,              #       LDA #$34 (red)
+    0x8D, 0xC8, 0x02,        # store: STA COLOR4
+    0x8D, 0xC6, 0x02,        #       STA COLOR2
+    0x4C, 0x00, 0x20,        #       JMP loop
+])
+xex = bytes([0xFF, 0xFF, 0x00, 0x20]) + (0x2000 + len(code) - 1).to_bytes(2, "little") + code
+xex += bytes([0xE0, 0x02, 0xE1, 0x02, 0x00, 0x20])
+open(sys.argv[1], "wb").write(xex)
+EOF
+# Pad 1 is connected but idle; pad 2 is the one being used.
+run joy 50 "autostart=joy.xex" '1 pad 0 0\n1 pad 1 0\n200 pad 1 0x8000\n230 shot right.ppm\n240 pad 1 0x8001\n260 shot fire.ppm\n270 quit\n'
+check_log joy "Gamepad 2 is joystick 1" "the pad in use becomes joystick 1"
+check_image joy right
+check_image joy fire
+
 echo "NTSC on a 60 Hz display"
 run ntsc 60 "tv=ntsc" '150 shot boot.ppm\n3000 audio\n3001 quit\n'
 check_log ntsc "Atari 59.92 Hz, synchronised to display" "NTSC locked to a 60 Hz display"

@@ -74,9 +74,17 @@ Each of the Atari's joystick ports takes input from:
 
 | Atari port | Inputs                                                     |
 |------------|------------------------------------------------------------|
-| 1          | Gamepad 1, GPIO joystick 1, numeric keypad, arrow keys if enabled |
-| 2          | Gamepad 2, GPIO joystick 2                                 |
-| 3, 4       | Gamepads 3 and 4 (for the 400/800, or MultiJoy)            |
+| 1          | The first gamepad used, GPIO joystick 1, numeric keypad, arrow keys if enabled |
+| 2          | The second gamepad used, GPIO joystick 2                   |
+| 3, 4       | The third and fourth gamepads used (for the 400/800, or MultiJoy) |
+
+Gamepads get a joystick port the first time a button or direction is
+pressed, in that order. Some USB devices also show up as a gamepad that
+never sends anything (the 8BitDo Retro Keyboard's receiver does), and this
+way they don't take a port. The serial log says which gamepad became which
+joystick. To fix the assignment instead, set `joy1_pad` and `joy2_pad` in
+`cmdline.txt` to gamepad numbers as listed in the log (`Gamepad 2
+connected: ...`).
 
 **Numeric keypad**: 8/2/4/6 and 7/9/1/3 for diagonals, 0 or 5 to fire. On by
 default; `keypad_joystick=0` turns it off.
@@ -155,6 +163,7 @@ display, so scrolling isn't as smooth.
 | `volume`            | 0 to 100                     | `100`    | Sound volume |
 | `audio_buffer_ms`   | 10 or more                   | `40`     | Sound buffer; raise it if the sound breaks up |
 | `keyboard`          | `us`, `uk`                   | `us`     | PC keyboard layout |
+| `joy1_pad` ... `joy4_pad` | gamepad number (1-4)   | first used | Gamepad for each Atari joystick port |
 | `keypad_joystick`   | `0`, `1`                     | `1`      | Numeric keypad as joystick 1 |
 | `arrow_joystick`    | `0`, `1`                     | `0`      | Arrow keys as joystick 1 |
 | `gpio_joysticks`    | `0`, `1`                     | `0`      | Real joysticks on the GPIO header |

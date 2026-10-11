@@ -314,7 +314,14 @@ void CKernel::SetupUSBGamePads(void) {
       m_pGamePad[i]->RegisterRemovedHandler(GamePadRemovedHandler);
       m_pGamePad[i]->RegisterStatusHandler(GamePadStatusHandler);
       m_PadState[i] = 0;
-      mLogger.Write(FromKernel, LogNotice, "Gamepad %u connected", i + 1);
+      const char *product = m_pGamePad[i]->GetProperty(CDevice::PropertyProduct);
+      if (product == 0) {
+        product = "unknown";
+      }
+      mLogger.Write(FromKernel, LogNotice, "Gamepad %u connected: %s%s", i + 1,
+                    product,
+                    (m_pGamePad[i]->GetProperties() & GamePadPropertyIsKnown)
+                        ? "" : " (generic)");
     }
   }
 }
