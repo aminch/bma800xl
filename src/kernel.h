@@ -144,6 +144,9 @@ private:
 
   CUSBGamePadDevice *m_pGamePad[HOST_PADS];
   volatile int m_PadState[HOST_PADS];
+  // Axes the direction is read from on pads Circle doesn't know.
+  int m_PadAxisX[HOST_PADS];
+  int m_PadAxisY[HOST_PADS];
 
   bool m_bGPIOJoysticks;
   CGPIOPin *m_pJoyPins[2][5];

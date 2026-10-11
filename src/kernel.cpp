@@ -105,6 +105,8 @@ CKernel::CKernel(void)
   for (unsigned i = 0; i < HOST_PADS; i++) {
     m_pGamePad[i] = 0;
     m_PadState[i] = -1;
+    m_PadAxisX[i] = 0;
+    m_PadAxisY[i] = 1;
   }
   memset(m_pJoyPins, 0, sizeof m_pJoyPins);
 
@@ -343,6 +345,16 @@ unsigned CKernel::KeyModifiers(void) { return m_MergedModifiers; }
 // USB gamepads
 //
 
+// Pads Circle doesn't know whose direction is not on axes 0 and 1, by USB
+// vendor and product ID (as BMC64's usb_gamepad_defaults.c).
+static const struct {
+  const char *vendor;
+  int axis_x;
+  int axis_y;
+} kPadProfiles[] = {
+    {"venca3-24", 3, 4}, // 8BitDo M30 2.4G
+};
+
 void CKernel::SetupUSBGamePads(void) {
   for (unsigned i = 0; i < HOST_PADS; i++) {
     if (m_pGamePad[i] != 0) {
@@ -356,14 +368,27 @@ void CKernel::SetupUSBGamePads(void) {
       m_pGamePad[i]->RegisterRemovedHandler(GamePadRemovedHandler);
       m_pGamePad[i]->RegisterStatusHandler(GamePadStatusHandler);
       m_PadState[i] = 0;
+      m_PadAxisX[i] = 0;
+      m_PadAxisY[i] = 1;
+      CString *vendor = m_pGamePad[i]->GetDevice()->GetName(DeviceNameVendor);
+      for (unsigned p = 0; vendor != 0 && p < sizeof kPadProfiles /
+                                                  sizeof kPadProfiles[0]; p++) {
+        if (strcmp(*vendor, kPadProfiles[p].vendor) == 0) {
+          m_PadAxisX[i] = kPadProfiles[p].axis_x;
+          m_PadAxisY[i] = kPadProfiles[p].axis_y;
+        }
+      }
       const char *product = m_pGamePad[i]->GetProperty(CDevice::PropertyProduct);
       if (product == 0) {
         product = "unknown";
       }
-      mLogger.Write(FromKernel, LogNotice, "Gamepad %u connected: %s%s", i + 1,
-                    product,
+      mLogger.Write(FromKernel, LogNotice,
+                    "Gamepad %u connected: %s (%s)%s, axes %d/%d", i + 1,
+                    product, vendor != 0 ? (const char *)*vendor : "?",
                     (m_pGamePad[i]->GetProperties() & GamePadPropertyIsKnown)
-                        ? "" : " (generic)");
+                        ? "" : " (generic)",
+                    m_PadAxisX[i], m_PadAxisY[i]);
+      delete vendor;
     }
   }
 }
@@ -460,9 +485,12 @@ void CKernel::GamePadStatusHandler(unsigned nDeviceIndex,
     }
   }
 
-  // The left stick (axes 0 and 1 on known and most unknown pads).
-  int x = AxisDirection(pState, known ? GamePadAxisLeftX : 0);
-  int y = AxisDirection(pState, known ? GamePadAxisLeftY : 1);
+  // The left stick (axes 0 and 1 on most unknown pads), or the D-pad on
+  // pads that report it as axes (kPadProfiles).
+  int x = AxisDirection(pState, known ? (int)GamePadAxisLeftX
+                                      : k->m_PadAxisX[nDeviceIndex]);
+  int y = AxisDirection(pState, known ? (int)GamePadAxisLeftY
+                                      : k->m_PadAxisY[nDeviceIndex]);
   if (x < 0) state |= HOST_PAD_LEFT;
   if (x > 0) state |= HOST_PAD_RIGHT;
   if (y < 0) state |= HOST_PAD_UP;
