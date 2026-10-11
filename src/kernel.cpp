@@ -34,11 +34,12 @@ static const char FromKernel[] = "bma800xl";
 // bits map to usages 0xE0..0xE7.
 #define USAGE_FIRST_MODIFIER 0xE0
 
-// GPIO joystick wiring, the same as BMC64's "GPIO Config 1".
+// GPIO joystick wiring, the same as BMC64's "GPIO Config 1" (in BMC64's
+// code that is config_0_joystickPins; its config_1 is the keyboard PCB).
 // Pins are active low with pull ups. Order: up, down, left, right, fire.
 static const unsigned kJoyGpio[2][5] = {
-    {23, 27, 17, 18, 22}, // Atari joystick port 1
-    {20, 19, 16, 13, 26}, // Atari joystick port 2
+    {17, 18, 27, 22, 23}, // Atari joystick port 1
+    {5, 6, 12, 13, 19},   // Atari joystick port 2
 };
 
 CKernel *CKernel::s_pThis = 0;

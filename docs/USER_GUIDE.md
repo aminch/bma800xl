@@ -143,8 +143,8 @@ BMC64 joystick adapters work. Each line is connected to ground when active.
 
 | Joystick | Up     | Down   | Left   | Right  | Fire   |
 |----------|--------|--------|--------|--------|--------|
-| Port 1   | GPIO23 | GPIO27 | GPIO17 | GPIO18 | GPIO22 |
-| Port 2   | GPIO20 | GPIO19 | GPIO16 | GPIO13 | GPIO26 |
+| Port 1   | GPIO17 | GPIO18 | GPIO27 | GPIO22 | GPIO23 |
+| Port 2   | GPIO5  | GPIO6  | GPIO12 | GPIO13 | GPIO19 |
 
 Atari joystick connector (DB9): pin 1 up, 2 down, 3 left, 4 right, 6 fire,
 8 ground.
