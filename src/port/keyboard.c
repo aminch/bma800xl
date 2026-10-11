@@ -119,6 +119,16 @@ static int key_control = 0;
 /* Gamepads acting as keys (see pad_virtual_keys). */
 static unsigned char virtual_down[256];
 
+/* Menu input trace, to find why the menu sometimes stops responding: while
+   a menu is open, each key or pad event is logged with the code it gave. */
+static int trace_event = FALSE;
+static int trace_usage, trace_pressed;
+static int event_from_pad = FALSE;
+static int trace_in_menu = FALSE;
+
+/* The key a held Home (or Select+Start) stands for; 0 when not held. */
+static int menu_combo_key = 0;
+
 /* Pad buttons that just turned into an Atari console key press. */
 static int pad_consol = INPUT_CONSOL_NONE;
 
@@ -153,6 +163,11 @@ static void update_pad_ports(void)
 		int s = host_pad_state(pad);
 		int prev = pad_prev[pad];
 		pad_prev[pad] = s;
+		if (s != prev && in_menu()) {
+			char msg[48];
+			snprintf(msg, sizeof(msg), "Menu pad %d: 0x%x", pad + 1, s);
+			host_log(msg);
+		}
 		if (fixed_ports)
 			continue;
 		if (s < 0) {
@@ -261,12 +276,17 @@ static void pad_virtual_keys(unsigned char *down)
 	pad_consol = INPUT_CONSOL_NONE;
 	memset(down, 0, 256);
 
-	/* Home, or Select and Start together, open the menu (or leave it). */
+	/* Home, or Select and Start together, open the menu (or leave it). The
+	   press keeps the meaning it had when it started: otherwise the Home
+	   that opened the menu would turn into Escape inside it while held. */
 	if ((all & HOST_PAD_HOME)
 	    || (all & (HOST_PAD_SELECT | HOST_PAD_START)) == (HOST_PAD_SELECT | HOST_PAD_START)) {
-		down[in_menu() ? K_ESCAPE : KBD_UI] = 1;
+		if (menu_combo_key == 0)
+			menu_combo_key = in_menu() ? K_ESCAPE : KBD_UI;
+		down[menu_combo_key] = 1;
 		return;
 	}
+	menu_combo_key = 0;
 
 	if (in_menu()) {
 		if (all & HOST_PAD_UP) down[K_UP] = 1;
@@ -291,8 +311,10 @@ static int next_key_event(int *usage, int *pressed)
 	unsigned char down[256];
 	int i;
 
+	event_from_pad = FALSE;
 	if (host_key_event(usage, pressed))
 		return 1;
+	event_from_pad = TRUE;
 
 	pad_virtual_keys(down);
 	for (i = 0; i < 256; i++) {
@@ -306,7 +328,34 @@ static int next_key_event(int *usage, int *pressed)
 	return 0;
 }
 
+static int read_keyboard(void);
+
 int PLATFORM_Keyboard(void)
+{
+	char msg[96];
+	int code;
+
+	if (in_menu() != trace_in_menu) {
+		trace_in_menu = in_menu();
+		snprintf(msg, sizeof(msg), "Menu %s (shift %d, ctrl %d)",
+		         trace_in_menu ? "opened" : "closed",
+		         shift_down(), key_is_down(K_LCTRL) || key_is_down(K_RCTRL));
+		host_log(msg);
+	}
+
+	trace_event = FALSE;
+	code = read_keyboard();
+	if (trace_event && in_menu()) {
+		snprintf(msg, sizeof(msg), "Menu key 0x%02x %s%s -> %d (shift %d, ctrl %d)",
+		         trace_usage, trace_pressed ? "down" : "up",
+		         event_from_pad ? " (pad)" : "",
+		         code, INPUT_key_shift, key_control);
+		host_log(msg);
+	}
+	return code;
+}
+
+static int read_keyboard(void)
 {
 	int shiftctrl = 0;
 	int usage, pressed;
@@ -328,6 +377,9 @@ int PLATFORM_Keyboard(void)
 		if (is_modifier_or_console(usage))
 			continue;
 		event_found = TRUE;
+		trace_event = TRUE;
+		trace_usage = usage;
+		trace_pressed = pressed;
 		lastkey = usage;
 		key_pressed = pressed;
 		lastuni = pressed ? usage_to_char(usage, shift_down()) : 0;

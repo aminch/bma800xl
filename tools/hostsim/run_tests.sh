@@ -150,6 +150,14 @@ check_log joy "Gamepad 2 is joystick 1" "the pad in use becomes joystick 1"
 check_image joy right
 check_image joy fire
 
+echo "The Home press that opens the menu isn't also Escape in it"
+run padhold 50 "" '1 pad 0 0\n150 pad 0 0x100\n250 pad 0 0\n280 quit\n'
+if grep -q 'Menu opened' "$OUT/padhold/log.txt" && ! grep -q 'Menu key 0x29 down' "$OUT/padhold/log.txt"; then
+    pass "padhold: no Escape while Home is held"
+else
+    fail "padhold" "menu not opened, or Escape sent while Home was held (see out/padhold/log.txt)"
+fi
+
 echo "Web UI requests while the menu is open"
 run menureset 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n200 webui coldstart\n400 shot after.ppm\n401 quit\n'
 check_log menureset "Web UI: cold start" "cold start leaves the menu and runs"
