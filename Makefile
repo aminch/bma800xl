@@ -16,14 +16,12 @@ include third_party/circle-stdlib/Config.mk
 
 BMA800XL_VERSION ?= $(shell tools/version.sh)
 A8_DIR := third_party/atari800/src
-A8_PATCHED_DIR := build/atari800-patched
 A8_VERSION := $(shell grep -m1 '^AC_INIT' third_party/atari800/configure.ac | cut -d, -f2 | tr -d ' []')
 
 include src/port/atari800.mk
 
 BUILD := build
 A8_OBJS := $(addprefix $(BUILD)/atari800/,$(A8_SRCS:.c=.o))
-A8_PATCHED_OBJS := $(addprefix $(BUILD)/atari800/,$(patsubst %.c,%.o,$(filter $(A8_SRCS),$(A8_PATCHED))))
 A8_LIB := $(BUILD)/libatari800.a
 
 OBJS = src/main.o src/kernel.o src/options.o src/fbl.o src/crt_pi_idx.o \
@@ -47,22 +45,15 @@ CPPFLAGS += $(VERSION_DEFINES)
 
 # The port's C files include atari800 headers, and src/port/config.h must be
 # found before anything else called config.h.
-src/port/%.o src/port/%.d: CFLAGS += -I src/port -I $(A8_PATCHED_DIR) -I $(A8_DIR)
+src/port/%.o src/port/%.d: CFLAGS += -I src/port -I $(A8_DIR)
 
-# atari800 itself: compiled into build/ so the submodule stays clean. Files
-# changed by src/patches/atari800_*.diff are compiled from their patched
-# copies (see src/port/atari800.mk).
-A8_CFLAGS = -I src/port -I $(A8_PATCHED_DIR) -I $(A8_DIR) -w
+# atari800 itself: compiled into build/ so the submodule stays clean.
+A8_CFLAGS = -I src/port -I $(A8_DIR) -w
 
-$(BUILD)/atari800/%.o: $(A8_DIR)/%.c src/port/config.h $(A8_PATCHED_STAMP)
+$(BUILD)/atari800/%.o: $(A8_DIR)/%.c src/port/config.h
 	@mkdir -p $(dir $@)
 	@echo "  CC    $<"
 	@$(CC) $(CFLAGS) $(A8_CFLAGS) $(C_STANDARD) -c -o $@ $<
-
-$(A8_PATCHED_OBJS): $(BUILD)/atari800/%.o: $(A8_PATCHED_STAMP) src/port/config.h
-	@mkdir -p $(dir $@)
-	@echo "  CC    $(A8_PATCHED_DIR)/$*.c"
-	@$(CC) $(CFLAGS) $(A8_CFLAGS) $(C_STANDARD) -c -o $@ $(A8_PATCHED_DIR)/$*.c
 
 $(A8_LIB): $(A8_OBJS)
 	@echo "  AR    $@"

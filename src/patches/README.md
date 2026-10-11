@@ -20,11 +20,11 @@ Patches are applied to the submodule revisions pinned by circle-stdlib v21
 
 atari800 is changed only when there is no other way. Its patches are made
 with `git format-patch` in a clone of atari800 at the pinned tag, so they can
-be sent upstream as they are. The Makefiles (through `src/port/atari800.mk`)
-copy the files a patch changes into `build/atari800-patched/` (or
-`tools/hostsim/build/atari800-patched/`), apply the patches there and compile
-those copies; the submodule itself is never modified. Adding or removing a
-patch rebuilds atari800.
+be sent upstream as they are. `tools/apply_atari800_patches.sh` resets the
+`third_party/atari800` submodule and applies them in it, like the Circle
+patches; `make_all.sh` and `tools/hostsim/run_tests.sh` run it, and with
+`--skip-patches` leave the submodule as it is, so changes made there by hand
+are kept. `git -C third_party/atari800 diff` shows what is patched.
 
 | Patch | Description |
 | --- | --- |

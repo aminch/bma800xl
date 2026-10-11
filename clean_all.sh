@@ -2,7 +2,8 @@
 #
 # Cleans everything: the kernel, the compiled atari800 library, the SD card
 # staging folder, and the third party builds inside circle-stdlib (which is
-# also reset to its pinned revision, undoing src/patches/).
+# also reset to its pinned revision, undoing src/patches/). atari800 is
+# reset too.
 #
 
 if [ ! -f sdcard/config.txt ]
@@ -34,5 +35,7 @@ do
     (cd "$lib" && git reset -q --hard && git clean -q -fdx)
 done
 (cd libs/circle/addon/wlan/hostap 2>/dev/null && git reset -q --hard && git clean -q -fdx)
+
+(cd "$SRC_DIR/third_party/atari800" 2>/dev/null && git reset -q --hard && git clean -q -fd)
 
 echo "Clean."

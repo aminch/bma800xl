@@ -3,8 +3,10 @@
 # Runs the emulator port on the PC (see host_sim.c) through a set of
 # scripted tests and checks the results.
 #
-#   tools/hostsim/run_tests.sh            run the tests
-#   tools/hostsim/run_tests.sh --update   also replace the reference images
+#   tools/hostsim/run_tests.sh                  run the tests
+#   tools/hostsim/run_tests.sh --update         also replace the reference images
+#   tools/hostsim/run_tests.sh --skip-patches   don't reset atari800 and apply
+#                                               src/patches/atari800_*.diff
 #
 # Screenshots are compared with the images in tools/hostsim/expected/.
 # Output goes to tools/hostsim/out/.
@@ -16,7 +18,20 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 OUT=$HERE/out
 SIM=$HERE/build/bma800xl_sim
 UPDATE=0
-[ "${1:-}" = "--update" ] && UPDATE=1
+SKIP_PATCHES=0
+for arg in "$@"
+do
+    case "$arg" in
+        --update) UPDATE=1 ;;
+        --skip-patches) SKIP_PATCHES=1 ;;
+        *) echo "Usage: $0 [--update] [--skip-patches]" >&2; exit 1 ;;
+    esac
+done
+
+if [ $SKIP_PATCHES = 0 ]; then
+    echo "Applying atari800 patches"
+    "$HERE/../apply_atari800_patches.sh" || exit 1
+fi
 
 make -s -C "$HERE" -j"$(nproc 2>/dev/null || echo 2)" || exit 1
 

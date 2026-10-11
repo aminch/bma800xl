@@ -6,7 +6,8 @@
 #   ./make_all.sh [pi3] [--skip-patches]
 #
 # The Pi 3 kernel also runs on the Pi Zero 2 W. --skip-patches leaves Circle
-# as it is instead of resetting it and applying src/patches/ again.
+# and atari800 as they are instead of resetting them and applying
+# src/patches/ again.
 # Run clean_all.sh first for a completely fresh build.
 #
 
@@ -70,6 +71,7 @@ else
         echo "  $(basename "$p")"
         patch -s -p1 < "$p"
     done
+    "$SRC_DIR/tools/apply_atari800_patches.sh"
 fi
 
 echo "=============================================================="

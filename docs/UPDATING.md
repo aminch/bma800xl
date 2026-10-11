@@ -5,8 +5,8 @@
 atari800 is a git submodule in `third_party/atari800`, pinned to a release
 tag. Nothing in that folder is edited; all of BMA800XL's own code is in
 `src/`. The few changes atari800 needs are patches,
-`src/patches/atari800_*.diff`, applied to copies of the files in `build/`
-(see `src/patches/README.md`). The connection points are:
+`src/patches/atari800_*.diff`, applied in the submodule by the build and
+test scripts (see `src/patches/README.md`). The connection points are:
 
 | File                   | Ties BMA800XL to                                    |
 |------------------------|-----------------------------------------------------|
@@ -18,10 +18,12 @@ tag. Nothing in that folder is edited; all of BMA800XL's own code is in
 
 ### Steps
 
-1. Move the submodule to the new release:
+1. Move the submodule to the new release, first undoing the patches the
+   build applied in it:
 
    ```
    cd third_party/atari800
+   git reset --hard && git clean -fd
    git fetch --tags
    git checkout ATARI800_7_3_0        # the new release tag
    cd ../..
