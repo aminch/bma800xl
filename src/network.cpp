@@ -24,13 +24,17 @@
 #include <circle/logger.h>
 #include <circle/machineinfo.h>
 #include <circle/net/netsubsystem.h>
+#include <circle/netdevice.h>
 #include <circle/string.h>
 #include <fatfs/ff.h>
 #include <wlan/bcm4343.h>
 #include <wlan/hostap/wpa_supplicant/wpasupplicant.h>
 
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "host.h"
 
 static const char FromNetwork[] = "network";
 #define HOSTNAME "bma800xl"
@@ -154,13 +158,6 @@ void NetworkInitialize(const Options *options) {
                FIRMWARE_PATH);
     return;
   }
-  if (!FileExists(WPA_CONFIG)) {
-    s_status = NETWORK_WIFI_CONFIG_MISSING;
-    log->Write(FromNetwork, LogError, "Wi-Fi config is missing: %s",
-               WPA_CONFIG);
-    return;
-  }
-
   s_status = NETWORK_WIFI_DEVICE_INITIALIZING;
   s_wlan = new CBcm4343Device(FIRMWARE_PATH);
   if (!s_wlan->Initialize()) {
@@ -183,6 +180,15 @@ void NetworkInitialize(const Options *options) {
   }
   StartServices(options);
 
+  // Without a network to join, Wi-Fi still starts so the menu can scan for
+  // one.
+  if (!FileExists(WPA_CONFIG)) {
+    s_status = NETWORK_WIFI_CONFIG_MISSING;
+    log->Write(FromNetwork, LogWarning,
+               "No %s: Wi-Fi started for scanning only", WPA_CONFIG);
+    return;
+  }
+
   s_status = NETWORK_WIFI_WPA_INITIALIZING;
   s_wpa = new CWPASupplicant(WPA_CONFIG);
   if (!s_wpa->Initialize()) {
@@ -194,6 +200,139 @@ void NetworkInitialize(const Options *options) {
   }
   s_status = NETWORK_WIFI_CONNECTING;
   log->Write(FromNetwork, LogNotice, "Wi-Fi initialized");
+}
+
+//
+// Wi-Fi scan, from BMC64. The chip reports access points in "escan" result
+// messages, each holding a list of BSS records.
+//
+
+namespace {
+
+struct WifiBssInfo {
+  uint32_t version;
+  uint32_t length;
+  uint8_t bssid[6];
+  uint16_t beacon_period;
+  uint16_t capability;
+  uint8_t ssid_length;
+  uint8_t ssid[32];
+  struct {
+    uint32_t count;
+    uint8_t rates[16];
+  } rateset;
+  uint16_t chanspec;
+  uint16_t atim_window;
+  uint8_t dtim_period;
+  int16_t rssi;
+  int8_t phy_noise;
+  uint8_t n_cap;
+  uint32_t nbss_cap;
+  uint8_t ctl_ch;
+  uint32_t reserved32[1];
+  uint8_t flags;
+  uint8_t reserved[3];
+  uint8_t basic_mcs[16];
+  uint16_t ie_offset;
+  uint32_t ie_length;
+  uint16_t snr;
+};
+
+struct WifiScanResult {
+  uint32_t buffer_length;
+  uint32_t version;
+  uint16_t sync_id;
+  uint16_t bss_count;
+  WifiBssInfo bss;
+};
+
+const uint16_t kWifiCapabilityPrivacy = 0x0010;
+const unsigned kWifiScanMs = 4000;
+
+// Adds the access points in one result message, strongest signal kept for
+// each name.
+unsigned ParseWifiScanResult(const uint8_t *buffer, unsigned length,
+                             struct host_wifi_ap *aps, unsigned max,
+                             unsigned count) {
+  const unsigned minimum_bss_length =
+      offsetof(WifiBssInfo, rssi) + sizeof(int16_t);
+  if (length < sizeof(WifiScanResult)) {
+    return count;
+  }
+  const WifiScanResult *scan = (const WifiScanResult *)buffer;
+  const uint8_t *record = (const uint8_t *)&scan->bss;
+  const uint8_t *end = buffer + length;
+  for (unsigned index = 0;
+       index < scan->bss_count && record + minimum_bss_length <= end;
+       index++) {
+    const WifiBssInfo *bss = (const WifiBssInfo *)record;
+    if (bss->length < minimum_bss_length || record + bss->length > end) {
+      break;
+    }
+    unsigned ssid_length = bss->ssid_length;
+    if (ssid_length > sizeof bss->ssid) {
+      ssid_length = sizeof bss->ssid;
+    }
+    if (ssid_length > 0 &&
+        ssid_length <= bss->length - offsetof(WifiBssInfo, ssid)) {
+      unsigned i;
+      for (i = 0; i < count; i++) {
+        if (strlen(aps[i].ssid) == ssid_length &&
+            memcmp(aps[i].ssid, bss->ssid, ssid_length) == 0) {
+          break;
+        }
+      }
+      if (i < count) {
+        if (bss->rssi > aps[i].signal) {
+          aps[i].signal = bss->rssi;
+        }
+      } else if (count < max) {
+        memcpy(aps[count].ssid, bss->ssid, ssid_length);
+        aps[count].ssid[ssid_length] = '\0';
+        aps[count].signal = bss->rssi;
+        aps[count].secure = (bss->capability & kWifiCapabilityPrivacy) != 0;
+        count++;
+      }
+    }
+    record += bss->length;
+  }
+  return count;
+}
+
+unsigned CollectWifiScanResults(struct host_wifi_ap *aps, unsigned max,
+                                unsigned count) {
+  uint8_t buffer[FRAME_BUFFER_SIZE];
+  unsigned length;
+  while (s_wlan->ReceiveScanResult(buffer, &length)) {
+    count = ParseWifiScanResult(buffer, length, aps, max, count);
+  }
+  return count;
+}
+
+}  // namespace
+
+extern "C" int host_wifi_scan(struct host_wifi_ap *aps, int max) {
+  if (s_wlan == 0) {
+    return -1;
+  }
+  uint8_t buffer[FRAME_BUFFER_SIZE];
+  unsigned length;
+  while (s_wlan->ReceiveScanResult(buffer, &length)) {
+  }
+  if (!s_wlan->Control("escan 3")) {
+    CLogger::Get()->Write(FromNetwork, LogError, "Cannot start Wi-Fi scan");
+    return 0;
+  }
+  unsigned count = 0;
+  for (unsigned waited = 0; waited < kWifiScanMs; waited += 100) {
+    count = CollectWifiScanResults(aps, (unsigned)max, count);
+    host_sleep_us(100000);  // lets Circle's tasks run, and the watchdog see us
+  }
+  s_wlan->Control("escan 0");
+  count = CollectWifiScanResults(aps, (unsigned)max, count);
+  CLogger::Get()->Write(FromNetwork, LogNotice,
+                        "Wi-Fi scan found %u networks", count);
+  return (int)count;
 }
 
 //

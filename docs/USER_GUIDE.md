@@ -27,7 +27,7 @@ BMA800XL's own settings:
 | Item | What it does |
 |------|--------------|
 | About BMA800XL, Licence | Version and credits; licence terms |
-| Network | Ethernet or Wi-Fi, the Wi-Fi network, password and country (written to `wpa_supplicant.conf`), the web UI and its PIN, the time zone |
+| Network | Ethernet or Wi-Fi, **Scan for Wi-Fi Networks**, the Wi-Fi network, password and country (written to `wpa_supplicant.conf`), the web UI and its PIN, the time zone |
 | Emulator Menu (atari800) | atari800's own menu (see below) |
 | Controllers | Which gamepad is which joystick, the keypad and arrow keys as joystick 1, GPIO joysticks, the keyboard layout, and a **Joystick Test** that shows live what the Atari sees on each joystick port |
 | Video | Locking frames to the display, the border, the CRT shader, smooth scaling |
@@ -168,9 +168,13 @@ for managing the SD card from any browser on the same network, so files can
 be copied to and from the Pi without taking the card out. It is the web UI
 from BMC64.
 
-Turn it on in the menu's *Network*: choose Ethernet or Wi-Fi, and for Wi-Fi
-enter the network's name, password and two letter country code, then
-reboot. Or, in `cmdline.txt` (on the same single line as the other options):
+Turn it on in the menu's *Network*. For Ethernet, set *Network* to Ethernet
+and reboot. For Wi-Fi, choose *Scan for Wi-Fi Networks*: the first time,
+it offers to switch Wi-Fi on and reboot; after that it lists the networks
+it can hear, strongest first. Pick yours, type its password, and reboot.
+Set *Wi-Fi Country* to your two letter country code too; it decides which
+channels are allowed. A hidden network can be typed in under *Wi-Fi
+Network* instead. Or, in `cmdline.txt` (on the same single line as the other options):
 
 - Ethernet: `network=ethernet`
 - Wi-Fi: `network=wifi`, and copy `wpa_supplicant.conf.example` to

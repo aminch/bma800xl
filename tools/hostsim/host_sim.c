@@ -451,6 +451,22 @@ void host_network_status(char *text, unsigned size)
 		snprintf(text, size, "Off");
 }
 
+/* BMA_WIFI=1 pretends Wi-Fi is running, with a few networks around. */
+int host_wifi_scan(struct host_wifi_ap *aps, int max)
+{
+	static const struct host_wifi_ap found[] = {
+		{"CoffeeShop", -71, 0},
+		{"Minchinet", -48, 1},
+		{"A very long network name, 32 ch", -80, 1},
+	};
+	int i, n = (int) (sizeof(found) / sizeof(found[0]));
+	if (getenv("BMA_WIFI") == NULL)
+		return -1;
+	for (i = 0; i < n && i < max; i++)
+		aps[i] = found[i];
+	return i;
+}
+
 const char *host_model_name(void)
 {
 	return "Host simulator";

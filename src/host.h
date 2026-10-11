@@ -112,6 +112,16 @@ int host_network_address(char *address, unsigned size);
 /* Network state for people: "Wi-Fi 192.168.1.50", "Off", "Ethernet:
    waiting for address"... */
 void host_network_status(char *text, unsigned size);
+/* A Wi-Fi network found by host_wifi_scan(). signal is in dBm. */
+struct host_wifi_ap {
+	char ssid[33];
+	int signal;
+	int secure;
+};
+/* Scans for Wi-Fi networks for a few seconds. Returns how many it found
+   (up to MAX), or -1 if Wi-Fi isn't running (it starts only when it is the
+   selected network). */
+int host_wifi_scan(struct host_wifi_ap *aps, int max);
 /* "Raspberry Pi 3 Model B+" */
 const char *host_model_name(void);
 /* The display's size in pixels. */

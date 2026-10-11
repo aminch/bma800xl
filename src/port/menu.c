@@ -37,6 +37,8 @@
 /* Something changed that only takes effect after a reboot. */
 static int reboot_needed = FALSE;
 
+static void offer_reboot_now(const char *message);
+
 /* Reboots or shuts down now, closing atari800's files first. */
 static void power(int off)
 {
@@ -278,9 +280,93 @@ static void edit_wifi(const char *title, char *value, int size)
 	}
 }
 
+static int compare_signal(const void *a, const void *b)
+{
+	return ((const struct host_wifi_ap *) b)->signal - ((const struct host_wifi_ap *) a)->signal;
+}
+
+/* Wi-Fi is off: offers to switch to it and reboot, after which a scan
+   works. */
+static void offer_wifi_reboot(void)
+{
+	enum { W_YES, W_NO };
+	static UI_tMenuItem items[] = {
+		UI_MENU_LABEL("Scanning needs Wi-Fi switched on,"),
+		UI_MENU_LABEL("which takes a reboot. Then come back"),
+		UI_MENU_LABEL("here and scan again."),
+		UI_MENU_LABEL(""),
+		UI_MENU_ACTION(W_YES, "Switch to Wi-Fi and Reboot"),
+		UI_MENU_ACTION(W_NO, "Cancel"),
+		UI_MENU_END
+	};
+	if (UI_driver->fSelect("Wi-Fi is Off", 0, W_YES, items, NULL) == W_YES) {
+		save_setting("network", "wifi");
+		power(0);
+	}
+}
+
+/* Scans for Wi-Fi networks and lets one be chosen, then asks for its
+   password. Returns TRUE if a network was chosen. */
+static int scan_wifi(void)
+{
+	enum { MAX_APS = 20 };
+	static struct host_wifi_ap aps[MAX_APS];
+	static char lines[MAX_APS][40];
+	static UI_tMenuItem items[MAX_APS + 3];
+	int n, i, chosen;
+
+	UI_driver->fMessage("Scanning for Wi-Fi networks...", 0);
+	n = host_wifi_scan(aps, MAX_APS);
+	if (n < 0) {
+		offer_wifi_reboot();
+		return FALSE;
+	}
+	if (n == 0) {
+		UI_driver->fMessage("No Wi-Fi networks found", 1);
+		return FALSE;
+	}
+	qsort(aps, n, sizeof(aps[0]), compare_signal);
+
+	items[0].flags = UI_ITEM_ACTION;
+	items[0].retval = -1;
+	items[0].prefix = NULL;
+	items[0].item = "Network                   Lock Signal";
+	items[0].suffix = NULL;
+	for (i = 0; i < n; i++) {
+		snprintf(lines[i], sizeof(lines[i]), "%-25.25s %-4s %4ddBm",
+		         aps[i].ssid, aps[i].secure ? "Yes" : "", aps[i].signal);
+		items[i + 1].flags = UI_ITEM_ACTION;
+		items[i + 1].retval = i;
+		items[i + 1].prefix = NULL;
+		items[i + 1].item = lines[i];
+		items[i + 1].suffix = NULL;
+	}
+	items[n + 1].flags = UI_ITEM_END;
+
+	chosen = UI_driver->fSelect("Choose a Wi-Fi Network", 0, 0, items, NULL);
+	if (chosen < 0 || chosen >= n)
+		return FALSE;
+
+	Util_strlcpy(wifi_ssid, aps[chosen].ssid, sizeof(wifi_ssid));
+	if (aps[chosen].secure) {
+		char text[64] = "";
+		if (!UI_driver->fEditString("Password", text, sizeof(wifi_psk)))
+			return FALSE;
+		Util_strlcpy(wifi_psk, text, sizeof(wifi_psk));
+	} else {
+		wifi_psk[0] = '\0';
+	}
+	if (!write_wifi_config()) {
+		UI_driver->fMessage("Cannot write " WPA_CONFIG, 1);
+		return FALSE;
+	}
+	save_setting("network", "wifi");
+	return TRUE;
+}
+
 static void network_menu(void)
 {
-	enum { N_DEVICE, N_SSID, N_PASSWORD, N_COUNTRY, N_WEBUI, N_PIN, N_TIMEZONE, N_REBOOT };
+	enum { N_DEVICE, N_SCAN, N_SSID, N_PASSWORD, N_COUNTRY, N_WEBUI, N_PIN, N_TIMEZONE, N_REBOOT };
 	static const char *const devices[] = {"off", "ethernet", "wifi", NULL};
 	static const char *const device_names[] = {"Off", "Ethernet", "Wi-Fi", NULL};
 	static char status[64], device[16], ssid[36], password[16], country[8], pin[12], tz[16];
@@ -288,6 +374,7 @@ static void network_menu(void)
 		UI_MENU_LABEL(status),
 		UI_MENU_LABEL(""),
 		UI_MENU_ACTION_PREFIX(N_DEVICE, "Network: ", device),
+		UI_MENU_SUBMENU(N_SCAN, "Scan for Wi-Fi Networks"),
 		UI_MENU_ACTION_PREFIX(N_SSID, "Wi-Fi Network: ", ssid),
 		UI_MENU_ACTION_PREFIX(N_PASSWORD, "Wi-Fi Password: ", password),
 		UI_MENU_ACTION_PREFIX(N_COUNTRY, "Wi-Fi Country: ", country),
@@ -317,7 +404,7 @@ static void network_menu(void)
 			strcpy(tz, "UTC");
 		else
 			snprintf(tz, sizeof(tz), "UTC%+d", minutes / 60);
-		items[6].flags = check_flags(setting_on("webui", TRUE));
+		items[7].flags = check_flags(setting_on("webui", TRUE));
 
 		option = UI_driver->fSelect("Network", 0, option, items, NULL);
 		switch (option) {
@@ -329,6 +416,10 @@ static void network_menu(void)
 			}
 			break;
 		}
+		case N_SCAN:
+			if (scan_wifi())
+				offer_reboot_now("Wi-Fi network saved.");
+			break;
 		case N_SSID:
 			edit_wifi("Wi-Fi network name", wifi_ssid, sizeof(wifi_ssid));
 			break;
@@ -705,23 +796,33 @@ static int main_menu(void)
 	}
 }
 
-/* Offers a reboot when settings changed that need one. */
-static void offer_reboot(void)
+/* Asks whether to reboot now, after MESSAGE. */
+static void offer_reboot_now(const char *message)
 {
 	enum { R_NOW, R_LATER };
 	static UI_tMenuItem items[] = {
-		UI_MENU_LABEL("Some changes take effect only"),
-		UI_MENU_LABEL("after a reboot."),
+		UI_MENU_LABEL(NULL),
+		UI_MENU_LABEL("It takes effect after a reboot."),
 		UI_MENU_LABEL(""),
 		UI_MENU_ACTION(R_NOW, "Reboot Now"),
 		UI_MENU_ACTION(R_LATER, "Later"),
 		UI_MENU_END
 	};
+	items[0].item = (char *) message;
+	if (UI_driver->fSelect("Reboot?", 0, R_NOW, items, NULL) == R_NOW)
+		power(0);
+	else
+		reboot_needed = TRUE;
+}
+
+/* Offers a reboot when settings changed that need one. */
+static void offer_reboot(void)
+{
 	if (!reboot_needed)
 		return;
 	reboot_needed = FALSE;
-	if (UI_driver->fSelect("Reboot?", 0, R_NOW, items, NULL) == R_NOW)
-		power(0);
+	offer_reboot_now("Some settings were changed.");
+	reboot_needed = FALSE;	/* "Later" set it again */
 }
 
 int BMA_Menu(void)

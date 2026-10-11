@@ -687,7 +687,7 @@ void host_network_status(char *text, unsigned size) {
       "Ethernet connected",
       "Ethernet not found",
       "Ethernet failed",
-      "Wi-Fi: no wpa_supplicant.conf",
+      "Wi-Fi: no network chosen",
       "Wi-Fi starting",
       "Wi-Fi failed",
       "Wi-Fi failed",

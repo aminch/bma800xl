@@ -122,6 +122,25 @@ check_image joytest right
 check_image joytest fire
 check_image joytest back
 
+echo "Wi-Fi scan"
+# Network is one up from Emulator Menu; Scan is one down in Network. Choose
+# the strongest network, type its password, and leave the reboot for later.
+mkdir -p "$OUT/wifiscan"
+(cd "$OUT/wifiscan" && printf '150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x52 1\n172 key 0x52 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x51 1\n202 key 0x51 0\n210 key 0x28 1\n212 key 0x28 0\n240 shot list.ppm\n250 key 0x28 1\n252 key 0x28 0\n270 type secret123\\n\n320 shot reboot.ppm\n330 key 0x51 1\n332 key 0x51 0\n340 key 0x28 1\n342 key 0x28 0\n370 shot network.ppm\n380 quit\n' \
+    | BMA_WIFI=1 BMA_REFRESH=50 BMA_CMDLINE="root=." timeout 600 "$SIM" > log.txt 2>&1)
+check_image wifiscan list
+check_image wifiscan reboot
+check_image wifiscan network
+if grep -q 'ssid="Minchinet"' "$OUT/wifiscan/wpa_supplicant.conf" 2>/dev/null \
+   && grep -q 'psk="secret123"' "$OUT/wifiscan/wpa_supplicant.conf" \
+   && grep -q '^network=wifi' "$OUT/wifiscan/bma800xl.cfg" 2>/dev/null; then
+    pass "wifiscan: network and password saved"
+else
+    fail "wifiscan" "wpa_supplicant.conf or bma800xl.cfg not as expected (see out/wifiscan)"
+fi
+run wifioff 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x52 1\n172 key 0x52 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x51 1\n202 key 0x51 0\n210 key 0x28 1\n212 key 0x28 0\n240 shot off.ppm\n250 quit\n'
+check_image wifioff off
+
 echo "A setting changed in the menu is saved"
 # Controllers, then Keypad is Joystick 1 (four down) to switch it off.
 run setting 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x51 1\n202 key 0x51 0\n210 key 0x51 1\n212 key 0x51 0\n220 key 0x51 1\n222 key 0x51 0\n230 key 0x51 1\n232 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n270 shot controllers.ppm\n280 quit\n'
