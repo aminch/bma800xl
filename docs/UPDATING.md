@@ -78,6 +78,9 @@ same revision BMC64 uses. `build_deps.sh` applies the patches in `patches/`
 to Circle before building:
 
 - `circle_sysconfig_patch.diff` enables multi-core and the USB FIQ
+- `circle_linux_bug_patch.diff` turns off `BUG_ON`, whose checks in Circle's
+  Linux emulation (used by VCHIQ for display and sound) only allow core 0;
+  the emulator calls them from core 1, as BMC64 does
 - `circle_bolt_keyboard_patch.diff` adds Logitech Bolt keyboard support
   (from BMC64)
 

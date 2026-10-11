@@ -1,0 +1,13 @@
+diff --git a/addon/linux/bug.h b/addon/linux/bug.h
+index 6b80534d..656accef 100644
+--- a/addon/linux/bug.h
++++ b/addon/linux/bug.h
+@@ -9,7 +9,7 @@
+ extern "C" {
+ #endif
+ 
+-#define BUG_ON(exp)	assert (!(exp))
++#define BUG_ON(exp)    ;
+ #define BUG()		assert (0)
+ 
+ void __warn (const char *file, const int line);
