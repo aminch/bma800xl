@@ -14,7 +14,8 @@ endif
 
 include third_party/circle-stdlib/Config.mk
 
-BMA800XL_VERSION ?= $(shell tools/version.sh)
+BMA800XL_VERSION ?= $(shell tools/version.sh --semver)
+BMA800XL_GIT ?= $(shell tools/version.sh --git)
 A8_DIR := third_party/atari800/src
 A8_VERSION := $(shell grep -m1 '^AC_INIT' third_party/atari800/configure.ac | cut -d, -f2 | tr -d ' []')
 
@@ -39,7 +40,8 @@ INCLUDE := $(CIRCLE_STDLIB_INCLUDES) $(INCLUDE) -I $(CIRCLEHOME)/addon/fatfs
 # See src/port/fswrap.c
 LDFLAGS += --wrap=stat
 
-VERSION_DEFINES = -DBMA800XL_VERSION=\"$(BMA800XL_VERSION)\" -DA8_VERSION=\"$(A8_VERSION)\"
+VERSION_DEFINES = -DBMA800XL_VERSION=\"$(BMA800XL_VERSION)\" \
+                  -DBMA800XL_GIT=\"$(BMA800XL_GIT)\" -DA8_VERSION=\"$(A8_VERSION)\"
 CFLAGS += $(VERSION_DEFINES)
 CPPFLAGS += $(VERSION_DEFINES)
 

@@ -32,6 +32,13 @@
 #define BMA800XL_VERSION "dev"
 #endif
 
+/* The version with the git commit, when the build gives one. */
+#ifdef BMA800XL_GIT
+#define BMA800XL_FULL_VERSION BMA800XL_VERSION " (" BMA800XL_GIT ")"
+#else
+#define BMA800XL_FULL_VERSION BMA800XL_VERSION
+#endif
+
 #define WPA_CONFIG "wpa_supplicant.conf"
 
 /* Something changed that only takes effect after a reboot. */
@@ -160,7 +167,7 @@ static void about(void)
 	char version[40], model[40], machine[64], network[64];
 	const char *lines[24];
 	int n = 0;
-	snprintf(version, sizeof(version), "Version %s", BMA800XL_VERSION);
+	snprintf(version, sizeof(version), "Version %s", BMA800XL_FULL_VERSION);
 	snprintf(model, sizeof(model), "%.38s", host_model_name());
 	machine_line(machine, sizeof(machine));
 	network_line(network, sizeof(network));

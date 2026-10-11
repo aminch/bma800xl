@@ -105,7 +105,8 @@ async function pollStatus() {
     $("qa-reset-sub").textContent = "Reset the " + machineDisplayName();
     $("i-model").textContent = s.model || "—";
     $("i-net").textContent = s.net_text || ("status " + s.net_status);
-    $("i-ver").textContent = s.version ? "BMA800XL " + s.version : "—";
+    $("i-ver").textContent = s.version
+      ? "BMA800XL " + s.version + (s.git ? " (" + s.git + ")" : "") : "—";
     $("i-uptime").textContent = fmtUptime(s.uptime_secs);
 
     if (rebooting) {

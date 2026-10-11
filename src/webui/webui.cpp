@@ -248,11 +248,11 @@ void HandleStatus(CSocket *socket) {
   char body[1024];
   int length = snprintf(
       body, sizeof(body),
-      "{\"hostname\":\"%s\",\"version\":\"%s\",\"machine\":\"%s\","
+      "{\"hostname\":\"%s\",\"version\":\"%s\",\"git\":\"%s\",\"machine\":\"%s\","
       "\"model\":\"%s\",\"ip\":\"%s\",\"net_status\":%d,\"net_text\":\"%s\","
       "\"uptime_secs\":%u,\"soc_temp_c\":%s,\"throttled\":%s,"
       "\"caps\":%s}",
-      WEBUI_HOSTNAME, BMA800XL_VERSION, WebUiMachineGet()->name,
+      WEBUI_HOSTNAME, BMA800XL_VERSION, BMA800XL_GIT, WebUiMachineGet()->name,
       model != 0 ? model : "",
       have_ip ? ip : "", net_status, NetStatusText(net_status), uptime,
       soc_temp, throttled, caps);

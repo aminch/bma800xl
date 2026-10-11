@@ -1,12 +1,23 @@
 #!/bin/sh
 #
-# Prints the BMA800XL version: the git tag or commit, with "-dirty" if
-# BMA800XL's own files have uncommitted changes. Changes inside the
-# submodules (build_deps.sh patches Circle) don't count.
+# Prints the BMA800XL version: the semantic version from the VERSION file
+# and the git commit, for example "1.0.0 (288b2f4)".
+#   --semver  only the semantic version
+#   --git     only the git commit, with "-dirty" if BMA800XL's own files
+#             have uncommitted changes. Changes inside the submodules
+#             (make_all.sh patches Circle and atari800) don't count.
 #
 cd "$(dirname "$0")/.." || exit 1
-version=$(git describe --tags --always 2>/dev/null) || { echo dev; exit 0; }
-if ! git diff --quiet --ignore-submodules HEAD 2>/dev/null; then
-    version="$version-dirty"
+semver=$(cat VERSION 2>/dev/null) || semver=dev
+if git=$(git rev-parse --short HEAD 2>/dev/null); then
+    if ! git diff --quiet --ignore-submodules HEAD 2>/dev/null; then
+        git="$git-dirty"
+    fi
+else
+    git=unknown
 fi
-echo "$version"
+case "$1" in
+--semver) echo "$semver" ;;
+--git) echo "$git" ;;
+*) echo "$semver ($git)" ;;
+esac

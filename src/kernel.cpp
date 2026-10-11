@@ -127,8 +127,8 @@ bool CKernel::Initialize(void) {
   if (!mLogger.Initialize(&mSerial)) {
     return false;
   }
-  mLogger.Write(FromKernel, LogNotice, "BMA800XL " BMA800XL_VERSION
-                " (atari800 " A8_VERSION ")");
+  mLogger.Write(FromKernel, LogNotice, "BMA800XL " BMA800XL_VERSION " (" BMA800XL_GIT
+                ", atari800 " A8_VERSION ")");
 
   if (!mTimer.Initialize()) {
     return false;
