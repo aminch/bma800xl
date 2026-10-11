@@ -124,12 +124,12 @@ check_image joytest back
 
 echo "Wi-Fi scan"
 # Network is one up from Emulator Menu; Scan is one down in Network. Choose
-# the strongest network, type its password, and leave the reboot for later.
+# the strongest network, which needs a password: the Network page comes
+# back with the password next, which is typed there.
 mkdir -p "$OUT/wifiscan"
-(cd "$OUT/wifiscan" && printf '150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x52 1\n172 key 0x52 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x51 1\n202 key 0x51 0\n210 key 0x28 1\n212 key 0x28 0\n240 shot list.ppm\n250 key 0x28 1\n252 key 0x28 0\n270 type secret123\\n\n320 shot reboot.ppm\n330 key 0x51 1\n332 key 0x51 0\n340 key 0x28 1\n342 key 0x28 0\n370 shot network.ppm\n380 quit\n' \
+(cd "$OUT/wifiscan" && printf '150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x52 1\n172 key 0x52 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x51 1\n202 key 0x51 0\n210 key 0x28 1\n212 key 0x28 0\n240 shot list.ppm\n250 key 0x28 1\n252 key 0x28 0\n280 shot network.ppm\n290 key 0x28 1\n292 key 0x28 0\n310 type secret123\\n\n370 quit\n' \
     | BMA_WIFI=1 BMA_REFRESH=50 BMA_CMDLINE="root=." timeout 600 "$SIM" > log.txt 2>&1)
 check_image wifiscan list
-check_image wifiscan reboot
 check_image wifiscan network
 if grep -q 'ssid="Minchinet"' "$OUT/wifiscan/wpa_supplicant.conf" 2>/dev/null \
    && grep -q 'psk="secret123"' "$OUT/wifiscan/wpa_supplicant.conf" \

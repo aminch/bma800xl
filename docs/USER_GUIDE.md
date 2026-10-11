@@ -171,7 +171,8 @@ from BMC64.
 Turn it on in the menu's *Network*. For Ethernet, set *Network* to Ethernet
 and reboot. For Wi-Fi, choose *Scan for Wi-Fi Networks*: the first time,
 it offers to switch Wi-Fi on and reboot; after that it lists the networks
-it can hear, strongest first. Pick yours, type its password, and reboot.
+it can hear, strongest first. Pick yours: it fills in *Wi-Fi Network*, and
+if the network needs a password, *Wi-Fi Password* is next. Then reboot.
 Set *Wi-Fi Country* to your two letter country code too; it decides which
 channels are allowed. A hidden network can be typed in under *Wi-Fi
 Network* instead. Or, in `cmdline.txt` (on the same single line as the other options):

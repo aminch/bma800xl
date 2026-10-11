@@ -37,8 +37,6 @@
 /* Something changed that only takes effect after a reboot. */
 static int reboot_needed = FALSE;
 
-static void offer_reboot_now(const char *message);
-
 /* Reboots or shuts down now, closing atari800's files first. */
 static void power(int off)
 {
@@ -305,8 +303,9 @@ static void offer_wifi_reboot(void)
 	}
 }
 
-/* Scans for Wi-Fi networks and lets one be chosen, then asks for its
-   password. Returns TRUE if a network was chosen. */
+/* Scans for Wi-Fi networks and lets one be chosen, which becomes the Wi-Fi
+   network. Returns 1 if it was chosen, 2 if it also needs a password, or 0
+   if nothing changed. */
 static int scan_wifi(void)
 {
 	enum { MAX_APS = 20 };
@@ -347,21 +346,20 @@ static int scan_wifi(void)
 	if (chosen < 0 || chosen >= n)
 		return FALSE;
 
-	Util_strlcpy(wifi_ssid, aps[chosen].ssid, sizeof(wifi_ssid));
-	if (aps[chosen].secure) {
-		char text[64] = "";
-		if (!UI_driver->fEditString("Password", text, sizeof(wifi_psk)))
-			return FALSE;
-		Util_strlcpy(wifi_psk, text, sizeof(wifi_psk));
-	} else {
+	/* The password is entered on the Network page; an open network has
+	   none, and the same network keeps the one it has. */
+	if (!aps[chosen].secure)
 		wifi_psk[0] = '\0';
-	}
+	else if (strcmp(wifi_ssid, aps[chosen].ssid) != 0)
+		wifi_psk[0] = '\0';
+	Util_strlcpy(wifi_ssid, aps[chosen].ssid, sizeof(wifi_ssid));
 	if (!write_wifi_config()) {
 		UI_driver->fMessage("Cannot write " WPA_CONFIG, 1);
-		return FALSE;
+		return 0;
 	}
 	save_setting("network", "wifi");
-	return TRUE;
+	reboot_needed = TRUE;
+	return aps[chosen].secure && wifi_psk[0] == '\0' ? 2 : 1;
 }
 
 static void network_menu(void)
@@ -417,8 +415,9 @@ static void network_menu(void)
 			break;
 		}
 		case N_SCAN:
-			if (scan_wifi())
-				offer_reboot_now("Wi-Fi network saved.");
+			/* Next, the password, if the network needs one. */
+			if (scan_wifi() == 2)
+				option = N_PASSWORD;
 			break;
 		case N_SSID:
 			edit_wifi("Wi-Fi network name", wifi_ssid, sizeof(wifi_ssid));
@@ -796,33 +795,23 @@ static int main_menu(void)
 	}
 }
 
-/* Asks whether to reboot now, after MESSAGE. */
-static void offer_reboot_now(const char *message)
+/* Offers a reboot when settings changed that need one. */
+static void offer_reboot(void)
 {
 	enum { R_NOW, R_LATER };
 	static UI_tMenuItem items[] = {
-		UI_MENU_LABEL(NULL),
-		UI_MENU_LABEL("It takes effect after a reboot."),
+		UI_MENU_LABEL("Some changes take effect only"),
+		UI_MENU_LABEL("after a reboot."),
 		UI_MENU_LABEL(""),
 		UI_MENU_ACTION(R_NOW, "Reboot Now"),
 		UI_MENU_ACTION(R_LATER, "Later"),
 		UI_MENU_END
 	};
-	items[0].item = (char *) message;
-	if (UI_driver->fSelect("Reboot?", 0, R_NOW, items, NULL) == R_NOW)
-		power(0);
-	else
-		reboot_needed = TRUE;
-}
-
-/* Offers a reboot when settings changed that need one. */
-static void offer_reboot(void)
-{
 	if (!reboot_needed)
 		return;
 	reboot_needed = FALSE;
-	offer_reboot_now("Some settings were changed.");
-	reboot_needed = FALSE;	/* "Later" set it again */
+	if (UI_driver->fSelect("Reboot?", 0, R_NOW, items, NULL) == R_NOW)
+		power(0);
 }
 
 int BMA_Menu(void)
