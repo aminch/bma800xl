@@ -263,9 +263,19 @@ static void feed_silence(void)
 
 /* ---- Time ------------------------------------------------------------------- */
 
+/* atari800's clock: real time plus the sleeps it asked for that were
+   skipped. Atari800_Sync() moves its target on by one Atari frame (which
+   its sound speed adjustment can stretch by 5%) every frame, and only
+   catches up when it falls behind, never when it gets ahead. With the
+   display doing the pacing its sleeps are skipped, so against real time it
+   would drift ahead, by a minute or more in a long session, and the first
+   sleep in a menu would then wait for all of it. Counting the skipped
+   sleeps keeps the two together. */
+static double skipped_sleep = 0.0;
+
 double PLATFORM_Time(void)
 {
-	return host_time();
+	return host_time() + skipped_sleep;
 }
 
 void PLATFORM_Sleep(double s)
@@ -273,6 +283,8 @@ void PLATFORM_Sleep(double s)
 	/* With the emulation locked to the display, the wait for vertical blank
 	   does the pacing; atari800's timer would only make frames late. */
 	if (s <= 0.0 || (vsync_lock && !UI_is_active && !Atari800_turbo)) {
+		if (s > 0.0)
+			skipped_sleep += s;
 		host_yield();
 		return;
 	}

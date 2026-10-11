@@ -180,6 +180,26 @@ mkdir -p "$OUT/drift"
 check_log drift "display refresh rate 50.003" "refresh rate refined"
 check_audio drift
 
+echo "The menu answers at once after a long game"
+# atari800's frame clock used to drift ahead while the display paced the
+# emulation, and the first menu sleep then waited for it (25 s after 10
+# minutes here, a minute or more on a Pi).
+mkdir -p "$OUT/longplay"
+(cd "$OUT/longplay" && printf '30000 key 0x3a 1\n30002 key 0x3a 0\n30060 key 0x29 1\n30062 key 0x29 0\n30120 shot back.ppm\n30121 quit\n' \
+    | BMA_SOUND_HALF=1 BMA_REFRESH=50 BMA_CMDLINE="root=. tv=pal" timeout 600 "$SIM" > log.txt 2>&1)
+if python3 - "$OUT/longplay/back.ppm" "$HERE/expected/menu-back.png" <<'EOF'
+import sys
+from PIL import Image, ImageChops
+a = Image.open(sys.argv[1]).convert("RGB")
+b = Image.open(sys.argv[2]).convert("RGB")
+sys.exit(0 if ImageChops.difference(a, b).getbbox() is None else 1)
+EOF
+then
+    pass "longplay: menu opened and closed within a second"
+else
+    fail "longplay" "menu still showing a second after Escape (see out/longplay)"
+fi
+
 echo "PAL on a 60 Hz display (not locked)"
 run mismatch 60 "tv=pal" '600 audio\n601 quit\n'
 check_log mismatch "timer paced" "falls back to timer pacing"

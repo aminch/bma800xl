@@ -132,7 +132,10 @@ void host_sound_close(void) {}
 unsigned host_sound_free_frames(void)
 {
 	sound_advance();
-	return snd_buffered >= snd_capacity ? 0 : (unsigned) (snd_capacity - snd_buffered);
+	/* BMA_SOUND_HALF=1 offers only half the buffer, which keeps atari800's
+	   own sound buffer fuller, as the VideoCore's late reports do on a Pi. */
+	double cap = getenv("BMA_SOUND_HALF") ? snd_capacity / 2.0 : snd_capacity;
+	return snd_buffered >= cap ? 0 : (unsigned) (cap - snd_buffered);
 }
 
 void host_sound_write(const int16_t *samples, unsigned frames)
