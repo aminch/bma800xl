@@ -272,6 +272,7 @@ static void feed_silence(void)
    sleep in a menu would then wait for all of it. Counting the skipped
    sleeps keeps the two together. */
 static double skipped_sleep = 0.0;
+#define MAX_SLEEP 0.25
 
 double PLATFORM_Time(void)
 {
@@ -287,6 +288,16 @@ void PLATFORM_Sleep(double s)
 			skipped_sleep += s;
 		host_yield();
 		return;
+	}
+	/* No wait atari800 asks for is ever this long (a frame is 20 ms). If it
+	   does, its clock has got ahead of real time somehow: move it on rather
+	   than leave the menus deaf until real time catches up. */
+	if (s > MAX_SLEEP) {
+		char msg[64];
+		snprintf(msg, sizeof(msg), "atari800's clock was %.2f s ahead; moved on", s);
+		host_log(msg);
+		skipped_sleep += s - MAX_SLEEP;
+		s = MAX_SLEEP;
 	}
 	host_sleep_us((unsigned) (s * 1000000.0));
 	/* Menus wait here between key presses without drawing frames. */

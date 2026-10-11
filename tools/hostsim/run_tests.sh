@@ -199,6 +199,11 @@ then
 else
     fail "longplay" "menu still showing a second after Escape (see out/longplay)"
 fi
+if grep -q "clock was" "$OUT/longplay/log.txt"; then
+    fail "longplay" "atari800's clock got ahead (see out/longplay/log.txt)"
+else
+    pass "longplay: atari800's clock kept with real time"
+fi
 
 echo "PAL on a 60 Hz display (not locked)"
 run mismatch 60 "tv=pal" '600 audio\n601 quit\n'
