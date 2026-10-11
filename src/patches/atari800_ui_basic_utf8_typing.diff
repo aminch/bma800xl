@@ -1,17 +1,3 @@
-From 18ba484d57a36f0eb60cb165efbfa3b0ba6bf695 Mon Sep 17 00:00:00 2001
-From: Adam Minchinton <adam.minchinton@gmail.com>
-Date: Sun, 11 Oct 2026 19:32:10 +0200
-Subject: [PATCH] ui_basic: type characters that have no Atari key
-
-A platform can return UI_BASIC_KEY_CHAR(c) from PLATFORM_Keyboard() for a
-key that types a Latin-1 character the Atari has no key for, such as the
-Norwegian a ring, o slash and ae. The line editor inserts it as UTF-8, so
-names and passwords with them can be typed in the menus.
----
- src/ui_basic.c | 9 +++++++++
- src/ui_basic.h | 7 +++++++
- 2 files changed, 16 insertions(+)
-
 diff --git a/src/ui_basic.c b/src/ui_basic.c
 index 5774c6e9..1e54c577 100644
 --- a/src/ui_basic.c

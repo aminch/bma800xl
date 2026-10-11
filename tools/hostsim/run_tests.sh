@@ -253,6 +253,72 @@ check_log crash 'Atari crashed: code \$02 \(CIM\) at \$2004' "the crash is logge
 check_log crash "A=34 X=56 " "the registers are logged"
 check_log crash '\$1FFC: .* A9 34 A2 56 02 ' "the code around the crash is logged"
 
+echo "A drive reply received at the wrong speed has a framing error"
+# A boot disk that sends a status command through POKEY itself, as
+# MyPicoDos does, and receives the reply at the drive's speed (divisor $28)
+# and then at 1050 Turbo speed (divisor 6). The first must be OK, the
+# second a framing error: MyPicoDos 4.05 crashed (CIM at $174D) when its
+# 1050 Turbo probe succeeded (patch atari800_sio_framing_error.diff).
+mkdir -p "$OUT/siospeed"
+python3 - "$OUT/siospeed/sio.atr" <<'EOF'
+import sys
+def text(s):  # screen codes, $FF ends
+    return [ord(c) - 0x20 for c in s] + [0xFF]
+boot = bytes([
+    0x00, 0x02, 0x00, 0x07, 0x06, 0x07,  # 2 boot sectors at $0700, run $0706
+    0x78,                    # SEI
+    0xA9, 0x28, 0x8D, 0x08, 0xD2,  # AUDCTL = $28 (channels 3+4, 1.79 MHz)
+    0xA9, 0x00, 0x8D, 0x06, 0xD2,  # AUDF4 = 0
+    0xA9, 0xA0, 0x8D, 0x07, 0xD2,  # AUDC4 = $A0 (silent)
+    0xA2, 0x28, 0x20, 0x2D, 0x07,  # LDX #$28 / JSR probe
+    0xA0, 0x50, 0x20, 0x9D, 0x07,  # LDY #80 / JSR show (line 2)
+    0xA2, 0x06, 0x20, 0x2D, 0x07,  # LDX #$06 / JSR probe
+    0xA0, 0x78, 0x20, 0x9D, 0x07,  # LDY #120 / JSR show (line 3)
+    0x4C, 0x2A, 0x07,        # JMP *
+    # $072D probe: status command, reply received at divisor X; returns
+    # the SKSTAT bits of all 7 reply bytes ANDed (bit 7 clear: framing error)
+    0xA9, 0x28, 0x8D, 0x04, 0xD2,  # AUDF3 = $28
+    0xA9, 0x34, 0x8D, 0x03, 0xD3,  # PBCTL = $34 (command line on)
+    0xA9, 0x23, 0x8D, 0x0F, 0xD2,  # SKCTL = $23 (send)
+    0x8D, 0x0A, 0xD2,        # SKRES
+    0xA0, 0x00,              # LDY #0
+    0xA9, 0x00, 0x8D, 0x0E, 0xD2,  # send: IRQEN = 0
+    0xA9, 0x10, 0x8D, 0x0E, 0xD2,  # IRQEN = $10 (output needed)
+    0xB9, 0xB0, 0x07,        # LDA frame,Y
+    0x8D, 0x0D, 0xD2,        # STA SEROUT
+    0xAD, 0x0E, 0xD2, 0x29, 0x10, 0xD0, 0xF9,  # wait for output needed
+    0xC8, 0xC0, 0x05, 0xD0, 0xE4,  # INY / CPY #5 / BNE send
+    0xAD, 0x0E, 0xD2, 0x29, 0x08, 0xD0, 0xF9,  # wait for output done
+    0x8E, 0x04, 0xD2,        # AUDF3 = X
+    0xA9, 0x13, 0x8D, 0x0F, 0xD2,  # SKCTL = $13 (receive)
+    0x8D, 0x0A, 0xD2,        # SKRES
+    0xA9, 0x3C, 0x8D, 0x03, 0xD3,  # PBCTL = $3C (command line off)
+    0xA9, 0xFF, 0x85, 0x80,  # $80 = $FF
+    0xA0, 0x07,              # LDY #7 (ACK, C, 4 bytes, checksum)
+    0xA9, 0x00, 0x8D, 0x0E, 0xD2,  # recv: IRQEN = 0
+    0xA9, 0x20, 0x8D, 0x0E, 0xD2,  # IRQEN = $20 (input ready)
+    0xAD, 0x0E, 0xD2, 0x29, 0x20, 0xD0, 0xF9,  # wait for input ready
+    0xAD, 0x0F, 0xD2, 0x25, 0x80, 0x85, 0x80,  # $80 &= SKSTAT
+    0x88, 0xD0, 0xE5,        # DEY / BNE recv
+    0xA9, 0x00, 0x8D, 0x0E, 0xD2,  # IRQEN = 0
+    0xA5, 0x80, 0x60,        # LDA $80 / RTS
+    # $079D show: "OK" or "FRAMING ERROR" at SAVMSC+Y from SKSTAT bit 7
+    0xA2, 0x00, 0x0A, 0xB0, 0x02, 0xA2, 0x03,  # X = 0 (OK) or 3 (error)
+    0xBD, 0xB5, 0x07, 0x30, 0x06,  # print: LDA texts,X / BMI done
+    0x91, 0x58, 0xE8, 0xC8, 0xD0, 0xF5,  # STA (SAVMSC),Y / INX / INY / BNE
+    0x60,                    # done: RTS
+    0x31, 0x53, 0x00, 0x00, 0x84,  # $07B0 frame: D1 status, checksum
+] + text("OK") + text("FRAMING ERROR"))  # $07B5 texts
+sectors = 720
+image = boot + bytes(sectors * 128 - len(boot))
+paragraphs = len(image) // 16
+header = bytes([0x96, 0x02, paragraphs & 0xFF, paragraphs >> 8 & 0xFF, 0x80, 0x00,
+                paragraphs >> 16]) + bytes(9)
+open(sys.argv[1], "wb").write(header + image)
+EOF
+run siospeed 50 "autostart=sio.atr" '300 shot result.ppm\n310 quit\n'
+check_image siospeed result
+
 echo "Gamepad in a game, with an idle extra pad in slot 1"
 mkdir -p "$OUT/joy"
 python3 - "$OUT/joy/joy.xex" <<'EOF'
