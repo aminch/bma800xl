@@ -41,6 +41,8 @@ go to the 3.5mm jack.
 
 The display is set to 720p at 50 Hz to suit a PAL Atari, which is the default.
 For an NTSC Atari, see the [User Guide](docs/USER_GUIDE.md#pal-and-ntsc).
+[docs/INSTALLATION.md](docs/INSTALLATION.md) has more on preparing the card,
+ROMs and upgrading.
 
 ## Keys
 
