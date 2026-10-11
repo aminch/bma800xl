@@ -1,7 +1,10 @@
 name: Build
 
 on:
+  # Tags are built by release.yml.
   push:
+    branches:
+      - '**'
   pull_request:
   workflow_dispatch:
 

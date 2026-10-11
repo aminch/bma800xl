@@ -1,0 +1,63 @@
+name: Release
+
+# Pushing a tag starting with v (v1.0.0) builds the SD card files and
+# creates a draft release with them. The tag must match the
+# VERSION file.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Verify tag matches VERSION
+        env:
+          ACTUAL_TAG: ${{ github.ref_name }}
+        run: |
+          expected_tag="v$(tools/version.sh --semver)"
+          if [ "$ACTUAL_TAG" != "$expected_tag" ]; then
+            echo "Tag must be $expected_tag (from VERSION), but received $ACTUAL_TAG"
+            exit 1
+          fi
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends texinfo wget zip imagemagick python3-pil
+
+      - name: Cache Arm GNU Toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bma800xl/toolchains
+          key: arm-gnu-toolchain-15.2.rel1
+
+      - name: Test the emulator port on the PC
+        run: tools/hostsim/run_tests.sh
+
+      - name: Build
+        run: ./build_sdcard.sh
+
+      - name: Check the release files
+        run: ./check_release_files.sh
+
+      - name: Zip the SD card files
+        run: cd build/sdcard && zip -r "../../bma800xl-${{ github.ref_name }}.zip" .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: BMA800XL ${{ github.ref_name }}
+          files: bma800xl-${{ github.ref_name }}.zip
+          generate_release_notes: false
+          draft: true
