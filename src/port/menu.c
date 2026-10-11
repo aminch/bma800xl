@@ -171,8 +171,8 @@ static void about(void)
 	lines[n++] = "atari800 " PACKAGE_VERSION;
 	lines[n++] = "  atari800.github.io";
 	lines[n++] = "Circle by Rene Stange";
-	lines[n++] = "Display, sound, network and web UI";
-	lines[n++] = "  from BMC64 by Randy Rossi";
+	lines[n++] = "Display, sound, network";
+	lines[n++] = " and WebUI from BMC64";
 	lines[n++] = "";
 	lines[n++] = model;
 	lines[n++] = machine;
@@ -570,9 +570,9 @@ static void controllers_menu(void)
 	static const char *const port_titles[] = {"Joystick 1", "Joystick 2", "Joystick 3", "Joystick 4"};
 	static const char *const modes[] = {"Automatic", "Gamepad 1", "Gamepad 2",
 	                                    "Gamepad 3", "Gamepad 4", "None", NULL};
-	static const char *const layouts[] = {"us", "uk", NULL};
-	static const char *const layout_names[] = {"US", "UK", NULL};
-	static char port_text[4][32], layout[8];
+	static const char *const layouts[] = {"us", "uk", "no", NULL};
+	static const char *const layout_names[] = {"US", "UK", "Norwegian", NULL};
+	static char port_text[4][32], layout[16];
 	static UI_tMenuItem items[] = {
 		UI_MENU_ACTION_PREFIX(C_PORT1, "Joystick 1: ", port_text[0]),
 		UI_MENU_ACTION_PREFIX(C_PORT2, "Joystick 2: ", port_text[1]),

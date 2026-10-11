@@ -19,3 +19,6 @@ sdcard_out/
 
 # Raspberry Pi firmware shipped on the SD card
 !sdcard/firmware/start.elf
+
+# Local files
+docs/a*/*.md

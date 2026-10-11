@@ -29,4 +29,5 @@ are kept. `git -C third_party/atari800 diff` shows what is patched.
 | Patch | Description |
 | --- | --- |
 | `atari800_ui_basic_utf8.diff` | The menus show UTF-8 text, so Wi-Fi network and file names like "café" no longer come out as "cafC)". Adds a Latin-1 font (U+00A0-U+00FF) in the Atari style, with the accented letters of AltirraOS's international character set; other characters show as `?`, and bytes that aren't valid UTF-8 are taken as Latin-1. Widths, list columns and the line editor count characters, not bytes. |
+| `atari800_ui_basic_utf8_typing.diff` | Characters with no Atari key (å, ø, æ on a Norwegian keyboard) can be typed in the menus: `PLATFORM_Keyboard()` returns `UI_BASIC_KEY_CHAR(c)` for them and the line editor inserts them as UTF-8. Needs the patch above. |
 

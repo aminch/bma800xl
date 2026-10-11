@@ -116,6 +116,31 @@ check_log basic "synchronised to display" "locked to a 50 Hz display"
 check_image basic boot
 check_image basic print
 
+echo "Norwegian keyboard"
+# tap FRAME USAGE [MODIFIER]: script lines pressing a key (USB HID usage) at
+# FRAME, with MODIFIER (0xe1 Shift, 0xe6 AltGr) held around it.
+tap() {
+    if [ $# -gt 2 ]; then
+        printf '%d key %s 1\\n%d key %s 1\\n%d key %s 0\\n%d key %s 0\\n' \
+            $1 $3 $(($1 + 1)) $2 $(($1 + 3)) $2 $(($1 + 4)) $3
+    else
+        printf '%d key %s 1\\n%d key %s 0\\n' $1 $2 $(($1 + 2)) $2
+    fi
+}
+# Shift+7, AltGr+2, Shift+0, +, Shift+¨, AltGr+8, |, Shift+<, å, ø, a type
+# "/@=+^[|>A" (å and ø have no Atari key).
+run keyboardno 50 "keyboard=no" "$(tap 160 0x24 0xe1)$(tap 168 0x1f 0xe6)$(tap 176 0x27 0xe1)$(tap 184 0x2d)$(tap 190 0x30 0xe1)$(tap 198 0x25 0xe6)$(tap 206 0x35)$(tap 212 0x64 0xe1)$(tap 220 0x2f)$(tap 226 0x33)$(tap 232 0x04)260 shot typed.ppm\n270 quit\n"
+check_image keyboardno typed
+# In the menus å, ø and æ can be typed: Network (one up from Emulator Menu),
+# Wi-Fi Network (two down), type "åøæÅa" and Return.
+run keyboardnomenu 50 "keyboard=no" "150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x52 1\n172 key 0x52 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x51 1\n202 key 0x51 0\n208 key 0x51 1\n210 key 0x51 0\n216 key 0x28 1\n218 key 0x28 0\n$(tap 240 0x2f)$(tap 248 0x33)$(tap 256 0x34)$(tap 264 0x2f 0xe1)$(tap 272 0x04)300 shot edit.ppm\n310 key 0x28 1\n312 key 0x28 0\n340 quit\n"
+check_image keyboardnomenu edit
+if grep -q 'ssid="åøæÅa"' "$OUT/keyboardnomenu/wpa_supplicant.conf" 2>/dev/null; then
+    pass "keyboardnomenu: name typed with å, ø and æ saved"
+else
+    fail "keyboardnomenu" "wpa_supplicant.conf doesn't have ssid=\"åøæÅa\" (see out/keyboardnomenu)"
+fi
+
 echo "BMA800XL menu with the keyboard"
 run menu 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n180 shot menu.ppm\n190 key 0x29 1\n192 key 0x29 0\n220 shot back.ppm\n230 quit\n'
 check_image menu menu

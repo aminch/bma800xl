@@ -64,39 +64,81 @@ enum {
 #define KBD_OSK     K_F11
 #define KBD_TURBO   K_F12
 
-/* Characters for each key, unshifted and shifted, for the supported layouts.
-   0 means the key does not produce a character. */
+/* Keyboard layouts, as in BMC64 (src/keyboard/layout_*.c): the character
+   each key types, as a Unicode code point (Latin-1), unshifted, shifted,
+   with AltGr (right Alt) and with Shift+AltGr. 0 means none. Letters are
+   not listed; they type a-z. Characters the Atari has no key for (å, £...)
+   only type in the menus. */
 typedef struct {
 	unsigned char usage;
-	char normal;
-	char shifted;
-} keychar_t;
+	unsigned short normal;
+	unsigned short shifted;
+	unsigned short altgr;
+	unsigned short shifted_altgr;
+} layout_key_t;
 
-static const keychar_t layout_us[] = {
-	{K_1, '1', '!'}, {0x1f, '2', '@'}, {0x20, '3', '#'}, {0x21, '4', '$'},
-	{0x22, '5', '%'}, {0x23, '6', '^'}, {0x24, '7', '&'}, {0x25, '8', '*'},
-	{K_9, '9', '('}, {K_0, '0', ')'},
-	{K_MINUS, '-', '_'}, {K_EQUAL, '=', '+'}, {K_LEFTBRACKET, '[', '{'},
-	{K_RIGHTBRACKET, ']', '}'}, {K_BACKSLASH, '\\', '|'},
-	{K_NONUS_HASH, '\\', '|'}, {K_SEMICOLON, ';', ':'}, {K_QUOTE, '\'', '"'},
-	{K_COMMA, ',', '<'}, {K_PERIOD, '.', '>'}, {K_SLASH, '/', '?'},
-	{K_NONUS_BACKSLASH, '\\', '|'},
-	{0, 0, 0}
+typedef struct {
+	const char *name;
+	const layout_key_t *keys;
+	int has_altgr;   /* right Alt is AltGr, not a key of its own */
+} layout_t;
+
+static const layout_key_t keys_us[] = {
+	{K_1, '1', '!', 0, 0}, {0x1f, '2', '@', 0, 0}, {0x20, '3', '#', 0, 0},
+	{0x21, '4', '$', 0, 0}, {0x22, '5', '%', 0, 0}, {0x23, '6', '^', 0, 0},
+	{0x24, '7', '&', 0, 0}, {0x25, '8', '*', 0, 0}, {K_9, '9', '(', 0, 0},
+	{K_0, '0', ')', 0, 0}, {K_MINUS, '-', '_', 0, 0}, {K_EQUAL, '=', '+', 0, 0},
+	{K_LEFTBRACKET, '[', '{', 0, 0}, {K_RIGHTBRACKET, ']', '}', 0, 0},
+	{K_BACKSLASH, '\\', '|', 0, 0}, {K_SEMICOLON, ';', ':', 0, 0},
+	{K_QUOTE, '\'', '"', 0, 0}, {K_GRAVE, '`', '~', 0, 0},
+	{K_COMMA, ',', '<', 0, 0}, {K_PERIOD, '.', '>', 0, 0},
+	{K_SLASH, '/', '?', 0, 0},
+	/* Not in BMC64's table: the extra keys of an ISO keyboard. */
+	{K_NONUS_HASH, '\\', '|', 0, 0}, {K_NONUS_BACKSLASH, '\\', '|', 0, 0},
+	{0, 0, 0, 0, 0}
 };
 
-static const keychar_t layout_uk[] = {
-	{K_1, '1', '!'}, {0x1f, '2', '"'}, {0x20, '3', '#'}, {0x21, '4', '$'},
-	{0x22, '5', '%'}, {0x23, '6', '^'}, {0x24, '7', '&'}, {0x25, '8', '*'},
-	{K_9, '9', '('}, {K_0, '0', ')'},
-	{K_MINUS, '-', '_'}, {K_EQUAL, '=', '+'}, {K_LEFTBRACKET, '[', '{'},
-	{K_RIGHTBRACKET, ']', '}'}, {K_BACKSLASH, '\\', '|'},
-	{K_NONUS_HASH, '#', '~'}, {K_SEMICOLON, ';', ':'}, {K_QUOTE, '\'', '@'},
-	{K_COMMA, ',', '<'}, {K_PERIOD, '.', '>'}, {K_SLASH, '/', '?'},
-	{K_NONUS_BACKSLASH, '\\', '|'},
-	{0, 0, 0}
+static const layout_key_t keys_uk[] = {
+	{K_1, '1', '!', 0, 0}, {0x1f, '2', '"', 0, 0}, {0x20, '3', 0xa3, 0, 0},
+	{0x21, '4', '$', 0, 0}, {0x22, '5', '%', 0, 0}, {0x23, '6', '^', 0, 0},
+	{0x24, '7', '&', 0, 0}, {0x25, '8', '*', 0, 0}, {K_9, '9', '(', 0, 0},
+	{K_0, '0', ')', 0, 0}, {K_MINUS, '-', '_', 0, 0}, {K_EQUAL, '=', '+', 0, 0},
+	{K_LEFTBRACKET, '[', '{', 0, 0}, {K_RIGHTBRACKET, ']', '}', 0, 0},
+	{K_BACKSLASH, '#', '~', 0, 0}, {K_NONUS_HASH, '#', '~', 0, 0},
+	{K_SEMICOLON, ';', ':', 0, 0}, {K_QUOTE, '\'', '@', 0, 0},
+	{K_GRAVE, '`', 0xac, 0, 0}, {K_NONUS_BACKSLASH, '\\', '|', 0, 0},
+	{K_COMMA, ',', '<', 0, 0}, {K_PERIOD, '.', '>', 0, 0},
+	{K_SLASH, '/', '?', 0, 0},
+	{0, 0, 0, 0, 0}
 };
 
-static const keychar_t *layout = layout_us;
+/* Norwegian. The dead keys (¨ ^ ` on the keys right of P and of +) type
+   their character at once. */
+static const layout_key_t keys_no[] = {
+	{K_1, '1', '!', 0, 0}, {0x1f, '2', '"', '@', 0},
+	{0x20, '3', '#', 0xa3, 0}, {0x21, '4', 0xa4, '$', 0},
+	{0x22, '5', '%', 0, 0}, {0x23, '6', '&', 0, 0},
+	{0x24, '7', '/', '{', 0}, {0x25, '8', '(', '[', 0},
+	{K_9, '9', ')', ']', 0}, {K_0, '0', '=', '}', 0},
+	{K_MINUS, '+', '?', '\\', 0}, {K_EQUAL, '\\', '`', 0, 0},
+	{K_LEFTBRACKET, 0xe5, 0xc5, 0, 0}, {K_RIGHTBRACKET, 0xa8, '^', 0, 0},
+	{K_BACKSLASH, '\'', '*', 0, 0}, {K_NONUS_HASH, '\'', '*', 0, 0},
+	{K_SEMICOLON, 0xf8, 0xd8, 0, 0}, {K_QUOTE, 0xe6, 0xc6, 0, 0},
+	{K_GRAVE, '|', 0xa7, 0, 0}, {K_COMMA, ',', ';', 0, 0},
+	{K_PERIOD, '.', ':', 0, 0}, {K_SLASH, '-', '_', 0, 0},
+	{K_NONUS_BACKSLASH, '<', '>', 0, 0},
+	{0, 0, 0, 0, 0}
+};
+
+static const layout_t layouts[] = {
+	{"us", keys_us, FALSE},
+	{"uk", keys_uk, FALSE},
+	{"gb", keys_uk, FALSE},
+	{"no", keys_no, TRUE},
+	{NULL, NULL, FALSE}
+};
+
+static const layout_t *layout = &layouts[0];
 
 /* Joystick emulation on the keyboard. */
 int BMA_keypad_joystick = TRUE;   /* numeric keypad, fire on keypad 0/5 */
@@ -209,10 +251,12 @@ int BMA_PortPad(int port)
 void BMA_InputSettingsChanged(void)
 {
 	const char *name = host_option("keyboard", "us");
-	if (strcmp(name, "uk") == 0 || strcmp(name, "gb") == 0)
-		layout = layout_uk;
-	else
-		layout = layout_us;
+	const layout_t *l;
+	layout = &layouts[0];
+	for (l = layouts; l->name != NULL; l++) {
+		if (strcmp(name, l->name) == 0)
+			layout = l;
+	}
 	BMA_keypad_joystick = host_option_int("keypad_joystick", TRUE);
 	BMA_arrow_joystick = host_option_int("arrow_joystick", FALSE);
 	init_pad_ports();
@@ -234,18 +278,37 @@ static int shift_down(void)
 	return key_is_down(K_LSHIFT) || key_is_down(K_RSHIFT);
 }
 
-static int usage_to_char(int usage, int shift)
+/* Is right Alt held as AltGr? */
+static int altgr_down(void)
 {
-	const keychar_t *k;
+	return layout->has_altgr && key_is_down(K_RALT);
+}
+
+/* The character (Unicode) key USAGE types, or 0. */
+static int usage_to_char(int usage, int shift, int altgr)
+{
+	const layout_key_t *k;
+	for (k = layout->keys; k->usage != 0; k++) {
+		if (k->usage == usage) {
+			if (altgr)
+				return shift ? k->shifted_altgr : k->altgr;
+			return shift ? k->shifted : k->normal;
+		}
+	}
+	if (altgr)
+		return 0;
 	if (usage >= K_A && usage <= K_Z)
 		return (shift ? 'A' : 'a') + usage - K_A;
 	if (usage == K_SPACE)
 		return ' ';
-	for (k = layout; k->usage != 0; k++) {
-		if (k->usage == usage)
-			return shift ? k->shifted : k->normal;
-	}
 	return 0;
+}
+
+/* The key left of 1 is the Atari key, unless the layout puts a character
+   there that the Atari has (| on a Norwegian keyboard). */
+static int grave_is_atari_key(void)
+{
+	return BMA_CharToAkey(usage_to_char(K_GRAVE, FALSE, FALSE), 0) == AKEY_NONE;
 }
 
 /* Keys used by keyboard joysticks are not passed to the emulation; some
@@ -262,8 +325,9 @@ static int is_joystick_key(int usage)
 	if (BMA_arrow_joystick) {
 		switch (usage) {
 		case K_UP: case K_DOWN: case K_LEFT: case K_RIGHT: case K_RCTRL:
-		case K_RALT:
 			return TRUE;
+		case K_RALT:
+			return !layout->has_altgr;
 		}
 	}
 	return FALSE;
@@ -395,7 +459,7 @@ static int read_keyboard(void)
 		event_found = TRUE;
 		lastkey = usage;
 		key_pressed = pressed;
-		lastuni = pressed ? usage_to_char(usage, shift_down()) : 0;
+		lastuni = pressed ? usage_to_char(usage, shift_down(), altgr_down()) : 0;
 	}
 
 	/* SHIFT and CONTROL */
@@ -499,6 +563,9 @@ static int read_keyboard(void)
 
 	switch (lastkey) {
 	case K_GRAVE:
+		if (!grave_is_atari_key())
+			break;
+		/* fall through */
 	case K_LGUI:
 		return AKEY_ATARI ^ shiftctrl;
 	case K_END:
@@ -580,6 +647,11 @@ static int read_keyboard(void)
 		case K_9: return AKEY_CTRL_9 | shiftctrl;
 		}
 	}
+
+	/* Characters the Atari has no key for (å) can still be typed in the
+	   menus. */
+	if (in_menu() && lastuni >= 0xa0 && lastuni <= 0xff)
+		return UI_BASIC_KEY_CHAR(lastuni);
 
 	return BMA_CharToAkey(lastuni, shiftctrl);
 }
@@ -680,7 +752,8 @@ static int joystick_state(int port)
 		if (host_key_down(K_DOWN)) state |= HOST_JOY_DOWN;
 		if (host_key_down(K_LEFT)) state |= HOST_JOY_LEFT;
 		if (host_key_down(K_RIGHT)) state |= HOST_JOY_RIGHT;
-		if (host_key_down(K_RCTRL) || host_key_down(K_RALT))
+		/* Right Alt is AltGr on some layouts. */
+		if (host_key_down(K_RCTRL) || (host_key_down(K_RALT) && !layout->has_altgr))
 			state |= HOST_JOY_FIRE;
 	}
 

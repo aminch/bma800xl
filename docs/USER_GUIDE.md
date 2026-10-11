@@ -64,7 +64,7 @@ The keys follow atari800's usual layout:
 | F7, Pause/Break        | Break                                         |
 | F11                    | On-screen keyboard (pick a key with the arrows) |
 | F12                    | Turbo (run as fast as possible) on/off        |
-| ` (backtick), left Windows key | Atari key (inverse video)             |
+| ` (backtick), left Windows key | Atari key (inverse video); on a Norwegian keyboard only the Windows key, as \| is on the backtick key |
 | Caps Lock              | Caps                                          |
 | Home                   | Clear                                         |
 | Insert, Delete         | Insert/delete character (with Shift: line)    |
@@ -81,7 +81,11 @@ The keys follow atari800's usual layout:
 | Alt+A                  | About                                         |
 
 Characters are typed as they appear on the PC keyboard, so Shift+2 gives `@`
-on a US keyboard. Set `keyboard=uk` in `cmdline.txt` for a UK keyboard.
+on a US keyboard. The layout is chosen in the menu's *Controllers*, or with
+`keyboard=uk` (UK) or `keyboard=no` (Norwegian) in `cmdline.txt`. On a
+Norwegian keyboard AltGr (right Alt) types `@ $ { [ ] } \`, and `^` types
+at once. Characters the Atari has no key for, such as `å ø æ £`, can only be
+typed in the menus (Wi-Fi network names and passwords, file names).
 
 To boot a game with BASIC switched off, hold **F2** (Option) while it starts,
 or turn BASIC off in *System Settings*.
@@ -109,7 +113,8 @@ receives.
 default; `keypad_joystick=0` turns it off.
 
 **Arrow keys**: with `arrow_joystick=1` the arrow keys are joystick 1 and
-right Ctrl or right Alt fires. Useful on keyboards without a numeric keypad.
+right Ctrl or right Alt fires (only right Ctrl with a Norwegian layout,
+where right Alt is AltGr). Useful on keyboards without a numeric keypad.
 The arrows then no longer move the Atari's cursor.
 
 **Gamepads**: in a game, the D-pad or left stick is the joystick, and
@@ -241,7 +246,7 @@ edited from the web UI.
 | `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes |
 | `volume`            | 0 to 100                     | `100`    | Sound volume |
 | `audio_buffer_ms`   | 10 or more                   | `40`     | Sound buffer; raise it if the sound breaks up |
-| `keyboard`          | `us`, `uk`                   | `us`     | PC keyboard layout |
+| `keyboard`          | `us`, `uk`, `no`             | `us`     | PC keyboard layout |
 | `joy1_pad` ... `joy4_pad` | `0` automatic, `1`-`4` a gamepad, `-1` none | `0` | Gamepad for each Atari joystick port |
 | `keypad_joystick`   | `0`, `1`                     | `1`      | Numeric keypad as joystick 1 |
 | `arrow_joystick`    | `0`, `1`                     | `0`      | Arrow keys as joystick 1 |
