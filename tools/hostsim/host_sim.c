@@ -456,8 +456,9 @@ int host_wifi_scan(struct host_wifi_ap *aps, int max)
 {
 	static const struct host_wifi_ap found[] = {
 		{"CoffeeShop", -71, 0},
-		{"Minchinet", -48, 1},
+		{"StdWiFiPoint", -48, 1},
 		{"A very long network name, 32 ch", -80, 1},
+		{"KåfféØst", -60, 0},
 	};
 	int i, n = (int) (sizeof(found) / sizeof(found[0]));
 	if (getenv("BMA_WIFI") == NULL)

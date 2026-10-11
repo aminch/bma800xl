@@ -3,8 +3,10 @@
 ## atari800
 
 atari800 is a git submodule in `third_party/atari800`, pinned to a release
-tag, and is built **unmodified**. Nothing in that folder is edited; all of
-BMA800XL's own code is in `src/`. The connection points are:
+tag. Nothing in that folder is edited; all of BMA800XL's own code is in
+`src/`. The few changes atari800 needs are patches,
+`src/patches/atari800_*.diff`, applied to copies of the files in `build/`
+(see `src/patches/README.md`). The connection points are:
 
 | File                   | Ties BMA800XL to                                    |
 |------------------------|-----------------------------------------------------|
@@ -12,6 +14,7 @@ BMA800XL's own code is in `src/`. The connection points are:
 | `src/port/config.h`    | atari800's build options (normally made by configure) |
 | `src/port/platform.c`  | `PLATFORM_*` functions from atari800's `platform.h` |
 | `src/port/keyboard.c`  | `PLATFORM_Keyboard`, `PLATFORM_PORT`, `PLATFORM_TRIG` |
+| `src/patches/atari800_*.diff` | Changes to atari800 files (`ui_basic.c`) |
 
 ### Steps
 
@@ -52,7 +55,19 @@ BMA800XL's own code is in `src/`. The connection points are:
      `src/port/platform.c` or `src/port/keyboard.c`. atari800's SDL port
      (`src/sdl/`) is the reference implementation to compare with.
 
-3. Build and test:
+3. Check the atari800 patches. If upstream took a patch, delete it from
+   `src/patches/` (and its row in `src/patches/README.md`). Otherwise check
+   that it still applies:
+
+   ```
+   cd third_party/atari800
+   for p in ../../src/patches/atari800_*.diff; do git apply --check "$p"; done
+   cd ../..
+   ```
+
+   If one doesn't, rebase it in a clone (see `src/patches/README.md`).
+
+4. Build and test:
 
    ```
    tools/hostsim/run_tests.sh      # on the PC
@@ -64,10 +79,10 @@ BMA800XL's own code is in `src/`. The connection points are:
    images with `tools/hostsim/run_tests.sh --update` and check the new ones
    by eye.
 
-4. Commit the submodule change together with any port changes:
+5. Commit the submodule change together with any port changes:
 
    ```
-   git add third_party/atari800 src/port
+   git add third_party/atari800 src/port src/patches
    git commit -m "Update atari800 to 7.3.0"
    ```
 

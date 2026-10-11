@@ -131,12 +131,28 @@ mkdir -p "$OUT/wifiscan"
     | BMA_WIFI=1 BMA_REFRESH=50 BMA_CMDLINE="root=." timeout 600 "$SIM" > log.txt 2>&1)
 check_image wifiscan list
 check_image wifiscan network
-if grep -q 'ssid="Minchinet"' "$OUT/wifiscan/wpa_supplicant.conf" 2>/dev/null \
+if grep -q 'ssid="StdWiFiPoint"' "$OUT/wifiscan/wpa_supplicant.conf" 2>/dev/null \
    && grep -q 'psk="secret123"' "$OUT/wifiscan/wpa_supplicant.conf" \
    && grep -q '^network=wifi' "$OUT/wifiscan/bma800xl.cfg" 2>/dev/null; then
     pass "wifiscan: network and password saved"
 else
     fail "wifiscan" "wpa_supplicant.conf or bma800xl.cfg not as expected (see out/wifiscan)"
+fi
+# A network name in UTF-8: listed and shown with its own letters (the list's
+# columns still line up), and the line editor deletes a whole character.
+# Choose it (one down), then edit the name: Left 3 times puts the cursor
+# after "Kåffé", Backspace leaves "KåffØst".
+mkdir -p "$OUT/wifiutf8"
+(cd "$OUT/wifiutf8" && printf '150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x52 1\n172 key 0x52 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x51 1\n202 key 0x51 0\n210 key 0x28 1\n212 key 0x28 0\n240 key 0x51 1\n242 key 0x51 0\n250 shot list.ppm\n260 key 0x28 1\n262 key 0x28 0\n290 shot network.ppm\n300 key 0x51 1\n302 key 0x51 0\n310 key 0x28 1\n312 key 0x28 0\n320 key 0x50 1\n322 key 0x50 0\n328 key 0x50 1\n330 key 0x50 0\n336 key 0x50 1\n338 key 0x50 0\n380 shot edit.ppm\n390 key 0x2a 1\n392 key 0x2a 0\n400 shot edited.ppm\n410 key 0x28 1\n412 key 0x28 0\n440 quit\n' \
+    | BMA_WIFI=1 BMA_REFRESH=50 BMA_CMDLINE="root=." timeout 600 "$SIM" > log.txt 2>&1)
+check_image wifiutf8 list
+check_image wifiutf8 network
+check_image wifiutf8 edit
+check_image wifiutf8 edited
+if grep -q 'ssid="KåffØst"' "$OUT/wifiutf8/wpa_supplicant.conf" 2>/dev/null; then
+    pass "wifiutf8: edited name saved"
+else
+    fail "wifiutf8" "wpa_supplicant.conf doesn't have ssid=\"KåffØst\" (see out/wifiutf8)"
 fi
 run wifioff 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x52 1\n172 key 0x52 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x51 1\n202 key 0x51 0\n210 key 0x28 1\n212 key 0x28 0\n240 shot off.ppm\n250 quit\n'
 check_image wifioff off

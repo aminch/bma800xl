@@ -15,6 +15,7 @@ bma800xl-*.zip
 # PC test harness
 tools/hostsim/build/
 tools/hostsim/out/
+sdcard_out/
 
 # Raspberry Pi firmware shipped on the SD card
 !sdcard/firmware/start.elf

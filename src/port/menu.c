@@ -226,6 +226,49 @@ static void copy_quoted(char *dst, size_t size, const char *src)
 	dst[end - src] = '\0';
 }
 
+/* The menus show strings as UTF-8, with bytes that aren't valid UTF-8 taken
+   as Latin-1 (src/patches/atari800_ui_basic_utf8.diff). Returns how many
+   bytes the character at s takes, by the same rules. */
+static int char_bytes(const char *s)
+{
+	const unsigned char *p = (const unsigned char *) s;
+	int len, i;
+	if (p[0] >= 0xc2 && p[0] <= 0xdf)
+		len = 2;
+	else if (p[0] >= 0xe0 && p[0] <= 0xef)
+		len = 3;
+	else if (p[0] >= 0xf0 && p[0] <= 0xf4)
+		len = 4;
+	else
+		return 1;
+	for (i = 1; i < len; i++)
+		if ((p[i] & 0xc0) != 0x80)
+			return 1;
+	/* overlong forms, surrogates and code points past U+10FFFF */
+	if ((p[0] == 0xe0 && p[1] < 0xa0) || (p[0] == 0xed && p[1] >= 0xa0)
+	    || (p[0] == 0xf0 && p[1] < 0x90) || (p[0] == 0xf4 && p[1] >= 0x90))
+		return 1;
+	return len;
+}
+
+/* Copies the first width characters (not bytes) of src, padded with spaces
+   to width characters if pad is set. size must allow 4 bytes a character. */
+static void copy_chars(char *dst, size_t size, const char *src, int width, int pad)
+{
+	char *end = dst + size - 1;
+	for (; width > 0 && *src != '\0'; width--) {
+		int n = char_bytes(src);
+		if (dst + n > end)
+			break;
+		memcpy(dst, src, n);
+		dst += n;
+		src += n;
+	}
+	for (; pad && width > 0 && dst < end; width--)
+		*dst++ = ' ';
+	*dst = '\0';
+}
+
 static void read_wifi_config(void)
 {
 	char path[FILENAME_MAX], line[160];
@@ -310,7 +353,7 @@ static int scan_wifi(void)
 {
 	enum { MAX_APS = 20 };
 	static struct host_wifi_ap aps[MAX_APS];
-	static char lines[MAX_APS][40];
+	static char lines[MAX_APS][128];
 	static UI_tMenuItem items[MAX_APS + 3];
 	int n, i, chosen;
 
@@ -332,8 +375,10 @@ static int scan_wifi(void)
 	items[0].item = "Network                   Lock Signal";
 	items[0].suffix = NULL;
 	for (i = 0; i < n; i++) {
-		snprintf(lines[i], sizeof(lines[i]), "%-25.25s %-4s %4ddBm",
-		         aps[i].ssid, aps[i].secure ? "Yes" : "", aps[i].signal);
+		char name[25 * 4 + 1];
+		copy_chars(name, sizeof(name), aps[i].ssid, 25, TRUE);
+		snprintf(lines[i], sizeof(lines[i]), "%s %-4s %4ddBm",
+		         name, aps[i].secure ? "Yes" : "", aps[i].signal);
 		items[i + 1].flags = UI_ITEM_ACTION;
 		items[i + 1].retval = i;
 		items[i + 1].prefix = NULL;
@@ -367,7 +412,7 @@ static void network_menu(void)
 	enum { N_DEVICE, N_SCAN, N_SSID, N_PASSWORD, N_COUNTRY, N_WEBUI, N_PIN, N_TIMEZONE, N_REBOOT };
 	static const char *const devices[] = {"off", "ethernet", "wifi", NULL};
 	static const char *const device_names[] = {"Off", "Ethernet", "Wi-Fi", NULL};
-	static char status[64], device[16], ssid[36], password[16], country[8], pin[12], tz[16];
+	static char status[64], device[16], ssid[20 * 4 + 1], password[16], country[8], pin[12], tz[16];
 	static UI_tMenuItem items[] = {
 		UI_MENU_LABEL(status),
 		UI_MENU_LABEL(""),
@@ -394,7 +439,7 @@ static void network_menu(void)
 		read_wifi_config();
 		network_line(status, sizeof(status));
 		Util_strlcpy(device, device_names[device_index], sizeof(device));
-		snprintf(ssid, sizeof(ssid), "%.20s", wifi_ssid[0] ? wifi_ssid : "(none)");
+		copy_chars(ssid, sizeof(ssid), wifi_ssid[0] ? wifi_ssid : "(none)", 20, FALSE);
 		Util_strlcpy(password, wifi_psk[0] ? "********" : "(none)", sizeof(password));
 		Util_strlcpy(country, wifi_country, sizeof(country));
 		Util_strlcpy(pin, webui_pin[0] ? webui_pin : "(none)", sizeof(pin));
