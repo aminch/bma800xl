@@ -76,7 +76,7 @@ builds everything and stages the SD card files in `build/sdcard/`. See
 
 ## Updating atari800
 
-The atari800 sources are used unmodified, from a git submodule pinned to a
+The atari800 sources are used from a git submodule pinned to a
 release tag. Everything specific to BMA800XL lives in `src/`, so moving to a
 new atari800 release is usually a matter of changing the submodule and
 rebuilding. See [docs/UPDATING.md](docs/UPDATING.md).
@@ -91,7 +91,7 @@ src/network.cpp, webui/    Ethernet / Wi-Fi and the web UI, from BMC64
 src/host.h                 What the kernel offers the emulator
 src/port/                  atari800's platform layer (PLATFORM_* functions),
                            its config.h and the list of atari800 sources
-third_party/atari800       atari800, unmodified (submodule)
+third_party/atari800       atari800 (submodule)
 third_party/circle-stdlib  Circle and newlib (submodule)
 tools/hostsim              Runs the emulator port on a PC for testing
 ```

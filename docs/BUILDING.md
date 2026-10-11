@@ -95,6 +95,6 @@ with `tools/gen_webui_assets.py` whenever an asset changes.
 | `src/port/atari800.mk`       | Which atari800 sources are built            |
 | `src/patches/`               | Changes applied to Circle by `make_all.sh`  |
 | `sdcard/`                    | Files for the SD card                       |
-| `third_party/atari800`       | atari800 (submodule, unmodified)            |
+| `third_party/atari800`       | atari800 (submodule)                        |
 | `third_party/circle-stdlib`  | Circle and newlib (submodule)               |
 | `tools/hostsim`              | PC test harness                             |
