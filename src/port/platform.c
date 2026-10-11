@@ -28,11 +28,14 @@
 #include "akey.h"
 #include "atari.h"
 #include "colours.h"
+#include "cpu.h"
 #include "input.h"
 #include "log.h"
+#include "memory.h"
 #include "monitor.h"
 #include "platform.h"
 #include "screen.h"
+#include "sio.h"
 #include "sound.h"
 #include "ui.h"
 #include "ui_basic.h"
@@ -101,6 +104,38 @@ static void read_border_setting(void)
 static double atari_fps(void)
 {
 	return Atari800_tv_mode == Atari800_TV_PAL ? Atari800_FPS_PAL : Atari800_FPS_NTSC;
+}
+
+/* atari800's crash menu ("The Atari computer has crashed") is only on the
+   screen. The CPU opens it through UI_Run, which calls the UI driver's fInit
+   first: that is where the crash is written to the log, with the registers,
+   the code around it and the disks in use. */
+static UI_tDriver crash_logging_driver;
+
+static void crash_logging_init(void)
+{
+	if (UI_crash_code >= 0) {
+		char msg[96];
+		int len, i;
+		snprintf(msg, sizeof(msg), "Atari crashed: code $%02X (CIM) at $%04X",
+		         UI_crash_code, UI_crash_address);
+		host_log(msg);
+		snprintf(msg, sizeof(msg), "  A=%02X X=%02X Y=%02X S=%02X P=%02X",
+		         CPU_regA, CPU_regX, CPU_regY, CPU_regS, CPU_regP);
+		host_log(msg);
+		len = snprintf(msg, sizeof(msg), "  $%04X:", (UWORD) (UI_crash_address - 8));
+		for (i = -8; i < 8; i++)
+			len += snprintf(msg + len, sizeof(msg) - len, " %02X",
+			                MEMORY_SafeGetByte((UWORD) (UI_crash_address + i)));
+		host_log(msg);
+		for (i = 0; i < SIO_MAX_DRIVES; i++) {
+			if (SIO_drive_status[i] == SIO_OFF || SIO_drive_status[i] == SIO_NO_DISK)
+				continue;
+			snprintf(msg, sizeof(msg), "  D%d: %.80s", i + 1, SIO_filename[i]);
+			host_log(msg);
+		}
+	}
+	UI_BASIC_driver.fInit();
 }
 
 /* Times a few vertical blanks to find the display's refresh rate. */
@@ -568,6 +603,10 @@ int PLATFORM_Initialise(int *argc, char *argv[])
 	update_sync_mode();
 
 	BMA_KeyboardInit();
+
+	crash_logging_driver = UI_BASIC_driver;
+	crash_logging_driver.fInit = crash_logging_init;
+	UI_driver = &crash_logging_driver;
 
 	if (!Sound_Initialise(argc, argv))
 		return FALSE;

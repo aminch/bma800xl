@@ -227,6 +227,21 @@ EOF
 run xex 50 "autostart=red.xex" '200 shot red.ppm\n210 quit\n'
 check_image xex red
 
+echo "A crash is written to the log"
+mkdir -p "$OUT/crash"
+python3 - "$OUT/crash/crash.xex" <<'EOF'
+import sys
+# LDA #$34 / LDX #$56 / CIM: the crash menu
+code = bytes([0xA9, 0x34, 0xA2, 0x56, 0x02])
+xex = bytes([0xFF, 0xFF, 0x00, 0x20]) + (0x2000 + len(code) - 1).to_bytes(2, "little") + code
+xex += bytes([0xE0, 0x02, 0xE1, 0x02, 0x00, 0x20])
+open(sys.argv[1], "wb").write(xex)
+EOF
+run crash 50 "autostart=crash.xex" '200 quit\n'
+check_log crash 'Atari crashed: code \$02 \(CIM\) at \$2004' "the crash is logged"
+check_log crash "A=34 X=56 " "the registers are logged"
+check_log crash '\$1FFC: .* A9 34 A2 56 02 ' "the code around the crash is logged"
+
 echo "Gamepad in a game, with an idle extra pad in slot 1"
 mkdir -p "$OUT/joy"
 python3 - "$OUT/joy/joy.xex" <<'EOF'
