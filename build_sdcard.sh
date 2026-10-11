@@ -62,11 +62,19 @@ cp "$SRC_DIR/kernel8-32.img" "$STAGING_DIR/"
 cp "$SRC_DIR/LICENSE" "$STAGING_DIR/LICENSE.txt"
 cp "$SRC_DIR/docs/SDCARD_README.txt" "$STAGING_DIR/README.txt"
 
-# Folders for the user's files. The file browser starts at the root.
-for dir in disks programs carts tapes states ROM
-do
-    mkdir -p "$STAGING_DIR/$dir"
-done
+# Folders for the user's files. The file browser starts at the root. Each
+# gets a README, which also keeps it in zip files and CI artifacts (GitHub
+# drops empty folders).
+folder_readme() {
+    mkdir -p "$STAGING_DIR/$1"
+    printf '%s\r\n' "$2" > "$STAGING_DIR/$1/README.txt"
+}
+folder_readme disks    "Disk images: .atr .atx .xfd .dcm .pro"
+folder_readme programs "Programs: .xex .com .exe .obx, and BASIC programs: .bas .lst"
+folder_readme carts    "Cartridge images: .car .rom .bin (and .a52 for the 5200)"
+folder_readme tapes    "Cassette images: .cas"
+folder_readme states   "Saved states: .a8s (Save State in the menu, Alt+S)"
+mkdir -p "$STAGING_DIR/ROM"
 cp "$SRC_DIR/docs/ROM_README.txt" "$STAGING_DIR/ROM/README.txt"
 
 echo "Staged boot partition files in $STAGING_DIR ($(tools/version.sh))"
