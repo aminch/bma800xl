@@ -385,7 +385,8 @@ void PLATFORM_ConfigSave(FILE *fp)
 
 /* The web UI's server runs as a Circle task, which only runs when the
    emulator yields, so these are only ever set between emulation steps. They
-   are acted on at the start of the next frame. */
+   are acted on after the current frame, or, while a menu is open, by
+   BMA_MenuRequests(). */
 static volatile int request_power = -1;   /* 0 reboot, 1 power off */
 static volatile int request_coldstart = FALSE;
 static volatile int request_autostart = FALSE;
@@ -408,18 +409,8 @@ void emu_autostart_interrupt(const char *path)
 	request_autostart = TRUE;
 }
 
-static void handle_requests(void)
+static void handle_power_request(void)
 {
-	if (request_autostart) {
-		request_autostart = FALSE;
-		Log_print("Web UI: starting %s", autostart_path);
-		if (AFILE_OpenFile(autostart_path, TRUE, 1, FALSE) == AFILE_ERROR)
-			Log_print("Cannot start %s", autostart_path);
-	}
-	if (request_coldstart) {
-		request_coldstart = FALSE;
-		Atari800_Coldstart();
-	}
 	if (request_power >= 0) {
 		int power_off = request_power;
 		request_power = -1;
@@ -431,6 +422,31 @@ static void handle_requests(void)
 		else
 			host_reboot();
 	}
+}
+
+static void handle_requests(void)
+{
+	if (request_autostart) {
+		request_autostart = FALSE;
+		Log_print("Web UI: starting %s", autostart_path);
+		if (AFILE_OpenFile(autostart_path, TRUE, 1, FALSE) == AFILE_ERROR)
+			Log_print("Cannot start %s", autostart_path);
+	}
+	if (request_coldstart) {
+		request_coldstart = FALSE;
+		Log_print("Web UI: cold start");
+		Atari800_Coldstart();
+	}
+	handle_power_request();
+}
+
+/* The main loop doesn't run while a menu is open. Reboot and power off
+   happen at once; for anything else this returns TRUE, and the menus are
+   closed (see PLATFORM_Keyboard) so the main loop can do it. */
+int BMA_MenuRequests(void)
+{
+	handle_power_request();
+	return request_coldstart || request_autostart;
 }
 
 /* ---- On-screen message ------------------------------------------------------ */

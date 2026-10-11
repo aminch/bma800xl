@@ -314,6 +314,10 @@ int PLATFORM_Keyboard(void)
 
 	update_pad_ports();
 
+	/* Something from the web UI is waiting: back out of the menus. */
+	if (in_menu() && BMA_MenuRequests())
+		return AKEY_ESCAPE;
+
 	/* Caps Lock gives a single key press. */
 	if (lastkey == K_CAPSLOCK && key_pressed) {
 		key_pressed = 0;

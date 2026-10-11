@@ -42,6 +42,16 @@ static const unsigned kJoyGpio[2][5] = {
 
 CKernel *CKernel::s_pThis = 0;
 
+// Core 1 counts up s_Core1Beat while it makes progress and names what it is
+// doing in s_Core1Stage, so core 0 can log where it got stuck if it stops.
+static volatile unsigned s_Core1Beat = 0;
+static const char *volatile s_Core1Stage = "starting";
+
+static inline void Core1Beat(const char *stage) {
+  s_Core1Stage = stage;
+  s_Core1Beat = s_Core1Beat + 1;
+}
+
 //
 // CEmulatorCore
 //
@@ -178,13 +188,34 @@ TShutdownMode CKernel::Run(void) {
 
   mEmulatorCore.Launch();
 
-  // Core 0 only looks after USB devices coming and going. Interrupts keep
-  // being handled here.
+  // Core 0 only looks after USB devices coming and going, and watches that
+  // the emulator on core 1 keeps going. Interrupts keep being handled here.
+  unsigned last_beat = 0;
+  unsigned last_change = CTimer::GetClockTicks();
+  bool stalled = false;
   for (;;) {
     if (mUSBHCI.UpdatePlugAndPlay()) {
       SetupUSBKeyboards();
       SetupUSBGamePads();
     }
+
+    unsigned beat = s_Core1Beat;
+    unsigned now = CTimer::GetClockTicks();
+    if (beat != last_beat) {
+      if (stalled) {
+        mLogger.Write(FromKernel, LogNotice, "Emulator running again after %u ms",
+                      (now - last_change) / (CLOCKHZ / 1000));
+        stalled = false;
+      }
+      last_beat = beat;
+      last_change = now;
+    } else if (beat != 0 && !stalled && now - last_change > 3 * CLOCKHZ) {
+      mLogger.Write(FromKernel, LogWarning,
+                    "Emulator has not moved for 3 s; last seen: %s",
+                    (const char *)s_Core1Stage);
+      stalled = true;
+    }
+
     asm volatile("wfi");
   }
 
@@ -285,6 +316,7 @@ void CKernel::KeyStatusHandlerRaw(unsigned char ucModifiers,
 }
 
 int CKernel::KeyEvent(int *usage, int *pressed) {
+  Core1Beat("reading keys");
   unsigned tail = m_KeyQueueTail;
   if (tail == m_KeyQueueHead) {
     return 0;
@@ -532,9 +564,12 @@ void CKernel::VideoUpdatePalette(void) { mFrameBuffer.UpdatePalette(); }
 
 void CKernel::VideoPresent(int wait_vsync) {
   // Let Circle's tasks (VCHIQ in particular) run once per frame.
+  Core1Beat("running Circle tasks");
   CScheduler::Get()->Yield();
+  Core1Beat("showing a frame (dispmanx)");
   mFrameBuffer.FrameReady(wait_vsync ? 1 : 0);
   FrameBufferLayer::SwapResources(wait_vsync != 0, &mFrameBuffer, nullptr);
+  Core1Beat("emulating");
 }
 
 //
@@ -570,7 +605,9 @@ unsigned CKernel::SoundFreeFrames(void) {
 
 void CKernel::SoundWrite(const int16_t *samples, unsigned frames) {
   if (mSound != 0 && mSound->PlaybackActive()) {
+    Core1Beat("writing sound (VCHIQ)");
     mSound->WriteFrames(samples, frames);
+    Core1Beat("emulating");
   }
 }
 
@@ -621,6 +658,7 @@ void host_sleep_us(unsigned us) {
   // Sleep in small steps so Circle's tasks keep running.
   double end = host_time() + us / 1000000.0;
   for (;;) {
+    Core1Beat("sleeping");
     CScheduler::Get()->Yield();
     double left = end - host_time();
     if (left <= 0) {

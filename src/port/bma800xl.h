@@ -16,5 +16,6 @@ int BMA_CharToAkey(int c, int shiftctrl);
 
 /* platform.c */
 void bma800xl_main(void);
+int BMA_MenuRequests(void);
 
 #endif /* BMA800XL_PORT_H_ */

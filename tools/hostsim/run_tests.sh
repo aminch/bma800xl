@@ -150,6 +150,12 @@ check_log joy "Gamepad 2 is joystick 1" "the pad in use becomes joystick 1"
 check_image joy right
 check_image joy fire
 
+echo "Web UI requests while the menu is open"
+run menureset 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n200 webui coldstart\n400 shot after.ppm\n401 quit\n'
+check_log menureset "Web UI: cold start" "cold start leaves the menu and runs"
+run menureboot 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n200 webui reboot\n1000 quit\n'
+check_log menureboot "reboot requested at frame 2[0-9]{2}$" "reboot happens with the menu open"
+
 echo "NTSC on a 60 Hz display"
 run ntsc 60 "tv=ntsc" '150 shot boot.ppm\n3000 audio\n3001 quit\n'
 check_log ntsc "Atari 59.92 Hz, synchronised to display" "NTSC locked to a 60 Hz display"

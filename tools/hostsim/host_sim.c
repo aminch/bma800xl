@@ -13,6 +13,7 @@
  *   <frame> pad <n> <bits>         set gamepad n to HOST_PAD_* bits
  *   <frame> shot <file.ppm>        save the visible screen
  *   <frame> audio                  print audio statistics
+ *   <frame> webui <reboot|coldstart>  a request from the web UI
  *   <frame> quit                   end the test
  *
  * This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
@@ -24,6 +25,10 @@
 #include <string.h>
 
 #include "../../src/host.h"
+
+/* From src/port/platform.c, called by the web UI on the Pi. */
+void bma_request_power(int power_off);
+void bma_request_coldstart(void);
 
 /* ---- Options ---------------------------------------------------------------- */
 
@@ -330,6 +335,11 @@ static void run_script(void)
 			pads[pad] = bits;
 		} else if (strcmp(cmd, "shot") == 0) {
 			screenshot(line + n + 1);
+		} else if (strcmp(cmd, "webui") == 0) {
+			if (strstr(line + n, "reboot"))
+				bma_request_power(0);
+			else if (strstr(line + n, "coldstart"))
+				bma_request_coldstart();
 		} else if (strcmp(cmd, "audio") == 0) {
 			fprintf(stderr, "[sim] frame %ld: audio written %ld frames in %ld writes, "
 			        "queue before write min %.0f, after write max %.0f, underruns %ld\n",
