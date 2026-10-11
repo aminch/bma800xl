@@ -484,6 +484,21 @@ void host_log(const char *message)
 	fprintf(stderr, "[log] %s\n", message);
 }
 
+static int log_destination = HOST_LOG_UART;
+
+int host_log_destination(void)
+{
+	return log_destination;
+}
+
+int host_set_log_destination(int destination)
+{
+	static const char *const names[] = {"off", "uart", "file"};
+	fprintf(stderr, "[sim] logging: %s\n", names[destination]);
+	log_destination = destination;
+	return 1;
+}
+
 extern void bma800xl_main(void);
 
 int main(void)

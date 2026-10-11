@@ -25,7 +25,7 @@ BUILD := build
 A8_OBJS := $(addprefix $(BUILD)/atari800/,$(A8_SRCS:.c=.o))
 A8_LIB := $(BUILD)/libatari800.a
 
-OBJS = src/main.o src/kernel.o src/options.o src/fbl.o src/crt_pi_idx.o \
+OBJS = src/main.o src/kernel.o src/logging.o src/options.o src/fbl.o src/crt_pi_idx.o \
        src/crt_pi_rgb.o src/vchiqsound.o src/vchiqsoundbasedevice.o \
        src/port/platform.o src/port/keyboard.o src/port/menu.o src/port/fswrap.o \
        src/network.o src/network_time_sync.o \

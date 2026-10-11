@@ -8,6 +8,7 @@
 //
 
 #include "kernel.h"
+#include "logging.h"
 #include "network.h"
 
 #include <assert.h>
@@ -86,10 +87,10 @@ void CEmulatorCore::Run(unsigned nCore) {
 //
 
 CKernel::CKernel(void)
-    : mTimer(&mInterrupt), mLogger(mKernelOptions.GetLogLevel(), &mTimer),
+    : mLog(&mSerial), mTimer(&mInterrupt), mLogger(mKernelOptions.GetLogLevel(), &mTimer),
       mGPIOManager(&mInterrupt), mVCHIQ(CMemorySystem::Get(), &mInterrupt),
       mEMMC(&mInterrupt, &mTimer, &mActLED),
-      mUSBHCI(&mInterrupt, &mTimer, TRUE), mConsole(&mSerial, &mSerial),
+      mUSBHCI(&mInterrupt, &mTimer, TRUE), mConsole(&mSerial, &mLog),
       mEmulatorCore(CMemorySystem::Get()), mSound(0), mSoundChannels(0),
       mVolume(VCHIQ_SOUND_VOLUME_DEFAULT),
       mAudioOut(VCHIQSoundDestinationAuto), m_MergedModifiers(0),
@@ -124,7 +125,7 @@ bool CKernel::Initialize(void) {
   if (!mInterrupt.Initialize()) {
     return false;
   }
-  if (!mLogger.Initialize(&mSerial)) {
+  if (!mLogger.Initialize(&mLog)) {
     return false;
   }
   mLogger.Write(FromKernel, LogNotice, "BMA800XL " BMA800XL_VERSION " (" BMA800XL_GIT
@@ -148,6 +149,14 @@ bool CKernel::Initialize(void) {
   }
   // Settings saved by the BMA800XL menu win over cmdline.txt.
   mOptions.LoadSettings("SD:/bma800xl.cfg");
+
+  // Until here the log went to the serial port.
+  const char *logging = mOptions.Get("enable_logging", "uart");
+  if (strcmp(logging, "off") == 0) {
+    SetLogDestination(HOST_LOG_OFF);
+  } else if (strcmp(logging, "file") == 0) {
+    SetLogDestination(HOST_LOG_FILE);
+  }
   if (!mConsole.Initialize()) {
     return false;
   }
@@ -604,6 +613,8 @@ void CKernel::VideoPresent(int wait_vsync) {
   // Let Circle's tasks (VCHIQ in particular) run once per frame.
   Core1Beat("running Circle tasks");
   CScheduler::Get()->Yield();
+  Core1Beat("writing the log file");
+  mLog.Drain();
   Core1Beat("showing a frame (dispmanx)");
   mFrameBuffer.FrameReady(wait_vsync ? 1 : 0);
   FrameBufferLayer::SwapResources(wait_vsync != 0, &mFrameBuffer, nullptr);
@@ -659,14 +670,32 @@ double CKernel::Time(void) {
 
 void CKernel::Reboot(void) {
   mLogger.Write(FromKernel, LogNotice, "Rebooting");
+  mLog.Close();
   reboot();
 }
 
 void CKernel::PowerOff(void) {
   mLogger.Write(FromKernel, LogNotice, "Halting; safe to switch off");
+  mLog.Close();
   // Blank the picture so it is clear the Pi has stopped.
   mFrameBuffer.Hide();
   halt();
+}
+
+bool CKernel::SetLogDestination(int destination) {
+  if (!mLog.SetDestination(destination)) {
+    mSerial.Write("Cannot open " LOG_FILE "\n", sizeof("Cannot open " LOG_FILE "\n") - 1);
+    return false;
+  }
+  if (destination == HOST_LOG_FILE) {
+    // The file starts with what was logged since boot.
+    char text[512];
+    int len;
+    while ((len = mLogger.Read(text, sizeof text)) > 0) {
+      mLog.Write(text, len);
+    }
+  }
+  return true;
 }
 
 //
@@ -751,6 +780,7 @@ void host_sleep_us(unsigned us) {
   for (;;) {
     Core1Beat("sleeping");
     CScheduler::Get()->Yield();
+    CKernel::Get()->DrainLog();
     double left = end - host_time();
     if (left <= 0) {
       break;
@@ -820,6 +850,12 @@ int host_network_address(char *address, unsigned size) {
 
 void host_log(const char *message) {
   CLogger::Get()->Write(FromKernel, LogNotice, "%s", message);
+}
+
+int host_log_destination(void) { return CKernel::Get()->GetLogDestination(); }
+
+int host_set_log_destination(int destination) {
+  return CKernel::Get()->SetLogDestination(destination);
 }
 
 } // extern "C"

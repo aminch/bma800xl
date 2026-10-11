@@ -126,8 +126,16 @@ int host_wifi_scan(struct host_wifi_ap *aps, int max);
 const char *host_model_name(void);
 /* The display's size in pixels. */
 void host_display_size(int *width, int *height);
-/* Shows a line of text on the boot log (serial and, early on, the screen). */
+/* Writes a line of text to the log. */
 void host_log(const char *message);
+
+/* Where the log goes (enable_logging=off|uart|file). */
+#define HOST_LOG_OFF  0
+#define HOST_LOG_UART 1  /* serial port, GPIO14/15 at 115200 */
+#define HOST_LOG_FILE 2  /* /bma800xl.log on the SD card */
+int host_log_destination(void);
+/* Changes it at once. Returns 0 if the log file cannot be opened. */
+int host_set_log_destination(int destination);
 
 #ifdef __cplusplus
 }

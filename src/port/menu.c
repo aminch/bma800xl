@@ -775,14 +775,38 @@ static void sound_menu(void)
 	}
 }
 
+/* ---- Logging -------------------------------------------------------------------- */
+
+/* Where the log goes: changed at once, and kept in bma800xl.cfg. */
+static void logging_menu(void)
+{
+	static const char *const values[] = {"off", "uart", "file"};
+	static const char *const names[] = {
+		"Off",
+		"UART (serial port GPIO14/15)",
+		"File (bma800xl.log)",
+		NULL
+	};
+	int current = host_log_destination();
+	int i = choose("Logging", names, current);
+	if (i < 0 || i == current)
+		return;
+	if (!host_set_log_destination(i)) {
+		UI_driver->fMessage("Cannot open bma800xl.log", 1);
+		return;
+	}
+	save_setting("enable_logging", values[i]);
+}
+
 /* ---- Main menu ------------------------------------------------------------------ */
 
 /* Returns TRUE to go on to atari800's menu. */
 static int main_menu(void)
 {
 	enum { M_EMULATOR, M_ABOUT, M_LICENCE, M_NETWORK, M_CONTROLLERS, M_VIDEO, M_SOUND,
-	       M_REBOOT, M_POWER_OFF, M_BACK };
-	static char machine[64], network[64];
+	       M_LOGGING, M_REBOOT, M_POWER_OFF, M_BACK };
+	static const char *const logging_names[] = {"Off", "UART", "File", NULL};
+	static char machine[64], network[64], logging[8];
 	static UI_tMenuItem items[] = {
 		UI_MENU_LABEL(machine),
 		UI_MENU_ACTION(M_ABOUT, "About BMA800XL"),
@@ -795,6 +819,7 @@ static int main_menu(void)
 		UI_MENU_SUBMENU(M_CONTROLLERS, "Controllers"),
 		UI_MENU_SUBMENU(M_VIDEO, "Video"),
 		UI_MENU_SUBMENU(M_SOUND, "Sound"),
+		UI_MENU_ACTION_PREFIX(M_LOGGING, "Logging: ", logging),
 		UI_MENU_LABEL(""),
 		UI_MENU_ACTION(M_REBOOT, "Reboot"),
 		UI_MENU_ACTION(M_POWER_OFF, "Shut Down"),
@@ -806,6 +831,7 @@ static int main_menu(void)
 	for (;;) {
 		machine_line(machine, sizeof(machine));
 		network_line(network, sizeof(network));
+		Util_strlcpy(logging, logging_names[host_log_destination()], sizeof(logging));
 		option = UI_driver->fSelect("BMA800XL " BMA800XL_VERSION, 0, option, items, NULL);
 		switch (option) {
 		case M_EMULATOR:
@@ -827,6 +853,9 @@ static int main_menu(void)
 			break;
 		case M_SOUND:
 			sound_menu();
+			break;
+		case M_LOGGING:
+			logging_menu();
 			break;
 		case M_REBOOT:
 			power(0);

@@ -32,6 +32,7 @@ BMA800XL's own settings:
 | Controllers | Which gamepad is which joystick, the keypad and arrow keys as joystick 1, GPIO joysticks, the keyboard layout, and a **Joystick Test** that shows live what the Atari sees on each joystick port |
 | Video | Locking frames to the display, the border, the CRT shader, smooth scaling |
 | Sound | HDMI or headphones, the sound buffer |
+| Logging | Where the log goes: Off, UART (serial port) or File (`bma800xl.log`); changes at once (see Logging) |
 | Reboot, Shut Down | |
 
 Settings are saved to `bma800xl.cfg` as soon as you change them. Most take
@@ -103,7 +104,7 @@ Each of the Atari's joystick ports takes input from:
 Gamepads get a joystick port the first time a button or direction is
 pressed, in that order. Some USB devices also show up as a gamepad that
 never sends anything (the 8BitDo Retro Keyboard's receiver does), and this
-way they don't take a port. The serial log says which gamepad became which
+way they don't take a port. The log says which gamepad became which
 joystick. To fix the assignment instead, choose a gamepad for each joystick
 in the menu's *Controllers*; the gamepad numbers are the ones in the log
 (`Gamepad 2 connected: ...`). *Joystick Test* there shows what each port
@@ -191,7 +192,7 @@ Wi-Fi needs the files in the `firmware` folder, which `build_sdcard.sh` puts
 there.
 
 Once the Pi has an address, it is shown at the bottom of the screen for a
-few seconds (`WEB UI: HTTP://192.168.1.50/`) and written to the serial log.
+few seconds (`WEB UI: HTTP://192.168.1.50/`) and written to the log.
 Open that address in a browser.
 
 The web UI has:
@@ -251,7 +252,8 @@ edited from the web UI.
 | `keypad_joystick`   | `0`, `1`                     | `1`      | Numeric keypad as joystick 1 |
 | `arrow_joystick`    | `0`, `1`                     | `0`      | Arrow keys as joystick 1 |
 | `gpio_joysticks`    | `0`, `1`                     | `0`      | Real joysticks on the GPIO header |
-| `serial_monitor`    | `0`, `1`                     | `0`      | Allow atari800's monitor over the serial port (GPIO14/15, 115200 baud) |
+| `enable_logging`    | `off`, `uart`, `file`        | `uart`   | Where the log goes (see Logging) |
+| `serial_monitor`    | `0`, `1`                     | `0`      | Allow atari800's monitor over the serial port (GPIO14/15, 115200 baud); needs `enable_logging=uart` |
 | `network`           | `off`, `ethernet`, `wifi`    | `off`    | Networking (see Networking and the web UI) |
 | `webui`             | `0`, `1`                     | `1`      | Web UI when networking is on |
 | `webui_pin`         | digits                       | none     | PIN for the web UI |
@@ -271,10 +273,22 @@ their names, and picks them up the first time it starts without an
 `atari800.cfg`; if you already have one, delete it or use *System Settings*
 in the menu to choose the ROMs, then *Save Configuration*.
 
-## Serial log
+## Logging
 
-BMA800XL logs what it is doing to the serial port (GPIO14 TX, GPIO15 RX,
-115200 baud), which helps when something doesn't work.
+BMA800XL logs what it is doing, which helps when something doesn't work:
+the version, the display and sound set up, gamepads coming and going,
+network status, and when the Atari crashes, the crash with the registers
+and the disks in use. Choose where it goes with *Logging* in the menu (it
+changes at once), or `enable_logging` in `cmdline.txt`:
+
+- **UART** (the default): the serial port, GPIO14 TX and GPIO15 RX at
+  115200 baud. Needs a USB serial adapter.
+- **File**: `bma800xl.log` in the root of the SD card. It starts with what
+  was logged since boot, is written to the card every few seconds, and
+  starts again at boot once it is over 1 MB. Download it from the web UI's
+  file manager to send with a bug report. Writing it costs a little time
+  on each frame, so switch it off once you have what you need.
+- **Off**: nothing is logged.
 
 ## Troubleshooting
 

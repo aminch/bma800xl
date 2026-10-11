@@ -37,6 +37,7 @@
 
 #include "fbl.h"
 #include "host.h"
+#include "logging.h"
 #include "options.h"
 #include "vchiqsound.h"
 
@@ -82,6 +83,10 @@ public:
   double Time(void);
   void Reboot(void);
   void PowerOff(void);
+  bool SetLogDestination(int destination);
+  int GetLogDestination(void) const { return mLog.GetDestination(); }
+  // Core 1: writes queued log text to the log file.
+  void DrainLog(void) { mLog.Drain(); }
 
   static CKernel *Get(void) { return s_pThis; }
 
@@ -109,6 +114,9 @@ private:
   CExceptionHandler mExceptionHandler;
   CInterruptSystem mInterrupt;
   CSerialDevice mSerial;
+  // The logger and stdio write here; it passes it on to mSerial, a file or
+  // nowhere.
+  CLogDevice mLog;
   CTimer mTimer;
   CLogger mLogger;
   CScheduler mScheduler;
