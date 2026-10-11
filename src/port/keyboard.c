@@ -119,13 +119,6 @@ static int key_control = 0;
 /* Gamepads acting as keys (see pad_virtual_keys). */
 static unsigned char virtual_down[256];
 
-/* Menu input trace, to find why the menu sometimes stops responding: while
-   a menu is open, each key or pad event is logged with the code it gave. */
-static int trace_event = FALSE;
-static int trace_usage, trace_pressed;
-static int event_from_pad = FALSE;
-static int trace_in_menu = FALSE;
-
 /* The key a held Home (or Select+Start) stands for; 0 when not held. */
 static int menu_combo_key = 0;
 
@@ -135,24 +128,42 @@ static int pad_consol = INPUT_CONSOL_NONE;
 /* Which USB gamepad drives each Atari joystick port, or -1. Some USB devices
    (the 8BitDo Retro Keyboard's receiver, for one) also appear as a gamepad
    that never sends anything, so pads are not tied to ports by their USB
-   number: a pad takes the first free port the first time it is used. Set
-   joy1_pad=N (and joy2_pad...) in cmdline.txt to fix the assignment. */
+   number: by default a pad takes the first free port the first time it is
+   used. joy1_pad=N (and joy2_pad...) fixes gamepad N to a port, and
+   joy1_pad=-1 leaves the port without a gamepad; 0 is automatic. */
 static int port_pad[HOST_PADS] = {-1, -1, -1, -1};
+static int port_mode[HOST_PADS] = {0, 0, 0, 0};
 static int pad_prev[HOST_PADS] = {-1, -1, -1, -1};
-static int fixed_ports = FALSE;
 
+static int pad_port(int pad)
+{
+	int port;
+	for (port = 0; port < HOST_PADS; port++)
+		if (port_pad[port] == pad)
+			return port;
+	return -1;
+}
+
+/* Reads the joyN_pad settings. Automatic ports keep the pad they have,
+   unless that pad is now fixed to another port. */
 static void init_pad_ports(void)
 {
 	static const char *const names[HOST_PADS] = {"joy1_pad", "joy2_pad", "joy3_pad", "joy4_pad"};
-	int port;
+	int port, other;
 	for (port = 0; port < HOST_PADS; port++) {
-		int pad = host_option_int(names[port], 0);
-		port_pad[port] = -1;
-		pad_prev[port] = -1;
-		if (pad >= 1 && pad <= HOST_PADS) {
-			port_pad[port] = pad - 1;
-			fixed_ports = TRUE;
-		}
+		int mode = host_option_int(names[port], 0);
+		if (mode < -1 || mode > HOST_PADS)
+			mode = 0;
+		port_mode[port] = mode;
+		if (mode != 0)
+			port_pad[port] = mode > 0 ? mode - 1 : -1;
+	}
+	for (port = 0; port < HOST_PADS; port++) {
+		if (port_mode[port] != 0 || port_pad[port] < 0)
+			continue;
+		for (other = 0; other < HOST_PADS; other++)
+			if (port_mode[other] > 0 && port_mode[other] - 1 == port_pad[port])
+				port_pad[port] = -1;
 	}
 }
 
@@ -163,30 +174,20 @@ static void update_pad_ports(void)
 		int s = host_pad_state(pad);
 		int prev = pad_prev[pad];
 		pad_prev[pad] = s;
-		if (s != prev && in_menu()) {
-			char msg[48];
-			snprintf(msg, sizeof(msg), "Menu pad %d: 0x%x", pad + 1, s);
-			host_log(msg);
-		}
-		if (fixed_ports)
-			continue;
+
+		port = pad_port(pad);
 		if (s < 0) {
-			/* Unplugged: free its port. */
-			for (port = 0; port < HOST_PADS; port++)
-				if (port_pad[port] == pad)
-					port_pad[port] = -1;
+			/* Unplugged: free an automatic port. */
+			if (port >= 0 && port_mode[port] == 0)
+				port_pad[port] = -1;
 			continue;
 		}
-		/* Claim a port when the pad goes from idle to pressed. */
-		if (prev != 0 || s == 0)
-			continue;
-		for (port = 0; port < HOST_PADS; port++)
-			if (port_pad[port] == pad)
-				break;
-		if (port < HOST_PADS)
+		/* Claim a free automatic port when the pad goes from idle to
+		   pressed. */
+		if (prev != 0 || s == 0 || port >= 0)
 			continue;
 		for (port = 0; port < HOST_PADS; port++) {
-			if (port_pad[port] < 0) {
+			if (port_mode[port] == 0 && port_pad[port] < 0) {
 				char msg[48];
 				port_pad[port] = pad;
 				snprintf(msg, sizeof(msg), "Gamepad %d is joystick %d", pad + 1, port + 1);
@@ -197,17 +198,30 @@ static void update_pad_ports(void)
 	}
 }
 
-void BMA_KeyboardInit(void)
+/* Gamepad USB slot driving Atari joystick PORT, or -1. */
+int BMA_PortPad(int port)
+{
+	return port >= 0 && port < HOST_PADS ? port_pad[port] : -1;
+}
+
+/* Reads the keyboard and joystick settings; the menu calls it again after
+   changing one. */
+void BMA_InputSettingsChanged(void)
 {
 	const char *name = host_option("keyboard", "us");
 	if (strcmp(name, "uk") == 0 || strcmp(name, "gb") == 0)
 		layout = layout_uk;
 	else
 		layout = layout_us;
-	BMA_keypad_joystick = host_option_int("keypad_joystick", BMA_keypad_joystick);
-	BMA_arrow_joystick = host_option_int("arrow_joystick", BMA_arrow_joystick);
-	memset(virtual_down, 0, sizeof(virtual_down));
+	BMA_keypad_joystick = host_option_int("keypad_joystick", TRUE);
+	BMA_arrow_joystick = host_option_int("arrow_joystick", FALSE);
 	init_pad_ports();
+}
+
+void BMA_KeyboardInit(void)
+{
+	memset(virtual_down, 0, sizeof(virtual_down));
+	BMA_InputSettingsChanged();
 }
 
 static int key_is_down(int usage)
@@ -288,6 +302,12 @@ static void pad_virtual_keys(unsigned char *down)
 	}
 	menu_combo_key = 0;
 
+	/* The joystick test shows the pad: only B and Start leave it. */
+	if (BMA_joystick_test) {
+		if (all & (HOST_PAD_B | HOST_PAD_START)) down[K_ESCAPE] = 1;
+		return;
+	}
+
 	if (in_menu()) {
 		if (all & HOST_PAD_UP) down[K_UP] = 1;
 		if (all & HOST_PAD_DOWN) down[K_DOWN] = 1;
@@ -311,10 +331,8 @@ static int next_key_event(int *usage, int *pressed)
 	unsigned char down[256];
 	int i;
 
-	event_from_pad = FALSE;
 	if (host_key_event(usage, pressed))
 		return 1;
-	event_from_pad = TRUE;
 
 	pad_virtual_keys(down);
 	for (i = 0; i < 256; i++) {
@@ -329,28 +347,26 @@ static int next_key_event(int *usage, int *pressed)
 }
 
 static int read_keyboard(void);
+static int joystick_signature(void);
+
+/* Set while the BMA800XL menu's joystick test is showing. */
+int BMA_joystick_test = FALSE;
 
 int PLATFORM_Keyboard(void)
 {
-	char msg[96];
-	int code;
+	static int last_signature = -1;
+	int code = read_keyboard();
 
-	if (in_menu() != trace_in_menu) {
-		trace_in_menu = in_menu();
-		snprintf(msg, sizeof(msg), "Menu %s (shift %d, ctrl %d)",
-		         trace_in_menu ? "opened" : "closed",
-		         shift_down(), key_is_down(K_LCTRL) || key_is_down(K_RCTRL));
-		host_log(msg);
-	}
-
-	trace_event = FALSE;
-	code = read_keyboard();
-	if (trace_event && in_menu()) {
-		snprintf(msg, sizeof(msg), "Menu key 0x%02x %s%s -> %d (shift %d, ctrl %d)",
-		         trace_usage, trace_pressed ? "down" : "up",
-		         event_from_pad ? " (pad)" : "",
-		         code, INPUT_key_shift, key_control);
-		host_log(msg);
+	/* In the joystick test, a change on any joystick sends Tab, which makes
+	   atari800's menu return so the test can show the new state. */
+	if (BMA_joystick_test && code == AKEY_NONE) {
+		int signature = joystick_signature();
+		if (signature != last_signature) {
+			last_signature = signature;
+			return AKEY_TAB;
+		}
+	} else if (!BMA_joystick_test) {
+		last_signature = -1;
 	}
 	return code;
 }
@@ -377,9 +393,6 @@ static int read_keyboard(void)
 		if (is_modifier_or_console(usage))
 			continue;
 		event_found = TRUE;
-		trace_event = TRUE;
-		trace_usage = usage;
-		trace_pressed = pressed;
 		lastkey = usage;
 		key_pressed = pressed;
 		lastuni = pressed ? usage_to_char(usage, shift_down()) : 0;
@@ -672,6 +685,21 @@ static int joystick_state(int port)
 	}
 
 	return state;
+}
+
+/* HOST_JOY_* bits the Atari sees on joystick PORT (0..3). */
+int BMA_JoystickState(int port)
+{
+	return port >= 0 && port < 4 ? joystick_state(port) : 0;
+}
+
+/* All four joysticks' state in one number, to notice changes. */
+static int joystick_signature(void)
+{
+	int port, signature = 0;
+	for (port = 0; port < 4; port++)
+		signature |= joystick_state(port) << (5 * port);
+	return signature;
 }
 
 static int stick_bits(int state)

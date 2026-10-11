@@ -7,12 +7,15 @@
 
 #include "options.h"
 
+#include <fatfs/ff.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 Options *Options::s_pThis = 0;
 
-Options::Options(void) : m_nCount(0) {
+Options::Options(void) : m_nSettings(0), m_nCount(0) {
+  m_SettingsPath[0] = '\0';
   s_pThis = this;
 
   CBcmPropertyTags Tags;
@@ -55,6 +58,10 @@ Options::Options(void) : m_nCount(0) {
 }
 
 const char *Options::Get(const char *name, const char *default_value) const {
+  int i = FindSetting(name);
+  if (i >= 0) {
+    return m_SettingValue[i];
+  }
   // Later options win, so a user's value overrides an earlier default.
   for (int i = m_nCount - 1; i >= 0; i--) {
     if (strcmp(m_pName[i], name) == 0) {
@@ -81,6 +88,83 @@ bool Options::GetBool(const char *name, bool default_value) const {
   }
   return strcmp(value, "1") == 0 || strcmp(value, "yes") == 0 ||
          strcmp(value, "true") == 0 || strcmp(value, "on") == 0;
+}
+
+int Options::FindSetting(const char *name) const {
+  for (int i = 0; i < m_nSettings; i++) {
+    if (strcmp(m_SettingName[i], name) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static char *Trim(char *s) {
+  while (*s == ' ' || *s == '\t') {
+    s++;
+  }
+  char *end = s + strlen(s);
+  while (end > s && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\r' ||
+                     end[-1] == '\n')) {
+    *--end = '\0';
+  }
+  return s;
+}
+
+void Options::LoadSettings(const char *path) {
+  strncpy(m_SettingsPath, path, sizeof m_SettingsPath - 1);
+  m_SettingsPath[sizeof m_SettingsPath - 1] = '\0';
+
+  FIL file;
+  if (f_open(&file, path, FA_READ) != FR_OK) {
+    return;
+  }
+  char line[SETTING_NAME_MAX + SETTING_VALUE_MAX + 8];
+  while (f_gets(line, sizeof line, &file) != 0) {
+    char *name = Trim(line);
+    if (*name == '#' || *name == '\0') {
+      continue;
+    }
+    char *value = strchr(name, '=');
+    if (value == 0) {
+      continue;
+    }
+    *value++ = '\0';
+    Set(Trim(name), Trim(value));
+  }
+  f_close(&file);
+}
+
+bool Options::Set(const char *name, const char *value) {
+  if (strlen(name) >= SETTING_NAME_MAX || strlen(value) >= SETTING_VALUE_MAX) {
+    return false;
+  }
+  int i = FindSetting(name);
+  if (i < 0) {
+    if (m_nSettings >= SETTINGS_MAX) {
+      return false;
+    }
+    i = m_nSettings++;
+    strcpy(m_SettingName[i], name);
+  }
+  strcpy(m_SettingValue[i], value);
+  return true;
+}
+
+bool Options::SaveSettings(void) {
+  if (m_SettingsPath[0] == '\0') {
+    return false;
+  }
+  FIL file;
+  if (f_open(&file, m_SettingsPath, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) {
+    return false;
+  }
+  f_puts("# BMA800XL settings, written by its menu (F1).\r\n"
+         "# These win over the same options in cmdline.txt.\r\n", &file);
+  for (int i = 0; i < m_nSettings; i++) {
+    f_printf(&file, "%s=%s\r\n", m_SettingName[i], m_SettingValue[i]);
+  }
+  return f_close(&file) == FR_OK;
 }
 
 Options *Options::Get(void) { return s_pThis; }

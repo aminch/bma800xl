@@ -65,6 +65,7 @@ public:
 
   // Called (through host.h) from the emulator on core 1.
   int VideoInit(int width, int height, uint8_t **pixels, int *pitch);
+  void DisplaySize(int *width, int *height);
   void VideoSetView(int x, int y, int w, int h, double aspect);
   void VideoSetPalette(int index, uint32_t rgb);
   void VideoUpdatePalette(void);

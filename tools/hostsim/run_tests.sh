@@ -101,16 +101,43 @@ check_log basic "synchronised to display" "locked to a 50 Hz display"
 check_image basic boot
 check_image basic print
 
-echo "Menu with the keyboard"
+echo "BMA800XL menu with the keyboard"
 run menu 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n180 shot menu.ppm\n190 key 0x29 1\n192 key 0x29 0\n220 shot back.ppm\n230 quit\n'
 check_image menu menu
 check_image menu back
 
+echo "atari800's menu from the BMA800XL menu"
+run emumenu 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n180 key 0x28 1\n182 key 0x28 0\n210 shot menu.ppm\n220 quit\n'
+check_image emumenu menu
+
+echo "Alt+D goes straight to atari800's disk menu"
+run altd 50 "" '150 key 0xe2 1\n152 key 0x07 1\n154 key 0x07 0\n156 key 0xe2 0\n190 shot disks.ppm\n200 quit\n'
+check_image altd disks
+
+echo "Joystick test"
+# Controllers is one down from Emulator Menu; Joystick Test is eight down
+# from the top of Controllers.
+run joytest 50 "" '1 pad 0 0\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x51 1\n202 key 0x51 0\n208 key 0x51 1\n210 key 0x51 0\n216 key 0x51 1\n218 key 0x51 0\n224 key 0x51 1\n226 key 0x51 0\n232 key 0x51 1\n234 key 0x51 0\n240 key 0x51 1\n242 key 0x51 0\n248 key 0x51 1\n250 key 0x51 0\n256 key 0x51 1\n258 key 0x51 0\n264 key 0x28 1\n266 key 0x28 0\n300 pad 0 0x8000\n320 shot right.ppm\n330 pad 0 0x8001\n350 shot fire.ppm\n360 pad 0 0\n370 pad 0 0x2\n375 pad 0 0\n400 shot back.ppm\n410 quit\n'
+check_image joytest right
+check_image joytest fire
+check_image joytest back
+
+echo "A setting changed in the menu is saved"
+# Controllers, then Keypad is Joystick 1 (four down) to switch it off.
+run setting 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x51 1\n202 key 0x51 0\n210 key 0x51 1\n212 key 0x51 0\n220 key 0x51 1\n222 key 0x51 0\n230 key 0x51 1\n232 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n270 shot controllers.ppm\n280 quit\n'
+if grep -q "^keypad_joystick=0" "$OUT/setting/bma800xl.cfg" 2>/dev/null; then
+    pass "setting: bma800xl.cfg has keypad_joystick=0"
+else
+    fail "setting" "keypad_joystick=0 not saved to bma800xl.cfg"
+fi
+check_image setting controllers
+
 echo "Menu and file browser with a gamepad"
 mkdir -p "$OUT/pad/games"
-run pad 50 "" '1 pad 0 0\n150 pad 0 0x100\n155 pad 0 0\n180 shot menu.ppm\n190 pad 0 1\n195 pad 0 0\n230 shot browser.ppm\n240 quit\n'
+# Home, then A for the Emulator Menu and A for Run Atari Program.
+run pad 50 "" '1 pad 0 0\n150 pad 0 0x100\n155 pad 0 0\n180 shot menu.ppm\n190 pad 0 1\n195 pad 0 0\n210 pad 0 1\n215 pad 0 0\n250 shot browser.ppm\n260 quit\n'
 check_image pad menu
-check_log pad "frame 230: saved browser.ppm" "file browser opened"
+check_log pad "frame 250: saved browser.ppm" "file browser opened"
 
 echo "Autostart a program"
 mkdir -p "$OUT/xex"
@@ -151,12 +178,8 @@ check_image joy right
 check_image joy fire
 
 echo "The Home press that opens the menu isn't also Escape in it"
-run padhold 50 "" '1 pad 0 0\n150 pad 0 0x100\n250 pad 0 0\n280 quit\n'
-if grep -q 'Menu opened' "$OUT/padhold/log.txt" && ! grep -q 'Menu key 0x29 down' "$OUT/padhold/log.txt"; then
-    pass "padhold: no Escape while Home is held"
-else
-    fail "padhold" "menu not opened, or Escape sent while Home was held (see out/padhold/log.txt)"
-fi
+run padhold 50 "" '1 pad 0 0\n150 pad 0 0x100\n250 pad 0 0\n280 shot menu.ppm\n290 quit\n'
+check_image padhold menu
 
 echo "Web UI requests while the menu is open"
 run menureset 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n200 webui coldstart\n400 shot after.ppm\n401 quit\n'

@@ -48,4 +48,11 @@ enum {
 // webui_pin=, timezone=). Call once, on core 0, before USB is initialised.
 void NetworkInitialize(const Options *options);
 
+extern "C" {
+// The IP address as text, if the network is up (returns 0 if not).
+int circle_get_network_ip_address(char *address, unsigned int address_size);
+// One of the NETWORK_* values above.
+int circle_get_network_status(void);
+}
+
 #endif

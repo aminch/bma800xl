@@ -1,5 +1,5 @@
 // Overlay text editor for the device's config files (cmdline.txt,
-// config.txt, atari800.cfg, wpa_supplicant.conf), which the device decides:
+// config.txt, atari800.cfg, bma800xl.cfg, wpa_supplicant.conf), which the device decides:
 // the file list marks them "edit".
 
 import { $, normPath } from "./util.js";
@@ -8,7 +8,7 @@ import { rebootNow } from "./dashboard.js";
 
 // Files the emulator's own menus also write; a menu save overwrites edits
 // made here until the next reboot.
-const MENU_WRITTEN = /^atari800\.cfg$/i;
+const MENU_WRITTEN = /^(atari800|bma800xl)\.cfg$/i;
 
 // The open editor, or null. Holds everything about the file being edited.
 let session = null;

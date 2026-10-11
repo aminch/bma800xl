@@ -23,6 +23,11 @@ extern "C" {
 const char *host_option(const char *name, const char *default_value);
 int host_option_int(const char *name, int default_value);
 double host_option_double(const char *name, double default_value);
+/* Changes a setting, which then wins over cmdline.txt; host_options_save()
+   writes the settings to bma800xl.cfg on the SD card. Both return 0 on
+   failure. */
+int host_option_set(const char *name, const char *value);
+int host_options_save(void);
 
 /* ---- Time ---------------------------------------------------------------- */
 
@@ -104,6 +109,13 @@ void host_reboot(void);
 void host_power_off(void);
 /* The Pi's IP address as text, when the network is up. Returns 0 if not. */
 int host_network_address(char *address, unsigned size);
+/* Network state for people: "Wi-Fi 192.168.1.50", "Off", "Ethernet:
+   waiting for address"... */
+void host_network_status(char *text, unsigned size);
+/* "Raspberry Pi 3 Model B+" */
+const char *host_model_name(void);
+/* The display's size in pixels. */
+void host_display_size(int *width, int *height);
 /* Shows a line of text on the boot log (serial and, early on, the screen). */
 void host_log(const char *message);
 

@@ -1,7 +1,9 @@
 //
 // options.h
 //
-// Reads key=value options from cmdline.txt on the SD card.
+// Reads key=value options from cmdline.txt on the SD card, and from
+// bma800xl.cfg, where the BMA800XL menu saves its settings. A setting in
+// bma800xl.cfg wins over the same option in cmdline.txt.
 //
 // This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
 // Raspberry Pi. See LICENSE for licensing details.
@@ -13,6 +15,9 @@
 #include <circle/bcmpropertytags.h>
 
 #define OPTIONS_MAX 32
+#define SETTINGS_MAX 48
+#define SETTING_NAME_MAX 24
+#define SETTING_VALUE_MAX 72
 
 class Options {
 public:
@@ -24,9 +29,23 @@ public:
   double GetDouble(const char *name, double default_value) const;
   bool GetBool(const char *name, bool default_value) const;
 
+  // Reads the settings file (key=value lines, # comments). Call once the SD
+  // card is mounted.
+  void LoadSettings(const char *path);
+  // Changes a setting (in memory; SaveSettings writes them all out).
+  bool Set(const char *name, const char *value);
+  bool SaveSettings(void);
+
   static Options *Get(void);
 
 private:
+  int FindSetting(const char *name) const;
+
+  char m_SettingsPath[64];
+  int m_nSettings;
+  char m_SettingName[SETTINGS_MAX][SETTING_NAME_MAX];
+  char m_SettingValue[SETTINGS_MAX][SETTING_VALUE_MAX];
+
   TPropertyTagCommandLine m_TagCommandLine;
   int m_nCount;
   const char *m_pName[OPTIONS_MAX];

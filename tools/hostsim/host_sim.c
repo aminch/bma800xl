@@ -48,9 +48,44 @@ static const char *option(const char *name)
 	return NULL;
 }
 
+/* Settings changed by the menu, which win over BMA_CMDLINE, as
+   bma800xl.cfg does on the Pi. Saved to ./bma800xl.cfg. */
+static char set_name[48][24], set_value[48][72];
+static int n_set;
+
+int host_option_set(const char *name, const char *value)
+{
+	int i;
+	for (i = 0; i < n_set; i++)
+		if (strcmp(set_name[i], name) == 0)
+			break;
+	if (i == n_set) {
+		if (n_set == 48)
+			return 0;
+		snprintf(set_name[n_set++], sizeof(set_name[0]), "%s", name);
+	}
+	snprintf(set_value[i], sizeof(set_value[0]), "%s", value);
+	return 1;
+}
+
+int host_options_save(void)
+{
+	FILE *f = fopen("bma800xl.cfg", "w");
+	int i;
+	if (f == NULL)
+		return 0;
+	for (i = 0; i < n_set; i++)
+		fprintf(f, "%s=%s\n", set_name[i], set_value[i]);
+	return fclose(f) == 0;
+}
+
 const char *host_option(const char *name, const char *default_value)
 {
 	const char *v = option(name);
+	int i;
+	for (i = 0; i < n_set; i++)
+		if (strcmp(set_name[i], name) == 0)
+			v = set_value[i];
 	static char ret[8][256];
 	static int slot;
 	if (v == NULL)
@@ -405,6 +440,26 @@ int host_network_address(char *address, unsigned size)
 		return 0;
 	snprintf(address, size, "%s", ip);
 	return 1;
+}
+
+void host_network_status(char *text, unsigned size)
+{
+	char ip[32];
+	if (host_network_address(ip, sizeof(ip)))
+		snprintf(text, size, "Wi-Fi %s", ip);
+	else
+		snprintf(text, size, "Off");
+}
+
+const char *host_model_name(void)
+{
+	return "Host simulator";
+}
+
+void host_display_size(int *width, int *height)
+{
+	*width = 1280;
+	*height = 720;
 }
 
 void host_log(const char *message)

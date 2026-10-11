@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <circle/machineinfo.h>
 #include <circle/startup.h>
 #include <circle/synchronize.h>
 #include <circle/usb/usbhid.h>
@@ -142,6 +143,8 @@ bool CKernel::Initialize(void) {
     mLogger.Write(FromKernel, LogError, "Cannot mount the SD card");
     return false;
   }
+  // Settings saved by the BMA800XL menu win over cmdline.txt.
+  mOptions.LoadSettings("SD:/bma800xl.cfg");
   if (!mConsole.Initialize()) {
     return false;
   }
@@ -560,6 +563,12 @@ void CKernel::VideoSetPalette(int index, uint32_t rgb) {
   mFrameBuffer.SetPalette((uint8_t)index, rgb565);
 }
 
+void CKernel::DisplaySize(int *width, int *height) {
+  int fb_w, fb_h, src_w, src_h, dst_w, dst_h;
+  mFrameBuffer.GetDimensions(width, height, &fb_w, &fb_h, &src_w, &src_h,
+                             &dst_w, &dst_h);
+}
+
 void CKernel::VideoUpdatePalette(void) { mFrameBuffer.UpdatePalette(); }
 
 void CKernel::VideoPresent(int wait_vsync) {
@@ -650,6 +659,59 @@ int host_option_int(const char *name, int default_value) {
 double host_option_double(const char *name, double default_value) {
   Options *o = Options::Get();
   return o ? o->GetDouble(name, default_value) : default_value;
+}
+
+int host_option_set(const char *name, const char *value) {
+  Options *o = Options::Get();
+  return o && o->Set(name, value);
+}
+
+int host_options_save(void) {
+  Options *o = Options::Get();
+  return o && o->SaveSettings();
+}
+
+const char *host_model_name(void) {
+  return CMachineInfo::Get()->GetMachineName();
+}
+
+void host_display_size(int *width, int *height) {
+  CKernel::Get()->DisplaySize(width, height);
+}
+
+void host_network_status(char *text, unsigned size) {
+  static const char *const kStatus[] = {
+      "Off",
+      "Ethernet starting",
+      "Ethernet: waiting for address",
+      "Ethernet connected",
+      "Ethernet not found",
+      "Ethernet failed",
+      "Wi-Fi: no wpa_supplicant.conf",
+      "Wi-Fi starting",
+      "Wi-Fi failed",
+      "Wi-Fi failed",
+      "Wi-Fi starting",
+      "Wi-Fi failed",
+      "Wi-Fi connecting",
+      "Wi-Fi connected",
+      "Wi-Fi: no connection",
+      "Wi-Fi not found",
+      "Wi-Fi not started",
+      "Wi-Fi not supported",
+      "Wi-Fi: firmware missing",
+  };
+  char ip[32];
+  int status = circle_get_network_status();
+  if (circle_get_network_ip_address(ip, sizeof ip)) {
+    snprintf(text, size, "%s %s",
+             status == NETWORK_ETHERNET_CONNECTED ? "Ethernet" : "Wi-Fi", ip);
+  } else if (status >= 0 &&
+             status < (int)(sizeof kStatus / sizeof kStatus[0])) {
+    snprintf(text, size, "%s", kStatus[status]);
+  } else {
+    snprintf(text, size, "Unknown");
+  }
 }
 
 double host_time(void) { return CKernel::Get()->Time(); }

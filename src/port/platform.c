@@ -86,6 +86,18 @@ static void apply_view(void)
 	host_video_set_view(x, y, w, h, aspect);
 }
 
+/* border=normal|none|full */
+static void read_border_setting(void)
+{
+	const char *border = host_option("border", "normal");
+	if (strcmp(border, "none") == 0)
+		view_mode = VIEW_PLAYFIELD;
+	else if (strcmp(border, "full") == 0)
+		view_mode = VIEW_FULL;
+	else
+		view_mode = VIEW_NORMAL;
+}
+
 static double atari_fps(void)
 {
 	return Atari800_tv_mode == Atari800_TV_PAL ? Atari800_FPS_PAL : Atari800_FPS_NTSC;
@@ -380,28 +392,17 @@ void PLATFORM_ConfigInit(void)
 
 int PLATFORM_Configure(char *option, char *parameters)
 {
-	if (strcmp(option, "BMA800XL_BORDER") == 0) {
-		int v = Util_sscandec(parameters);
-		if (v >= VIEW_PLAYFIELD && v <= VIEW_FULL)
-			view_mode = v;
-		return TRUE;
-	}
-	if (strcmp(option, "BMA800XL_KEYPAD_JOYSTICK") == 0) {
-		BMA_keypad_joystick = Util_sscanbool(parameters);
-		return TRUE;
-	}
-	if (strcmp(option, "BMA800XL_ARROW_JOYSTICK") == 0) {
-		BMA_arrow_joystick = Util_sscanbool(parameters);
-		return TRUE;
-	}
-	return FALSE;
+	/* Older versions kept these in atari800.cfg. They are BMA800XL
+	   settings now, in bma800xl.cfg; skip them quietly. */
+	(void) parameters;
+	return strcmp(option, "BMA800XL_BORDER") == 0
+	    || strcmp(option, "BMA800XL_KEYPAD_JOYSTICK") == 0
+	    || strcmp(option, "BMA800XL_ARROW_JOYSTICK") == 0;
 }
 
 void PLATFORM_ConfigSave(FILE *fp)
 {
-	fprintf(fp, "BMA800XL_BORDER=%d\n", view_mode);
-	fprintf(fp, "BMA800XL_KEYPAD_JOYSTICK=%d\n", BMA_keypad_joystick);
-	fprintf(fp, "BMA800XL_ARROW_JOYSTICK=%d\n", BMA_arrow_joystick);
+	(void) fp;
 }
 
 /* ---- Requests from the web UI ----------------------------------------------- */
@@ -547,8 +548,6 @@ static void show_network_address(void)
 
 int PLATFORM_Initialise(int *argc, char *argv[])
 {
-	const char *border;
-
 	if (host_video_init(Screen_WIDTH, Screen_HEIGHT, &fb_pixels, &fb_pitch) != 0) {
 		Log_print("Cannot initialise the display");
 		return FALSE;
@@ -561,15 +560,7 @@ int PLATFORM_Initialise(int *argc, char *argv[])
 	}
 	memset(fb_pixels, 0, fb_pitch * Screen_HEIGHT);
 
-	border = host_option("border", NULL);
-	if (border != NULL) {
-		if (strcmp(border, "none") == 0)
-			view_mode = VIEW_PLAYFIELD;
-		else if (strcmp(border, "full") == 0)
-			view_mode = VIEW_FULL;
-		else
-			view_mode = VIEW_NORMAL;
-	}
+	read_border_setting();
 	apply_view();
 	PLATFORM_PaletteUpdate();
 
@@ -610,6 +601,27 @@ static void bma_on_exit(void)
 static const char *sd_root(void)
 {
 	return host_option("root", "/");
+}
+
+/* ---- For the BMA800XL menu ---------------------------------------------------- */
+
+const char *BMA_SdRoot(void)
+{
+	return sd_root();
+}
+
+double BMA_RefreshRate(void)
+{
+	return refresh_rate;
+}
+
+/* The frame lock or border setting changed. */
+void BMA_VideoSettingsChanged(void)
+{
+	update_sync_mode();
+	restart_sound();
+	read_border_setting();
+	apply_view();
 }
 
 /* Builds atari800's command line from cmdline.txt options. */
@@ -688,6 +700,13 @@ void bma800xl_main(void)
 
 	for (;;) {
 		INPUT_key_code = PLATFORM_Keyboard();
+
+		/* F1, Home or Select+Start open the BMA800XL menu, which leads on
+		   to atari800's. Alt+letter shortcuts go straight to atari800's. */
+		if (INPUT_key_code == AKEY_UI && UI_alt_function < 0) {
+			if (!BMA_Menu())
+				INPUT_key_code = AKEY_NONE;
+		}
 
 		if (INPUT_key_code == AKEY_KEYB) {
 			/* The on-screen keyboard (F11): pick one key to press. */

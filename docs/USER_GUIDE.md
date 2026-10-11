@@ -8,7 +8,8 @@
 | `bootcode.bin`, `start.elf`, `fixup.dat` | Raspberry Pi firmware              |
 | `config.txt`     | Raspberry Pi settings: video mode                          |
 | `cmdline.txt`    | Emulator options (see below)                               |
-| `atari800.cfg`   | atari800's settings, written by *Save Configuration* in the menu |
+| `bma800xl.cfg`   | BMA800XL's settings, written by the BMA800XL menu          |
+| `atari800.cfg`   | atari800's settings, written by *Save Configuration* in atari800's menu |
 | `ROM/`           | Optional real Atari ROM images                             |
 | `disks/`, `programs/`, `carts/`, `tapes/`, `states/` | Suggested places for your files |
 
@@ -19,13 +20,30 @@ any time, except in the second after something was written.
 
 ## The menu
 
-Press **F1** (or **Home** on a gamepad, or **Select+Start** together) for
-atari800's menu. Everything is in there: loading disks, programs, cartridges
-and tapes, choosing the machine (System Settings), sound, display colours,
-save states and so on. **Esc** goes back.
+Press **F1** (or **Home** on a gamepad, or **Select+Start** together) for the
+BMA800XL menu. It shows the machine and display, the network status, and
+BMA800XL's own settings:
 
-Settings changed in the menu last until you switch off. Use *Save
-Configuration* to keep them; they are stored in `atari800.cfg`.
+| Item | What it does |
+|------|--------------|
+| About BMA800XL, Licence | Version and credits; licence terms |
+| Network | Ethernet or Wi-Fi, the Wi-Fi network, password and country (written to `wpa_supplicant.conf`), the web UI and its PIN, the time zone |
+| Emulator Menu (atari800) | atari800's own menu (see below) |
+| Controllers | Which gamepad is which joystick, the keypad and arrow keys as joystick 1, GPIO joysticks, the keyboard layout, and a **Joystick Test** that shows live what the Atari sees on each joystick port |
+| Video | Locking frames to the display, the border, the CRT shader, smooth scaling |
+| Sound | HDMI or headphones, the sound buffer |
+| Reboot, Shut Down | |
+
+Settings are saved to `bma800xl.cfg` as soon as you change them. Most take
+effect at once; those marked *(reboot)*, and the network settings, need a
+reboot, which the menu offers when you leave it.
+
+**Emulator Menu** opens atari800's menu, which has everything about the
+Atari: loading disks, programs, cartridges and tapes, choosing the machine
+(System Settings), sound, display colours, save states and so on. The Alt
+shortcuts (Alt+D for disks, Alt+R to run a program, and so on) go straight
+to it. **Esc** goes back to the Atari. Settings changed there last until you
+switch off; use *Save Configuration* to keep them in `atari800.cfg`.
 
 In the file browser, use the arrow keys or D-pad, **Return**/**A** to choose,
 **Esc**/**B** to go back. Typing a letter jumps to files starting with it.
@@ -36,7 +54,7 @@ The keys follow atari800's usual layout:
 
 | Key                    | Atari                                         |
 |------------------------|-----------------------------------------------|
-| F1                     | Menu                                          |
+| F1                     | BMA800XL menu (atari800's is one item away)   |
 | F2                     | Option                                        |
 | F3                     | Select                                        |
 | F4                     | Start                                         |
@@ -82,9 +100,10 @@ Gamepads get a joystick port the first time a button or direction is
 pressed, in that order. Some USB devices also show up as a gamepad that
 never sends anything (the 8BitDo Retro Keyboard's receiver does), and this
 way they don't take a port. The serial log says which gamepad became which
-joystick. To fix the assignment instead, set `joy1_pad` and `joy2_pad` in
-`cmdline.txt` to gamepad numbers as listed in the log (`Gamepad 2
-connected: ...`).
+joystick. To fix the assignment instead, choose a gamepad for each joystick
+in the menu's *Controllers*; the gamepad numbers are the ones in the log
+(`Gamepad 2 connected: ...`). *Joystick Test* there shows what each port
+receives.
 
 **Numeric keypad**: 8/2/4/6 and 7/9/1/3 for diagonals, 0 or 5 to fire. On by
 default; `keypad_joystick=0` turns it off.
@@ -135,7 +154,7 @@ makes scrolling perfectly smooth.
 For an NTSC Atari:
 
 1. In `config.txt`, set `hdmi_mode=4` (720p at 60 Hz).
-2. In the menu, *System Settings*, set the video system to NTSC and *Save
+2. In the Emulator Menu, *System Settings*, set the video system to NTSC and *Save
    Configuration* (or put `tv=ntsc` in `cmdline.txt`).
 
 If the display and the Atari don't match (a PAL Atari on a 60 Hz display),
@@ -149,13 +168,17 @@ for managing the SD card from any browser on the same network, so files can
 be copied to and from the Pi without taking the card out. It is the web UI
 from BMC64.
 
-Turn it on in `cmdline.txt` (on the same single line as the other options):
+Turn it on in the menu's *Network*: choose Ethernet or Wi-Fi, and for Wi-Fi
+enter the network's name, password and two letter country code, then
+reboot. Or, in `cmdline.txt` (on the same single line as the other options):
 
 - Ethernet: `network=ethernet`
 - Wi-Fi: `network=wifi`, and copy `wpa_supplicant.conf.example` to
   `wpa_supplicant.conf` in the root of the card with your network's name,
-  password and country. Wi-Fi needs the files in the `firmware` folder,
-  which `build_sdcard.sh` puts there.
+  password and country.
+
+Wi-Fi needs the files in the `firmware` folder, which `build_sdcard.sh` puts
+there.
 
 Once the Pi has an address, it is shown at the bottom of the screen for a
 few seconds (`WEB UI: HTTP://192.168.1.50/`) and written to the serial log.
@@ -171,8 +194,8 @@ The web UI has:
 - **Files**: browse the SD card; upload (or drag and drop) files into a
   folder, download, rename, delete, and create folders. Clicking a disk
   image, program, cartridge or tape **starts it** on the Atari, the same as
-  *Run Atari Program*. `cmdline.txt`, `config.txt`, `atari800.cfg` and
-  `wpa_supplicant.conf` can be **edited** in the browser; changes take
+  *Run Atari Program*. `cmdline.txt`, `config.txt`, `bma800xl.cfg`,
+  `atari800.cfg` and `wpa_supplicant.conf` can be **edited** in the browser; changes take
   effect after a reboot, and the previous version is kept as `.bak`.
 
 Uploads can't overwrite `cmdline.txt`, `config.txt` or `wpa_supplicant.conf`
@@ -190,9 +213,12 @@ The network also sets the Pi's clock, so files saved on the card get the
 right date and time. Set `timezone` to your offset from UTC in minutes, for
 example `timezone=600` for UTC+10.
 
-## cmdline.txt options
+## Options
 
 `cmdline.txt` is a single line of `name=value` options separated by spaces.
+The BMA800XL menu saves the options it changes to `bma800xl.cfg`, one
+`name=value` per line, and those win over `cmdline.txt`. Either file can be
+edited from the web UI.
 
 | Option              | Values                       | Default  | What it does |
 |---------------------|------------------------------|----------|--------------|
@@ -207,11 +233,11 @@ example `timezone=600` for UTC+10.
 | `crt_shader`        | `0`, `1`                     | `0`      | CRT look (scanlines) from BMC64 |
 | `crt_curvature`     | `0`, `1`                     | `0`      | With `crt_shader`, a curved screen |
 | `vsync`             | `auto`, `on`, `off`          | `auto`   | Lock frames to the display (see PAL and NTSC) |
-| `audio_out`         | `auto`, `hdmi`, `analog`     | `auto`   | Where the sound goes |
+| `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes |
 | `volume`            | 0 to 100                     | `100`    | Sound volume |
 | `audio_buffer_ms`   | 10 or more                   | `40`     | Sound buffer; raise it if the sound breaks up |
 | `keyboard`          | `us`, `uk`                   | `us`     | PC keyboard layout |
-| `joy1_pad` ... `joy4_pad` | gamepad number (1-4)   | first used | Gamepad for each Atari joystick port |
+| `joy1_pad` ... `joy4_pad` | `0` automatic, `1`-`4` a gamepad, `-1` none | `0` | Gamepad for each Atari joystick port |
 | `keypad_joystick`   | `0`, `1`                     | `1`      | Numeric keypad as joystick 1 |
 | `arrow_joystick`    | `0`, `1`                     | `0`      | Arrow keys as joystick 1 |
 | `gpio_joysticks`    | `0`, `1`                     | `0`      | Real joysticks on the GPIO header |
@@ -222,9 +248,6 @@ example `timezone=600` for UTC+10.
 | `timezone`          | minutes east of UTC          | `0`      | Time zone for the network clock |
 | `usbpowerdelay`     | milliseconds                 | `1000`   | Circle: wait for USB devices to power up |
 
-The border, keypad and arrow joystick settings are also kept in
-`atari800.cfg` (`BMA800XL_BORDER`, `BMA800XL_KEYPAD_JOYSTICK`,
-`BMA800XL_ARROW_JOYSTICK`); `cmdline.txt` wins when both are set.
 
 ## ROMs
 

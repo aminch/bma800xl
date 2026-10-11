@@ -17,7 +17,8 @@ hardware, with no Linux underneath, using the same approach as
   cartridges (CAR, ROM, BIN) and tapes (CAS)
 - USB keyboards and gamepads, the numeric keypad as a joystick, and real
   Atari joysticks wired to the GPIO header
-- atari800's built in menus for everything else: press F1
+- A BMA800XL menu (F1) for network, controllers, video and sound settings,
+  with atari800's own menus one item away for everything else
 - Optional Ethernet or Wi-Fi with BMC64's web UI: manage the SD card from a
   browser (upload, download, edit config files, start programs, reboot)
 
@@ -45,7 +46,7 @@ For an NTSC Atari, see the [User Guide](docs/USER_GUIDE.md#pal-and-ntsc).
 
 | Key            | Does                                                 |
 |----------------|------------------------------------------------------|
-| F1             | Menu                                                 |
+| F1             | BMA800XL menu, with atari800's menu one item away    |
 | F2 / F3 / F4   | Option / Select / Start                              |
 | F5             | Reset (Shift+F5: power off and on)                   |
 | F6             | Help                                                 |
