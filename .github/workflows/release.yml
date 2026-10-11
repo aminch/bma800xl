@@ -49,7 +49,7 @@ jobs:
         run: ./build_sdcard.sh
 
       - name: Check the release files
-        run: ./check_release_files.sh
+        run: ./check_release_files.sh --release
 
       - name: Zip the SD card files
         run: cd build/sdcard && zip -r "../../bma800xl-${{ github.ref_name }}.zip" .

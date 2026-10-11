@@ -43,25 +43,36 @@ then
     exit 1
 fi
 
-firmware_marker="$FIRMWARE_CACHE_DIR/$firmware_revision.complete"
+# The firmware is cached outside the source tree: clean_all.sh resets the
+# Circle submodule, where Circle's Makefile would download it.
+firmware_cache_dir="$FIRMWARE_CACHE_DIR/$firmware_revision/firmware"
 license_cache_dir="$FIRMWARE_CACHE_DIR/$firmware_revision/licenses"
 copyright_cache_file="$license_cache_dir/copyright"
 firmware_missing=0
 
 for firmware in "${WLAN_FIRMWARE[@]}"
 do
-    if [ ! -s "$WLAN_FIRMWARE_DIR/$firmware" ]
+    if [ ! -s "$firmware_cache_dir/$firmware" ]
     then
         firmware_missing=1
         break
     fi
 done
 
-if [ ! -f "$firmware_marker" ] || [ "$firmware_missing" -eq 1 ]
+if [ "$firmware_missing" -eq 1 ]
 then
-    make -C "$WLAN_FIRMWARE_DIR" firmware
+    # Circle's Makefile downloads into the current folder. A temporary one,
+    # so a failed download leaves nothing half done in the cache.
     mkdir -p "$FIRMWARE_CACHE_DIR"
-    touch "$firmware_marker"
+    download_dir=$(mktemp -d "$FIRMWARE_CACHE_DIR/.downloading.XXXXXX")
+    trap 'rm -rf "$download_dir"' EXIT
+    echo "Downloading the Wi-Fi firmware ($firmware_revision)"
+    make -s -C "$download_dir" -f "$WLAN_FIRMWARE_DIR/Makefile" \
+        FIRMWARE="$firmware_revision" firmware
+    mkdir -p "$(dirname "$firmware_cache_dir")"
+    rm -rf "$firmware_cache_dir"
+    mv "$download_dir" "$firmware_cache_dir"
+    trap - EXIT
 fi
 
 license_missing=0
@@ -112,7 +123,7 @@ mkdir -p "$OUTPUT_DIRECTORY/firmware"
 
 for firmware in "${WLAN_FIRMWARE[@]}"
 do
-    cp "$WLAN_FIRMWARE_DIR/$firmware" "$OUTPUT_DIRECTORY/firmware/"
+    cp "$firmware_cache_dir/$firmware" "$OUTPUT_DIRECTORY/firmware/"
 done
 
 for license in "${WLAN_LICENSES[@]}"

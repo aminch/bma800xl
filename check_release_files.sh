@@ -2,9 +2,10 @@
 #
 # Checks that a staged SD card (build_sdcard.sh's build/sdcard by default)
 # has everything a release needs, as BMC64's check_release_files.sh does.
-# The release workflow runs it before zipping.
+# build_sdcard.sh runs it at the end; the release workflow runs it with
+# --release, which also refuses a kernel built with uncommitted changes.
 #
-#   ./check_release_files.sh [RELEASE_DIRECTORY]
+#   ./check_release_files.sh [--release] [RELEASE_DIRECTORY]
 #
 
 SRC_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -50,9 +51,16 @@ REQUIRED_FILES=(
     "ROM/README.txt"
 )
 
+RELEASE=0
+if [ "${1:-}" = "--release" ]
+then
+    RELEASE=1
+    shift
+fi
+
 if [ "$#" -gt 1 ]
 then
-    echo "Usage: $0 [RELEASE_DIRECTORY]" >&2
+    echo "Usage: $0 [--release] [RELEASE_DIRECTORY]" >&2
     exit 2
 fi
 
@@ -80,7 +88,8 @@ do
     fi
 done
 
-# The kernel must be this version, built from committed files.
+# The kernel must be this version (and for a release, built from committed
+# files).
 version="BMA800XL $("$SRC_DIR/tools/version.sh" --semver) ($("$SRC_DIR/tools/version.sh" --git),"
 kernel="$RELEASE_DIRECTORY/kernel8-32.img"
 if [ -f "$kernel" ] && ! grep -qaF "$version" "$kernel"
@@ -88,7 +97,7 @@ then
     echo "kernel8-32.img is not \"$version ...\": rebuild it"
     problems=1
 fi
-if [ -f "$kernel" ] && grep -qaE "BMA800XL [^ ]+ \([0-9a-f]+-dirty," "$kernel"
+if [ "$RELEASE" -eq 1 ] && [ -f "$kernel" ] && grep -qaE "BMA800XL [^ ]+ \([0-9a-f]+-dirty," "$kernel"
 then
     echo "kernel8-32.img was built with uncommitted changes (-dirty)"
     problems=1

@@ -54,7 +54,8 @@ mkdir -p "$STAGING_DIR"
 cp "$SRC_DIR"/sdcard/firmware/* "$STAGING_DIR/"
 if ! "$SRC_DIR/make_wifi_firmware.sh" "$STAGING_DIR"
 then
-    echo "Wi-Fi firmware could not be fetched; Wi-Fi won't work from this card." >&2
+    echo "Wi-Fi firmware could not be fetched (it is cached once it has been)." >&2
+    exit 1
 fi
 cp "$SRC_DIR/sdcard/config.txt" "$SRC_DIR/sdcard/cmdline.txt" \
    "$SRC_DIR/sdcard/wpa_supplicant.conf.example" "$STAGING_DIR/"
@@ -76,5 +77,11 @@ folder_readme tapes    "Cassette images: .cas"
 folder_readme states   "Saved states: .a8s (Save State in the menu, Alt+S)"
 mkdir -p "$STAGING_DIR/ROM"
 cp "$SRC_DIR/docs/ROM_README.txt" "$STAGING_DIR/ROM/README.txt"
+
+if ! "$SRC_DIR/check_release_files.sh" "$STAGING_DIR"
+then
+    echo "BUILD FAILED: the SD card files in $STAGING_DIR are not complete." >&2
+    exit 1
+fi
 
 echo "Staged boot partition files in $STAGING_DIR ($(tools/version.sh))"
