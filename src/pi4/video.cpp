@@ -61,15 +61,21 @@ Pi4Video::Pi4Video(void)
       m_nSourceWidth(0), m_nSourceHeight(0), m_nViewX(0), m_nViewY(0),
       m_nViewW(0), m_nViewH(0), m_nDestX(0), m_nDestY(0), m_nDestW(0),
       m_nDestH(0), m_nRepeat(1), m_pColumn(0), m_bFiltered(false),
-      m_bScalerReady(false), m_pJobPage(0) {
+      m_bCrt(false), m_bSmooth(false), m_bCurvature(false),
+      m_bScalerReady(false), m_pJobPage(0), m_pKms(0), m_pKmsTarget(0),
+      m_nKmsPitch(0) {
   memset(m_Palette, 0, sizeof m_Palette);
   memset(m_Palette565, 0, sizeof m_Palette565);
+  for (unsigned i = 0; i < 256; i++) {
+    m_Palette32[i] = 0xFF000000u;
+  }
   for (unsigned i = 0; i < 4; i++) {
     m_pLine[i] = 0;
   }
 }
 
 Pi4Video::~Pi4Video(void) {
+  delete m_pKms;
   delete m_pFrameBuffer;
   delete[] m_pSource;
   delete[] m_pColumn;
@@ -92,7 +98,10 @@ bool Pi4Video::TakeFrameBuffer(unsigned width, unsigned height,
   return false;
 }
 
-bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature) {
+bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature, Driver driver) {
+  m_bCrt = crt;
+  m_bSmooth = smooth;
+  m_bCurvature = crt && curvature;
   // The display's size, as CBcmFrameBuffer finds it when given 0 x 0
   // (with the same limits).
   m_nDisplayWidth = 640;
@@ -148,11 +157,26 @@ bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature) {
                           crt && curvature ? " curved" : "");
   }
   ClearPages();
+  m_pFrameBuffer->SetVirtualOffset(0, 0);
+  m_nBackPage = 1;
+
+  // The direct display driver takes over from the firmware's framebuffer,
+  // which stays as the fall back if it can't.
+  if (driver != Driver::Firmware) {
+    m_pKms = new kms::Display;
+    if (!m_pKms->Attach()) {
+      delete m_pKms;
+      m_pKms = 0;
+    } else {
+      // Sharp and smooth are scaled by the HVS; the CRT shader is drawn by
+      // the ARM at up to 1080 lines and scaled the rest of the way.
+      CLogger::Get()->Write(FromVideo, LogNotice, "Picture by BMA800XL's display lists on the HVS");
+    }
+  }
+
   __atomic_store_n(&s_pThis, this, __ATOMIC_RELEASE);
   DataSyncBarrier();
   SendEvent();
-  m_pFrameBuffer->SetVirtualOffset(0, 0);
-  m_nBackPage = 1;
   return true;
 }
 
@@ -200,6 +224,10 @@ int Pi4Video::Allocate(int width, int height, uint8_t **pixels, int *pitch) {
 void Pi4Video::SetView(int x, int y, int w, int h, double aspect,
                        double scale) {
   if (m_pFrameBuffer == 0 || w <= 0 || h <= 0) {
+    return;
+  }
+  if (m_pKms != 0) {
+    SetViewKms(x, y, w, h, aspect, scale);
     return;
   }
   if (scale <= 0.1 || scale > 1.0) {
@@ -271,6 +299,7 @@ void Pi4Video::SetPalette(int index, uint32_t rgb) {
   unsigned g = (rgb >> 8) & 0xff;
   unsigned b = rgb & 0xff;
   m_Palette565[index] = (uint16_t)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+  m_Palette32[index] = 0xFF000000u | (rgb & 0xffffff);
   m_Scaler.SetPalette(index, rgb);
 }
 
@@ -336,6 +365,12 @@ void Pi4Video::CopyLine(uint8_t *dst, uint32_t *line) const {
 void Pi4Video::Prepare(unsigned item) { m_Scaler.Prepare(m_pSource, item); }
 
 void Pi4Video::Render(unsigned row, unsigned core) {
+  if (m_pKmsTarget != 0) {
+    // Straight into the direct driver's buffer (ordinary memory; the HVS
+    // ignores the alpha byte).
+    m_Scaler.Render(m_pSource, row, (uint32_t *)(m_pKmsTarget + (size_t)row * m_nKmsPitch));
+    return;
+  }
   uint32_t *line = m_pLine[core];
   m_Scaler.Render(m_pSource, row, line);
   CopyLine(m_pJobPage + (size_t)(m_nDestY + row) * m_nPitch +
@@ -359,6 +394,10 @@ void Pi4Video::WorkerLoop(unsigned core) {
 
 void Pi4Video::Present(bool wait_vsync) {
   if (m_pFrameBuffer == 0 || m_pSource == 0) {
+    return;
+  }
+  if (m_pKms != 0) {
+    PresentKms(wait_vsync);
     return;
   }
   uint8_t *page = Page(m_nBackPage);
@@ -385,13 +424,115 @@ void Pi4Video::Present(bool wait_vsync) {
 }
 
 void Pi4Video::DisplaySize(int *width, int *height) const {
+  if (m_pKms != 0) {
+    *width = (int)m_pKms->Width();
+    *height = (int)m_pKms->Height();
+    return;
+  }
   *width = (int)m_nDisplayWidth;
   *height = (int)m_nDisplayHeight;
 }
 
 void Pi4Video::Blank(void) {
+  if (m_pKms != 0) {
+    m_pKms->Blank();
+    return;
+  }
   if (m_pFrameBuffer == 0) {
     return;
   }
   ClearPages();
+}
+
+//
+// The direct display driver (src/pi4kms/).
+//
+
+// As SetView() does for the framebuffer, on the mode's size: sharp in whole
+// multiples of the view's height, smooth and CRT filling the height (times
+// SCALE). Sharp and smooth hand the HVS the view as it is; the CRT shader
+// draws at the size shown, or a whole fraction of it no more than 1080
+// lines (720 curved and smooth), which the HVS enlarges sharply.
+void Pi4Video::SetViewKms(int x, int y, int w, int h, double aspect,
+                          double scale) {
+  if (scale <= 0.1 || scale > 1.0) {
+    scale = 1.0;
+  }
+  m_nViewX = x;
+  m_nViewY = y;
+  m_nViewW = w;
+  m_nViewH = h;
+
+  const unsigned width = m_pKms->Width(), height = m_pKms->Height();
+  unsigned dest_h;
+  if (m_bFiltered) {
+    dest_h = (unsigned)(height * scale);
+  } else {
+    unsigned repeat = (unsigned)(height * scale) / (unsigned)h;
+    dest_h = (repeat == 0 ? 1 : repeat) * (unsigned)h;
+  }
+  if (dest_h > height) {
+    dest_h = height;
+  }
+  if (dest_h == 0) {
+    dest_h = 1;
+  }
+  unsigned dest_w = (unsigned)(dest_h * aspect + 0.5);
+  if (dest_w > width) {
+    dest_w = width;
+  }
+  unsigned dest_x = (width - dest_w) / 2;
+  unsigned dest_y = (height - dest_h) / 2;
+
+  unsigned src_w = (unsigned)w, src_h = (unsigned)h;
+  bool nearest = !m_bSmooth;
+  if (m_bCrt) {
+    unsigned max_height = m_bCurvature && m_bSmooth ? 720 : 1080;
+    unsigned divide = (dest_h + max_height - 1) / max_height;
+    src_w = dest_w / divide;
+    src_h = dest_h / divide;
+    nearest = true;
+    m_bScalerReady = m_Scaler.Configure((unsigned)m_nSourceWidth, x, y, w, h,
+                                        src_w, src_h);
+    if (!m_bScalerReady) {
+      CLogger::Get()->Write(FromVideo, LogError, "Not enough memory to scale the picture");
+      return;
+    }
+  }
+  if (!m_pKms->SetPicture(src_w, src_h, dest_x, dest_y, dest_w, dest_h, nearest)) {
+    // Back to the firmware's framebuffer.
+    CLogger::Get()->Write(FromVideo, LogWarning, "Can't show the picture on the HVS; using the framebuffer");
+    m_pKms->Release();
+    delete m_pKms;
+    m_pKms = 0;
+    SetView(x, y, w, h, aspect, scale);
+  }
+}
+
+void Pi4Video::PresentKms(bool wait_vsync) {
+  unsigned pitch;
+  uint32_t *buffer = m_pKms->BeginFrame(&pitch);
+  if (buffer == 0) {
+    return;
+  }
+  if (m_bCrt) {
+    if (!m_bScalerReady) {
+      return;
+    }
+    // Cores 2 and 3 help, as for the framebuffer.
+    m_pKmsTarget = (uint8_t *)buffer;
+    m_nKmsPitch = pitch * 4;
+    m_Share.Run(*this, 1, m_Scaler.PrepareCount(), m_Scaler.Height());
+    m_pKmsTarget = 0;
+  } else {
+    // The view in colour, as it is; the HVS scales it.
+    for (int y = 0; y < m_nViewH; y++) {
+      const uint8_t *src = m_pSource + (size_t)(m_nViewY + y) * m_nSourceWidth + m_nViewX;
+      uint32_t *dst = buffer + (size_t)y * pitch;
+      for (int x = 0; x < m_nViewW; x++) {
+        dst[x] = m_Palette32[src[x]];
+      }
+    }
+  }
+  m_pKms->EndFrame(wait_vsync);
 }

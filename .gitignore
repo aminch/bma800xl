@@ -17,6 +17,7 @@ tools/hostsim/build/
 tools/hostsim/out/
 tools/pi4scaler/build/
 tools/pi4scaler/out/
+tools/pi4kms/build/
 sdcard_out/
 
 # Raspberry Pi firmware shipped on the SD card

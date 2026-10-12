@@ -203,9 +203,17 @@ bool CKernel::Initialize(void) {
     mLogger.Write(FromKernel, LogWarning,
                   "Sound goes to HDMI: the headphone jack isn't supported on the Pi 4 yet");
   }
+  // video_driver: firmware (the default), hvs or kms (docs/PI4.md).
+  const char *video_driver = mOptions.Get("video_driver", "firmware");
+  Pi4Video::Driver driver = Pi4Video::Driver::Firmware;
+  if (strcmp(video_driver, "hvs") == 0) {
+    driver = Pi4Video::Driver::Hvs;
+  } else if (strcmp(video_driver, "kms") == 0) {
+    driver = Pi4Video::Driver::Kms;
+  }
   if (!mVideo.Initialize(mOptions.GetBool("crt_shader", false),
                          mOptions.GetBool("smooth", false),
-                         mOptions.GetBool("crt_curvature", false))) {
+                         mOptions.GetBool("crt_curvature", false), driver)) {
     return false;
   }
   // Without sound the emulator still runs.

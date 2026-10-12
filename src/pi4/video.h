@@ -42,6 +42,7 @@
 
 #include "frameshare.h"
 #include "scaler.h"
+#include "../pi4kms/display.h"
 
 #include <circle/bcmframebuffer.h>
 #include <stdint.h>
@@ -51,9 +52,16 @@ public:
   Pi4Video(void);
   ~Pi4Video(void);
 
-  // Core 0, at start up: takes a double buffered framebuffer. CRT, SMOOTH
-  // and CURVATURE are the crt_shader, smooth and crt_curvature options.
-  bool Initialize(bool crt, bool smooth, bool curvature);
+  // Which driver puts the picture on the screen (the video_driver option):
+  // the firmware's framebuffer, or BMA800XL's own display lists on the HVS
+  // (src/pi4kms/, docs/PI4.md), on the firmware's video mode or (Kms)
+  // with BMA800XL setting the mode too.
+  enum class Driver { Firmware, Hvs, Kms };
+
+  // Core 0, at start up: takes a double buffered framebuffer and, if asked
+  // to, the HVS. CRT, SMOOTH and CURVATURE are the crt_shader, smooth and
+  // crt_curvature options.
+  bool Initialize(bool crt, bool smooth, bool curvature, Driver driver);
 
   // Core 1, from the emulator (see host.h).
   int Allocate(int width, int height, uint8_t **pixels, int *pitch);
@@ -76,6 +84,8 @@ private:
   uint8_t *Page(unsigned page) const;
   void DrawSharp(uint8_t *page);
   void CopyLine(uint8_t *dst, uint32_t *line) const;
+  void SetViewKms(int x, int y, int w, int h, double aspect, double scale);
+  void PresentKms(bool wait_vsync);
 
   // Pi4FrameShare's job.
   friend class Pi4FrameShare;
@@ -102,9 +112,11 @@ private:
 
   uint32_t m_Palette[256];   // 0xRRGGBB
   uint16_t m_Palette565[256];
+  uint32_t m_Palette32[256]; // 0xFFRRGGBB
 
   // Smooth scaling and the CRT shader.
   bool m_bFiltered;
+  bool m_bCrt, m_bSmooth, m_bCurvature;
   bool m_bScalerReady;
   Pi4Scaler m_Scaler;
   uint32_t *m_pLine[4];   // a line of output per core
@@ -112,6 +124,12 @@ private:
   // The frame being drawn by several cores.
   Pi4FrameShare m_Share;
   uint8_t *volatile m_pJobPage;
+
+  // The direct display driver, when it is in use; the CRT shader then
+  // draws into its buffer, KMS_PITCH bytes per line, from line 0.
+  kms::Display *m_pKms;
+  uint8_t *m_pKmsTarget;
+  unsigned m_nKmsPitch;
 
   static Pi4Video *s_pThis;
 };
