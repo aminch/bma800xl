@@ -40,7 +40,7 @@ bool WaitClear(uintptr_t address, uint32_t mask, unsigned timeout_us) {
 
 // The first 1 GB of memory is mapped one to one; HEAP_DMA30 memory is in
 // it. The table covers the whole 4 GB the GPU can address.
-const unsigned MappedPages = (1u << 30) >> PageShift;
+const unsigned MappedPages = Gpu::MappedBytes >> PageShift;
 const unsigned TablePages = (1ull << 32) >> PageShift;
 
 } // namespace

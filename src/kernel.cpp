@@ -249,14 +249,19 @@ TShutdownMode CKernel::Run(void) {
   mEmulatorCore.Launch();
 
 #if RASPPI >= 4
-  // The GPU, for the CRT shader (crt_gpu=1 in cmdline.txt): start it and check
-  // that it renders. Done here, with the emulator running on core 1, which
-  // also writes the log.
-  if (mOptions.GetBool("crt_gpu", false) && mGpu.Initialize()) {
-    mGpu.ClearTest();
-    if (mRenderer.Initialize(&mGpu, 1920, 1200) && mRenderer.CopyTest() &&
-        mCrt.Initialize(&mGpu, &mRenderer, 384, 288)) {
-      mCrt.Test();
+  // The 3D GPU draws the smooth and CRT pictures instead of the ARM
+  // (crt_gpu=1 in cmdline.txt; crt_gpu_test=1 also checks its pictures
+  // against the ARM's). Started here, with the emulator running on core 1,
+  // which also writes the log.
+  if (mOptions.GetBool("crt_gpu", false) && mGpu.Initialize() && mGpu.ClearTest() &&
+      mRenderer.Initialize(&mGpu, 4096, 2160) &&
+      mCrt.Initialize(&mGpu, &mRenderer, 384, 288)) {
+    bool ok = true;
+    if (mOptions.GetBool("crt_gpu_test", false)) {
+      ok = mRenderer.CopyTest() && mCrt.Test();
+    }
+    if (ok) {
+      mVideo.UseGpu(&mCrt);
     }
   }
 #endif

@@ -74,8 +74,7 @@ bool Crt::Configure(unsigned src_pitch, int vx, int vy, int vw, int vh, unsigned
 }
 
 void Crt::SetPalette(int index, uint32_t rgb) {
-  m_Palette[index & 255] = 0xFF000000 | ((rgb & 0xFF) << 16) | (rgb & 0xFF00) |
-                           ((rgb >> 16) & 0xFF);
+  m_Palette[index & 255] = 0xFF000000 | (rgb & 0xFFFFFF);
 }
 
 // The view, in colour.
@@ -158,8 +157,7 @@ bool Crt::Test(void) {
     for (unsigned y = 0; ok && y < DestH; y++) {
       for (unsigned x = 0; x < DestW; x++) {
         uint32_t expected = scaler->Reference(src, x, y);
-        uint32_t p = pixels[y * DestW + x];
-        uint32_t got = (p & 0xFF) << 16 | (p & 0xFF00) | ((p >> 16) & 0xFF);
+        uint32_t got = pixels[y * DestW + x] & 0xFFFFFF;
         unsigned diff = 0;
         for (int k = 0; k < 24; k += 8) {
           int d = (int)((got >> k) & 255) - (int)((expected >> k) & 255);

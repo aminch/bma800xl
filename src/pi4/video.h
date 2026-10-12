@@ -12,6 +12,8 @@
 // smooth both on), and on bigger displays the firmware scales it up.
 // Those pictures are drawn by cores 1, 2 and 3 together: core 1 runs the
 // emulator, cores 2 and 3 have nothing else to do.
+// With the crt_gpu option the 3D GPU draws them instead
+// (src/pi4v3d/crt.h), and the ARM again if the GPU can't.
 //
 // Sources:
 //  - Circle, include/circle/bcmframebuffer.h and lib/bcmframebuffer.cpp
@@ -47,6 +49,7 @@
 #include "frameshare.h"
 #include "scaler.h"
 #include "../pi4kms/display.h"
+#include "../pi4v3d/crt.h"
 
 #include <circle/bcmframebuffer.h>
 #include <stdint.h>
@@ -80,6 +83,11 @@ public:
   // Shows a black screen (before halting).
   void Blank(void);
 
+  // Core 0, once the 3D GPU is running (the crt_gpu option): from the next
+  // frame CRT draws the pictures the ARM would (smooth and CRT on the
+  // framebuffer, CRT on the HVS). The ARM takes over again if it fails.
+  void UseGpu(v3d::Crt *crt);
+
   // Cores 2 and 3 (CEmulatorCore::Run): help draw frames, forever.
   static void WorkerLoop(unsigned core);
 
@@ -94,6 +102,9 @@ private:
   void SetViewKms(int x, int y, int w, int h, double aspect, double scale);
   void PresentKms(bool wait_vsync);
   void WaitForVerticalSync(void);
+  bool DrawnByArm(void) const;
+  void ConfigureGpu(void);
+  void DropGpu(const char *why);
 
   // Pi4FrameShare's job.
   friend class Pi4FrameShare;
@@ -141,6 +152,14 @@ private:
   Driver m_Driver;
   uint8_t *m_pKmsTarget;
   unsigned m_nKmsPitch;
+
+  // The GPU, when it draws instead of the ARM: offered by core 0, taken
+  // by core 1 at the next frame. KMS_SRC_W x KMS_SRC_H: the size the CRT
+  // shader draws at on the HVS.
+  v3d::Crt *volatile m_pGpuOffered;
+  v3d::Crt *m_pGpu;
+  bool m_bGpuReady;
+  unsigned m_nKmsSrcW, m_nKmsSrcH;
 
   static Pi4Video *s_pThis;
 };

@@ -57,6 +57,12 @@ public:
   // The GPU address of memory from Allocate().
   static uint32_t Address(const void *p) { return (uint32_t)(uintptr_t)p; }
 
+  // The GPU's MMU maps the first 1 GB of memory, one to one.
+  static const uint64_t MappedBytes = 1ull << 30;
+  static bool Reachable(const void *p, size_t bytes) {
+    return (uintptr_t)p + bytes <= MappedBytes;
+  }
+
 private:
   bool PowerUp(void);
   bool Present(void);

@@ -45,8 +45,6 @@
 #include "pi4/sound.h"
 #include "pi4/video.h"
 #include "pi4v3d/crt.h"
-#include "pi4v3d/draw.h"
-#include "pi4v3d/gpu.h"
 #else
 #include <vc4/vchiq/vchiqdevice.h>
 

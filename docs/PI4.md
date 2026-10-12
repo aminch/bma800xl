@@ -51,6 +51,13 @@ on the Pi 3, worked out on ARM cores 1 to 3 (`src/pi4/scaler.cpp`). It is
 drawn at up to 1080 lines (720 with curvature and smooth both on) and
 scaled up to fill larger screens.
 
+With `crt_gpu=1` the Pi 4's 3D GPU draws the smooth and CRT pictures
+instead (`src/pi4v3d/`), with the same crt-pi settings, and the ARM cores
+are left free. If the GPU doesn't start or can't draw a picture, the ARM
+draws it as before; the log's `v3d:` lines and *Drawn by* line say which.
+`crt_gpu_test=1` also compares the GPU's pictures with the ARM's at start
+up.
+
 ## Sound
 
 `audio_out` chooses where the sound goes:

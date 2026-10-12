@@ -244,6 +244,7 @@ edited from the web UI.
 | `smooth`            | `0`, `1`                     | `0`      | Bilinear filtering instead of sharp pixels |
 | `crt_shader`        | `0`, `1`                     | `0`      | CRT look (scanlines) from BMC64 |
 | `crt_curvature`     | `0`, `1`                     | `0`      | With `crt_shader`, a curved screen |
+| `crt_gpu`           | `0`, `1`                     | `0`      | Pi 4 only: the 3D GPU draws the smooth and CRT pictures instead of the ARM (see [PI4.md](PI4.md)) |
 | `vsync`             | `auto`, `on`, `off`          | `auto`   | Lock frames to the display (see PAL and NTSC) |
 | `video_driver`      | `kms`, `hvs`, `firmware`     | `kms`      | Pi 4 only: `kms` runs the display at the Atari's exact frame rate; `hvs` leaves the mode set in `config.txt`; `firmware` uses the firmware's framebuffer, if the others give trouble (see [PI4.md](PI4.md)) |
 | `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes (`auto`: HDMI, or the headphone jack if the display takes no sound) |

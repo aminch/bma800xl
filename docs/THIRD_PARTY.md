@@ -38,6 +38,14 @@ See the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmwa
 
 BMA800XL uses the crt-pi CRT shader by davej, as included in BMC64, under the [GNU General Public License version 2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 
+## Mesa
+
+For the Raspberry Pi 4's 3D GPU, BMA800XL adapts parts of the [Mesa 3D graphics library](https://mesa3d.org/)'s Broadcom V3D drivers (`src/pi4v3d/`, `tools/v3dshader/`), under the MIT license. The GPU shaders are compiled with Mesa 25.2.8's V3D compiler.
+
+## Linux
+
+For the Raspberry Pi 4's 3D GPU, BMA800XL adapts parts of the Linux kernel's V3D driver and BCM2835 power domain driver (`src/pi4v3d/`), under the [GNU General Public License version 2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
+
 ## Circle ARM stub
 
 For the Raspberry Pi 4, BMA800XL includes `armstub8-rpi4.bin`, built from [Circle's `boot/armstub`](https://github.com/rsta2/circle/tree/master/boot/armstub) source, under Circle's [GNU General Public License version 3](https://github.com/rsta2/circle/blob/master/COPYING).

@@ -7,6 +7,10 @@
 // sharp or smooth. The same pictures as src/pi4/scaler.h draws on the ARM
 // cores, which the self-test checks.
 //
+// Pixels are 32-bit words 0xAARRGGBB, as the framebuffer and the HVS take
+// them. The GPU sees them as red in the low byte, but every channel is
+// treated alike, so they come out in the order they went in.
+//
 // This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
 // Raspberry Pi. See LICENSE for licensing details.
 //
@@ -42,6 +46,7 @@ public:
 
   // Draws a frame from SRC into TARGET with its top left corner at (X, Y);
   // the rest of TARGET is cleared to black. Waits for the GPU.
+  // TARGET's memory must be reachable by the GPU (Gpu::Reachable()).
   bool Draw(const uint8_t *src, const Target &target, int x, int y);
 
   // Draws a test picture in every crt-pi mode and compares it with
@@ -59,7 +64,7 @@ private:
   unsigned m_nPitch;
   int m_nViewX, m_nViewY, m_nViewW, m_nViewH;
   unsigned m_nDestW, m_nDestH;
-  uint32_t m_Palette[256];  // 0xAABBGGRR, as the texture holds it
+  uint32_t m_Palette[256];  // 0xFFRRGGBB
 };
 
 } // namespace v3d

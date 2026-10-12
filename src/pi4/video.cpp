@@ -70,7 +70,8 @@ Pi4Video::Pi4Video(void)
       m_bCrt(false), m_bSmooth(false), m_bCurvature(false),
       m_bScalerReady(false), m_pJobPage(0), m_pKms(0),
       m_Driver(Driver::Firmware), m_pKmsTarget(0),
-      m_nKmsPitch(0) {
+      m_nKmsPitch(0), m_pGpuOffered(0), m_pGpu(0), m_bGpuReady(false),
+      m_nKmsSrcW(0), m_nKmsSrcH(0) {
   memset(m_Palette, 0, sizeof m_Palette);
   memset(m_Palette565, 0, sizeof m_Palette565);
   for (unsigned i = 0; i < 256; i++) {
@@ -292,6 +293,7 @@ void Pi4Video::SetView(int x, int y, int w, int h, double aspect,
     BuildColumnMap();
   }
   ClearPages();
+  ConfigureGpu();
 }
 
 void Pi4Video::BuildColumnMap(void) {
@@ -313,6 +315,9 @@ void Pi4Video::SetPalette(int index, uint32_t rgb) {
   m_Palette565[index] = (uint16_t)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
   m_Palette32[index] = 0xFF000000u | (rgb & 0xffffff);
   m_Scaler.SetPalette(index, rgb);
+  if (m_pGpu != 0) {
+    m_pGpu->SetPalette(index, rgb);
+  }
 }
 
 void Pi4Video::UpdatePalette(void) {
@@ -408,6 +413,21 @@ void Pi4Video::Present(bool wait_vsync) {
   if (m_pFrameBuffer == 0 || m_pSource == 0) {
     return;
   }
+  v3d::Crt *offered = __atomic_load_n(&m_pGpuOffered, __ATOMIC_ACQUIRE);
+  if (offered != 0 && m_pGpu == 0) {
+    __atomic_store_n(&m_pGpuOffered, (v3d::Crt *)0, __ATOMIC_RELAXED);
+    if (DrawnByArm()) {
+      m_pGpu = offered;
+      for (unsigned i = 0; i < 256; i++) {
+        m_pGpu->SetPalette(i, m_Palette[i]);
+      }
+      m_pGpu->SetMode(m_bCrt, m_bSmooth, m_bCurvature);
+      ConfigureGpu();
+      if (m_pGpu != 0) {
+        CLogger::Get()->Write(FromVideo, LogNotice, "Drawn by the GPU from now on");
+      }
+    }
+  }
   if (m_pKms != 0) {
     PresentKms(wait_vsync);
     return;
@@ -416,6 +436,11 @@ void Pi4Video::Present(bool wait_vsync) {
   if (!m_bFiltered) {
     if (m_pColumn != 0) {
       DrawSharp(page);
+    }
+  } else if (m_pGpu != 0 && m_bGpuReady) {
+    v3d::Target target = {page, m_nWidth, m_nHeight, m_nPitch};
+    if (!m_pGpu->Draw(m_pSource, target, (int)m_nDestX, (int)m_nDestY)) {
+      DropGpu("drawing failed");
     }
   } else if (m_bScalerReady) {
     if (m_pLine[1] == 0) {
@@ -537,6 +562,8 @@ void Pi4Video::SetViewKms(int x, int y, int w, int h, double aspect,
     src_w = dest_w / divide;
     src_h = dest_h / divide;
     nearest = true;
+    m_nKmsSrcW = src_w;
+    m_nKmsSrcH = src_h;
     m_bScalerReady = m_Scaler.Configure((unsigned)m_nSourceWidth, x, y, w, h,
                                         src_w, src_h);
     if (!m_bScalerReady) {
@@ -551,7 +578,9 @@ void Pi4Video::SetViewKms(int x, int y, int w, int h, double aspect,
     delete m_pKms;
     m_pKms = 0;
     SetView(x, y, w, h, aspect, scale);
+    return;
   }
+  ConfigureGpu();
 }
 
 void Pi4Video::PresentKms(bool wait_vsync) {
@@ -560,7 +589,12 @@ void Pi4Video::PresentKms(bool wait_vsync) {
   if (buffer == 0) {
     return;
   }
-  if (m_bCrt) {
+  if (m_bCrt && m_pGpu != 0 && m_bGpuReady) {
+    v3d::Target target = {buffer, m_nKmsSrcW, m_nKmsSrcH, pitch * 4};
+    if (!m_pGpu->Draw(m_pSource, target, 0, 0)) {
+      DropGpu("drawing failed");
+    }
+  } else if (m_bCrt) {
     if (!m_bScalerReady) {
       return;
     }
@@ -580,4 +614,57 @@ void Pi4Video::PresentKms(bool wait_vsync) {
     }
   }
   m_pKms->EndFrame(wait_vsync);
+}
+
+//
+// The 3D GPU (src/pi4v3d/), with the crt_gpu option.
+//
+
+void Pi4Video::UseGpu(v3d::Crt *crt) {
+  __atomic_store_n(&m_pGpuOffered, crt, __ATOMIC_RELEASE);
+}
+
+// The pictures the ARM draws, which the GPU can draw instead: smooth and
+// CRT on the framebuffer (32-bit only), CRT on the HVS.
+bool Pi4Video::DrawnByArm(void) const {
+  if (m_pKms != 0) {
+    return m_bCrt;
+  }
+  return m_bFiltered && m_nDepth == 32;
+}
+
+// After the view changes: the GPU draws the same picture as the scaler, at
+// the same size, into memory it can reach (the first 1 GB).
+void Pi4Video::ConfigureGpu(void) {
+  if (m_pGpu == 0) {
+    return;
+  }
+  m_bGpuReady = false;
+  if (m_nViewW <= 0 || m_nViewH <= 0) {
+    return;  // no view yet
+  }
+  if (!DrawnByArm()) {
+    DropGpu("not needed for this picture");
+    return;
+  }
+  bool ok;
+  if (m_pKms != 0) {
+    ok = m_pGpu->Configure((unsigned)m_nSourceWidth, m_nViewX, m_nViewY, m_nViewW, m_nViewH,
+                           m_nKmsSrcW, m_nKmsSrcH);
+  } else {
+    ok = v3d::Gpu::Reachable(Page(0), (size_t)2 * m_nHeight * m_nPitch) &&
+         m_pGpu->Configure((unsigned)m_nSourceWidth, m_nViewX, m_nViewY, m_nViewW, m_nViewH,
+                           m_nDestW, m_nDestH);
+  }
+  if (!ok) {
+    DropGpu("can't draw this picture");
+    return;
+  }
+  m_bGpuReady = true;
+}
+
+void Pi4Video::DropGpu(const char *why) {
+  CLogger::Get()->Write(FromVideo, LogWarning, "Drawn by the ARM, not the GPU: %s", why);
+  m_pGpu = 0;
+  m_bGpuReady = false;
 }
