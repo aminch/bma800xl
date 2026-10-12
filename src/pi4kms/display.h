@@ -12,6 +12,10 @@
 //    address the VideoCore sees it at; include/circle/synchronize64.h:
 //    CleanAndInvalidateDataCacheRange(), so what the ARM wrote is in
 //    memory before the HVS reads it.
+//  - Circle, lib/sched/scheduler.cpp: CScheduler::Yield() runs Circle's
+//    tasks on the core that calls it (core 1 here); addon/linux/
+//    semaphore.cpp: Circle's VCHIQ waits yield, which is how the Pi 3 runs
+//    them while it waits for a frame.
 //
 // This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
 // Raspberry Pi. See LICENSE for licensing details.
@@ -65,6 +69,8 @@ public:
 
 private:
   void FreeBuffers(void);
+  // As Hvs::WaitForChange(), running Circle's tasks while it waits.
+  bool WaitForFlip(unsigned from);
   // Puts the picture's display list back (after the channel restarts).
   static void Reinstall(void *param);
 

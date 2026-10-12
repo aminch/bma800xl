@@ -13,7 +13,9 @@
 #include <circle/logger.h>
 #include <circle/memory.h>
 #include <circle/new.h>
+#include <circle/sched/scheduler.h>
 #include <circle/synchronize.h>
+#include <circle/timer.h>
 #include <string.h>
 
 namespace kms {
@@ -112,7 +114,7 @@ uint32_t *Display::BeginFrame(unsigned *pitch) {
   // The back buffer was on screen until the frame after the last flip.
   if (m_bFlipPending) {
     if (m_Hvs.FrameCount() == m_nFlipCount &&
-        !m_Hvs.WaitForChange(m_nFlipCount, FrameTimeoutMs) && !m_bTimedOut) {
+        !WaitForFlip(m_nFlipCount) && !m_bTimedOut) {
       m_bTimedOut = true;
       CLogger::Get()->Write(FromDisplay, LogWarning, "The HVS has stopped (display off?)");
     }
@@ -139,11 +141,28 @@ void Display::EndFrame(bool wait_vsync) {
   m_bFlipPending = true;
   m_nFlipCount = now;
   if (wait_vsync) {
-    if (m_Hvs.WaitForChange(now, FrameTimeoutMs)) {
+    if (WaitForFlip(now)) {
       m_bFlipPending = false;
     }
   }
   m_nBack ^= 1;
+}
+
+// Circle's tasks (the network, Wi-Fi, the web UI) only run when core 1
+// yields, so the wait for the next frame runs them, as the Pi 3's wait in
+// vc_dispmanx_update_submit_sync() does (Circle's addon/linux semaphores
+// yield while they wait). Spinning instead leaves them one turn a frame,
+// which is far too little for the Wi-Fi driver.
+bool Display::WaitForFlip(unsigned from) {
+  u64 start = CTimer::GetClockTicks64();
+  u64 limit = (u64)FrameTimeoutMs * (CLOCKHZ / 1000);
+  while (m_Hvs.FrameCount() == from) {
+    if (CTimer::GetClockTicks64() - start > limit) {
+      return false;
+    }
+    CScheduler::Get()->Yield();
+  }
+  return true;
 }
 
 bool Display::MatchRate(double fps, unsigned audio_fs) {

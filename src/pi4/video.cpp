@@ -11,10 +11,15 @@
 
 #include <circle/bcmpropertytags.h>
 #include <circle/logger.h>
+#include <circle/sched/scheduler.h>
 #include <circle/synchronize.h>
+#include <circle/timer.h>
 #include <string.h>
 
 static const char FromVideo[] = "video";
+
+// The wait for vsync starts this long before the vertical blank is due.
+static const u64 VsyncMarginTicks = 3 * (CLOCKHZ / 1000);
 
 Pi4Video *Pi4Video::s_pThis = 0;
 
@@ -57,7 +62,8 @@ void FillFrameBuffer(void *dst, uint64_t value, unsigned long bytes) {
 
 Pi4Video::Pi4Video(void)
     : m_pFrameBuffer(0), m_nDepth(0), m_nWidth(0), m_nHeight(0), m_nPitch(0),
-      m_nBackPage(1), m_nDisplayWidth(0), m_nDisplayHeight(0), m_pSource(0),
+      m_nBackPage(1), m_nDisplayWidth(0), m_nDisplayHeight(0),
+      m_nLastVsync(0), m_nVsyncPeriod(0), m_pSource(0),
       m_nSourceWidth(0), m_nSourceHeight(0), m_nViewX(0), m_nViewY(0),
       m_nViewW(0), m_nViewH(0), m_nDestX(0), m_nDestY(0), m_nDestW(0),
       m_nDestH(0), m_nRepeat(1), m_pColumn(0), m_bFiltered(false),
@@ -424,9 +430,35 @@ void Pi4Video::Present(bool wait_vsync) {
   // the other page is off screen and free to draw the next frame into.
   m_pFrameBuffer->SetVirtualOffset(0, m_nBackPage * m_nHeight);
   if (wait_vsync) {
-    m_pFrameBuffer->WaitForVerticalSync();
+    WaitForVerticalSync();
   }
   m_nBackPage ^= 1;
+}
+
+// Circle's tasks (the network, Wi-Fi, the web UI) only run when core 1
+// yields. The Pi 3 runs them while it waits for a frame (Circle's VCHIQ
+// waits yield); the firmware's wait for vsync is a mailbox call that holds
+// core 1 instead, which leaves them one turn a frame, far too little for
+// the Wi-Fi driver. So they run until shortly before the vertical blank is
+// due, and only the rest of the frame is spent in the mailbox call. The
+// period is the shortest seen between two waits: a missed blank only makes
+// one longer, and the firmware's mode doesn't change while running.
+void Pi4Video::WaitForVerticalSync(void) {
+  if (m_nVsyncPeriod > VsyncMarginTicks) {
+    u64 due = m_nLastVsync + m_nVsyncPeriod - VsyncMarginTicks;
+    while ((s64)(CTimer::GetClockTicks64() - due) < 0) {
+      CScheduler::Get()->Yield();
+    }
+  }
+  m_pFrameBuffer->WaitForVerticalSync();
+  u64 now = CTimer::GetClockTicks64();
+  if (m_nLastVsync != 0) {
+    u64 period = now - m_nLastVsync;
+    if (m_nVsyncPeriod == 0 || period < m_nVsyncPeriod) {
+      m_nVsyncPeriod = period;
+    }
+  }
+  m_nLastVsync = now;
 }
 
 void Pi4Video::DisplaySize(int *width, int *height) const {

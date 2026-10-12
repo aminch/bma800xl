@@ -32,6 +32,10 @@
 //    (https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface):
 //    the property tags those methods send (allocate buffer, set depth,
 //    set virtual offset, set palette, wait for vsync, get display size).
+//  - Circle, lib/sched/scheduler.cpp: CScheduler::Yield() runs Circle's
+//    tasks on the core that calls it (core 1 here); addon/linux/
+//    semaphore.cpp: Circle's VCHIQ waits yield, which is how the Pi 3 runs
+//    them while it waits for a frame.
 //
 // This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
 // Raspberry Pi. See LICENSE for licensing details.
@@ -89,6 +93,7 @@ private:
   void CopyLine(uint8_t *dst, uint32_t *line) const;
   void SetViewKms(int x, int y, int w, int h, double aspect, double scale);
   void PresentKms(bool wait_vsync);
+  void WaitForVerticalSync(void);
 
   // Pi4FrameShare's job.
   friend class Pi4FrameShare;
@@ -102,6 +107,8 @@ private:
   unsigned m_nPitch;      // bytes per framebuffer line
   unsigned m_nBackPage;   // page drawn next: 0 or 1
   unsigned m_nDisplayWidth, m_nDisplayHeight;
+  u64 m_nLastVsync;       // when the last wait for vsync ended (clock ticks)
+  u64 m_nVsyncPeriod;     // shortest time seen between two; 0 if unknown
 
   // The emulator draws into this 8-bit indexed buffer.
   uint8_t *m_pSource;
