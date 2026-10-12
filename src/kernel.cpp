@@ -799,9 +799,10 @@ void CKernel::PowerOff(void) {
   // power off: the mailbox tag RPI_FIRMWARE_NOTIFY_REBOOT, 0x00030048, no
   // data (drivers/firmware/raspberrypi.c, rpi_firmware_notify_reboot and
   // rpi_firmware_shutdown; include/soc/bcm2835/raspberrypi-firmware.h).
+  // Circle's GetTag() needs room for at least one value, so the simple tag.
   {
     CBcmPropertyTags tags;
-    TPropertyTag tag;
+    TPropertyTagSimple tag;
     tags.GetTag(0x00030048, &tag, sizeof tag, 0);
   }
   // Then a restart into "partition 63", which the firmware takes as a halt:
