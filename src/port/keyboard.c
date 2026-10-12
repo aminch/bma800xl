@@ -46,6 +46,7 @@ enum {
 	K_KP_PLUS = 0x57, K_KP_ENTER = 0x58, K_KP_1 = 0x59, K_KP_2, K_KP_3,
 	K_KP_4, K_KP_5, K_KP_6, K_KP_7, K_KP_8, K_KP_9, K_KP_0 = 0x62,
 	K_KP_PERIOD = 0x63, K_NONUS_BACKSLASH = 0x64, K_APPLICATION = 0x65,
+	K_POWER = 0x66,
 	K_LCTRL = 0xe0, K_LSHIFT = 0xe1, K_LALT = 0xe2, K_LGUI = 0xe3,
 	K_RCTRL = 0xe4, K_RSHIFT = 0xe5, K_RALT = 0xe6, K_RGUI = 0xe7
 };
@@ -456,6 +457,14 @@ static int read_keyboard(void)
 	while (!event_found && next_key_event(&usage, &pressed)) {
 		if (is_modifier_or_console(usage))
 			continue;
+		/* The power key: Shut Down. The Pi 400's keyboard sends it for
+		   Fn+F10 while the Pi is running (Raspberry Pi, "Have you tried
+		   turning it off and on again?", raspberrypi.com news, 2021). */
+		if (usage == K_POWER) {
+			if (pressed)
+				bma_request_power(1);
+			continue;
+		}
 		event_found = TRUE;
 		lastkey = usage;
 		key_pressed = pressed;

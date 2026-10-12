@@ -399,6 +399,13 @@ echo "PAL on a 60 Hz display (not locked)"
 run mismatch 60 "tv=pal" '600 audio\n601 quit\n'
 check_log mismatch "timer paced" "falls back to timer pacing"
 
+echo "The power key (Pi 400: Fn+F10) shuts down"
+run powerkey 50 "" '150 key 0x66 1\n152 key 0x66 0\n250 quit\n'
+check_log powerkey "Shutting down" "the power key while playing"
+check_log powerkey "power off requested" "the power key powers off"
+run powerkeymenu 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n180 key 0x66 1\n182 key 0x66 0\n250 quit\n'
+check_log powerkeymenu "power off requested" "the power key in the menu powers off"
+
 echo "Configuration saved"
 check_log basic "Writing config file" "atari800.cfg written"
 if grep -q "^DISABLE_BASIC=0" "$OUT/basic/atari800.cfg" 2>/dev/null; then
