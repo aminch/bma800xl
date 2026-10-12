@@ -62,7 +62,8 @@ Pi4Video::Pi4Video(void)
       m_nViewW(0), m_nViewH(0), m_nDestX(0), m_nDestY(0), m_nDestW(0),
       m_nDestH(0), m_nRepeat(1), m_pColumn(0), m_bFiltered(false),
       m_bCrt(false), m_bSmooth(false), m_bCurvature(false),
-      m_bScalerReady(false), m_pJobPage(0), m_pKms(0), m_pKmsTarget(0),
+      m_bScalerReady(false), m_pJobPage(0), m_pKms(0),
+      m_Driver(Driver::Firmware), m_pKmsTarget(0),
       m_nKmsPitch(0) {
   memset(m_Palette, 0, sizeof m_Palette);
   memset(m_Palette565, 0, sizeof m_Palette565);
@@ -99,6 +100,7 @@ bool Pi4Video::TakeFrameBuffer(unsigned width, unsigned height,
 }
 
 bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature, Driver driver) {
+  m_Driver = driver;
   m_bCrt = crt;
   m_bSmooth = smooth;
   m_bCurvature = crt && curvature;
@@ -431,6 +433,13 @@ void Pi4Video::DisplaySize(int *width, int *height) const {
   }
   *width = (int)m_nDisplayWidth;
   *height = (int)m_nDisplayHeight;
+}
+
+bool Pi4Video::MatchRate(double fps, unsigned audio_fs) {
+  if (m_pKms == 0 || m_Driver != Driver::Kms) {
+    return false;
+  }
+  return m_pKms->MatchRate(fps, audio_fs);
 }
 
 void Pi4Video::Blank(void) {

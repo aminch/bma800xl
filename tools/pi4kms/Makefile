@@ -9,7 +9,7 @@ ROOT := ../..
 CXX ?= c++
 CXXFLAGS = -O2 -g -Wall -Wextra -std=c++17
 SRCS := test.cpp test_modes.cpp $(ROOT)/src/pi4kms/filter.cpp \
-        $(ROOT)/src/pi4kms/dlist.cpp $(MODE_SRCS)
+        $(ROOT)/src/pi4kms/dlist.cpp $(ROOT)/src/pi4kms/modes.cpp
 
 OUT := build
 

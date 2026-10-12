@@ -70,6 +70,9 @@ public:
   void UpdatePalette(void);
   void Present(bool wait_vsync);
   void DisplaySize(int *width, int *height) const;
+  // With the Kms driver: runs the display at FPS frames a second if it
+  // can. AUDIO_FS: the HDMI sound's sample rate. True if the mode changed.
+  bool MatchRate(double fps, unsigned audio_fs);
   // Shows a black screen (before halting).
   void Blank(void);
 
@@ -128,6 +131,7 @@ private:
   // The direct display driver, when it is in use; the CRT shader then
   // draws into its buffer, KMS_PITCH bytes per line, from line 0.
   kms::Display *m_pKms;
+  Driver m_Driver;
   uint8_t *m_pKmsTarget;
   unsigned m_nKmsPitch;
 

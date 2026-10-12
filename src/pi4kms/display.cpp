@@ -85,6 +85,7 @@ bool Display::SetPicture(unsigned src_w, unsigned src_h, unsigned x, unsigned y,
     }
     m_nBufferWords = words;
     m_bFlipPending = false;
+    m_Plane.bus_address = 0;   // nothing drawn into the new buffers yet
   }
   m_nPitch = pitch;
   m_Plane.pitch = pitch * 4;
@@ -95,7 +96,10 @@ bool Display::SetPicture(unsigned src_w, unsigned src_h, unsigned x, unsigned y,
   m_Plane.width = w;
   m_Plane.height = h;
   m_Plane.nearest = nearest;
-  m_bHavePicture = LbmWords(m_Plane) <= 28 * 1024;
+  // The HVS must be able to show it (a trial list), with line buffer
+  // memory to spare.
+  uint32_t trial[MaxWords];
+  m_bHavePicture = LbmWords(m_Plane) <= 28 * 1024 && BuildList(m_Plane, 0, 0, trial) != 0;
   CLogger::Get()->Write(FromDisplay, LogNotice, "Picture %ux%u shown at %u,%u %ux%u, %s",
                         src_w, src_h, x, y, w, h, nearest ? "sharp" : "smooth");
   return m_bHavePicture;
@@ -140,6 +144,40 @@ void Display::EndFrame(bool wait_vsync) {
     }
   }
   m_nBack ^= 1;
+}
+
+bool Display::MatchRate(double fps, unsigned audio_fs) {
+  if (!m_bAttached) {
+    return false;
+  }
+  Timing current, wanted;
+  if (!m_ModeSetter.Current(&current)) {
+    return false;
+  }
+  if (!ChooseMode(current, fps, m_ModeSetter.GetEdid(), &wanted)) {
+    CLogger::Get()->Write(FromDisplay, LogNotice,
+                          "No %ux%u mode at %.2f Hz the display lists; keeping %.2f Hz",
+                          current.h_active, current.v_active, fps, current.Refresh());
+    return false;
+  }
+  if (wanted.vic == current.vic &&
+      (wanted.pixel_hz > current.pixel_hz ? wanted.pixel_hz - current.pixel_hz
+                                          : current.pixel_hz - wanted.pixel_hz) < 1000) {
+    return false;
+  }
+  m_ModeSetter.Set(m_Hvs, wanted, audio_fs, Reinstall, this);
+  return true;
+}
+
+void Display::Reinstall(void *param) {
+  Display *display = (Display *)param;
+  // The buffer last shown is the front one.
+  if (display->m_bHavePicture && display->m_Plane.bus_address != 0) {
+    display->m_Hvs.Show(&display->m_Plane);
+  } else {
+    display->m_Hvs.Show(0);
+  }
+  display->m_bFlipPending = false;
 }
 
 void Display::Blank(void) {

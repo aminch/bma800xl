@@ -369,7 +369,13 @@ void PLATFORM_DisplayScreen(void)
 	int wait;
 
 	if (Atari800_tv_mode != vsync_tv_mode) {
-		/* PAL/NTSC changed: the frame rate and the sound rate follow. */
+		/* PAL/NTSC changed: the frame rate and the sound rate follow, and
+		   the display too where the host can change its mode. */
+		if (host_display_match_rate(atari_fps())) {
+			measure_refresh_rate();
+			refresh_refined = FALSE;
+			vbl_count = 0;
+		}
 		update_sync_mode();
 		restart_sound();
 	} else if (vsync_lock && refine_refresh_rate()) {
@@ -599,6 +605,7 @@ int PLATFORM_Initialise(int *argc, char *argv[])
 	apply_view();
 	PLATFORM_PaletteUpdate();
 
+	host_display_match_rate(atari_fps());
 	measure_refresh_rate();
 	update_sync_mode();
 

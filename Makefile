@@ -44,7 +44,7 @@ OBJS = src/main.o src/kernel.o src/logging.o src/options.o \
 ifeq ($(RASPPI),4)
 OBJS += src/pi4/video.o src/pi4/sound.o src/pi4/scaler.o \
         src/pi4kms/filter.o src/pi4kms/dlist.o src/pi4kms/hvs.o \
-        src/pi4kms/display.o
+        src/pi4kms/display.o src/pi4kms/modes.o src/pi4kms/modeset.o
 # Smooth scaling and the CRT shader are drawn by the ARM: -O3 lets GCC turn
 # their per-pixel loops into NEON code (tools/pi4scaler tests the same).
 src/pi4/scaler.o: OPTIMIZE = -O3

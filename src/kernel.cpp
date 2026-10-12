@@ -610,6 +610,13 @@ void CKernel::DisplaySize(int *width, int *height) {
 
 void CKernel::VideoUpdatePalette(void) { mVideo.UpdatePalette(); }
 
+bool CKernel::DisplayMatchRate(double fps) {
+  Core1Beat("setting the video mode");
+  bool changed = mVideo.MatchRate(fps, Pi4Sound::SAMPLE_RATE);
+  Core1Beat("emulating");
+  return changed;
+}
+
 void CKernel::VideoPresent(int wait_vsync) {
   // Let Circle's tasks (the network, the web UI) run once per frame.
   Core1Beat("running Circle tasks");
@@ -705,6 +712,11 @@ void CKernel::DisplaySize(int *width, int *height) {
 }
 
 void CKernel::VideoUpdatePalette(void) { mFrameBuffer.UpdatePalette(); }
+
+bool CKernel::DisplayMatchRate(double fps) {
+  (void)fps; // The mode is the firmware's (config.txt).
+  return false;
+}
 
 void CKernel::VideoPresent(int wait_vsync) {
   // Let Circle's tasks (VCHIQ in particular) run once per frame.
@@ -838,6 +850,10 @@ const char *host_model_name(void) {
 
 void host_display_size(int *width, int *height) {
   CKernel::Get()->DisplaySize(width, height);
+}
+
+int host_display_match_rate(double fps) {
+  return CKernel::Get()->DisplayMatchRate(fps) ? 1 : 0;
 }
 
 void host_network_status(char *text, unsigned size) {
