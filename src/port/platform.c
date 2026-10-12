@@ -479,6 +479,7 @@ static void handle_power_request(void)
 	if (request_power >= 0) {
 		int power_off = request_power;
 		request_power = -1;
+		Log_print(power_off ? "Shutting down" : "Rebooting");
 		/* Shuts atari800 down, which closes the disk images. */
 		Atari800_Exit(FALSE);
 		sync_files();
