@@ -254,6 +254,9 @@ TShutdownMode CKernel::Run(void) {
   // also writes the log.
   if (mOptions.GetBool("crt_gpu", false) && mGpu.Initialize()) {
     mGpu.ClearTest();
+    if (mRenderer.Initialize(&mGpu, 1920, 1200)) {
+      mRenderer.CopyTest();
+    }
   }
 #endif
 

@@ -171,10 +171,40 @@ void Gpu::InvalidateCaches(void) {
 
 void Gpu::LogState(const char *when) {
   CLogger::Get()->Write(FromGpu, LogWarning,
-                        "%s: CT1CS %08X CT1CA %08X RFC %u ERR_STAT %08X MMU_CTL %08X "
-                        "VIO_ADDR %08X VIO_ID %08X",
-                        when, Core(CleCt1Cs), Core(CleCt1Ca), Core(CleRfc), Core(ErrStat),
-                        Hub(MmuCtl), Hub(MmuVioAddr), Hub(MmuVioId));
+                        "%s: CT0CS %08X CT0CA %08X BFC %u CT1CS %08X CT1CA %08X RFC %u "
+                        "ERR_STAT %08X MMU_CTL %08X VIO_ADDR %08X VIO_ID %08X",
+                        when, Core(CleCt0Cs), Core(CleCt0Ca), Core(CleBfc), Core(CleCt1Cs),
+                        Core(CleCt1Ca), Core(CleRfc), Core(ErrStat), Hub(MmuCtl),
+                        Hub(MmuVioAddr), Hub(MmuVioId));
+}
+
+// Waits for the frame count in COUNTER to move on from BEFORE.
+bool Gpu::Wait(uint32_t counter, uint32_t before, unsigned timeout_ms, const char *what) {
+  u64 begin = CTimer::GetClockTicks64();
+  u64 limit = (u64)timeout_ms * (CLOCKHZ / 1000);
+  while (Core(counter) == before) {
+    if (CTimer::GetClockTicks64() - begin > limit) {
+      LogState(what);
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Gpu::Bin(uint32_t start, uint32_t end, uint32_t tile_alloc, uint32_t size,
+              uint32_t tile_state, unsigned timeout_ms) {
+  if (!m_bReady) {
+    return false;
+  }
+  SetCore(PtbBpos, 0);
+  InvalidateCaches();
+  uint32_t done = Core(CleBfc);
+  SetCore(CleCt0Qma, tile_alloc);
+  SetCore(CleCt0Qms, size);
+  SetCore(CleCt0Qts, CleCt0QtsEnable | tile_state);
+  SetCore(CleCt0Qba, start);
+  SetCore(CleCt0Qea, end);
+  return Wait(CleBfc, done, timeout_ms, "Binning timed out");
 }
 
 bool Gpu::Render(uint32_t start, uint32_t end, unsigned timeout_ms) {
@@ -185,15 +215,7 @@ bool Gpu::Render(uint32_t start, uint32_t end, unsigned timeout_ms) {
   uint32_t done = Core(CleRfc);
   SetCore(CleCt1Qba, start);
   SetCore(CleCt1Qea, end);
-  u64 begin = CTimer::GetClockTicks64();
-  u64 limit = (u64)timeout_ms * (CLOCKHZ / 1000);
-  while (Core(CleRfc) == done) {
-    if (CTimer::GetClockTicks64() - begin > limit) {
-      LogState("Rendering timed out");
-      return false;
-    }
-  }
-  return true;
+  return Wait(CleRfc, done, timeout_ms, "Rendering timed out");
 }
 
 // A 256x256 picture in 64x64 tiles, cleared by the tile buffer and stored to
@@ -225,7 +247,7 @@ bool Gpu::ClearTest(void) {
   rcl.RenderingModeClearColor(Colour, 0);
   rcl.RenderingModeColor(InternalBpp32, InternalType8, ClampNone);
   rcl.RenderingModeZsClear(1.0f, 0);
-  rcl.TileListInitialBlockSize(1, true);
+  rcl.TileListInitialBlockSize(0, true);
   rcl.MulticoreTileListSetBase(Address(tile_alloc));
   rcl.MulticoreSupertileCfg(TilesX, TilesY, 1, 1);
   // Two dummy tiles that clear the tile buffer (and work around a

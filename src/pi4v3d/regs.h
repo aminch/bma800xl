@@ -77,10 +77,15 @@ const uint32_t CleCt0Ca = 0x00110;
 const uint32_t CleCt1Ca = 0x00114;
 const uint32_t CleBfc = 0x00134;         // binning frames completed
 const uint32_t CleRfc = 0x00138;         // rendering frames completed
-const uint32_t CleCt0Qba = 0x00160;
+const uint32_t CleCt0Qts = 0x0015C;      // binning tile state address
+const uint32_t CleCt0QtsEnable = 1u << 1;
+const uint32_t CleCt0Qba = 0x00160;      // binning control list start
 const uint32_t CleCt1Qba = 0x00164;      // render control list start
-const uint32_t CleCt0Qea = 0x00168;
+const uint32_t CleCt0Qea = 0x00168;      // binning control list end; writing it starts the job
 const uint32_t CleCt1Qea = 0x0016C;      // render control list end; writing it starts the job
+const uint32_t CleCt0Qma = 0x00170;      // tile allocation memory
+const uint32_t CleCt0Qms = 0x00174;      // and its size
+const uint32_t PtbBpos = 0x0030C;        // binner overflow memory size
 const uint32_t ErrStat = 0x00F20;
 
 // Power manager: the GRAFX domain register; writes need the password.

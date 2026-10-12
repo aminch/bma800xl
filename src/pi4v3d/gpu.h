@@ -40,8 +40,14 @@ public:
   // freed.
   void *Allocate(size_t bytes, size_t align = 64);
 
-  // Runs the rendering control list from START to END (GPU addresses) and
-  // waits for it, at most TIMEOUT_MS. False if it didn't finish.
+  // Runs the binning control list from START to END (GPU addresses), with
+  // TILE_ALLOC (SIZE bytes) for the tile lists and TILE_STATE for the
+  // tiles' state, and waits for it, at most TIMEOUT_MS. False if it didn't
+  // finish.
+  bool Bin(uint32_t start, uint32_t end, uint32_t tile_alloc, uint32_t size,
+           uint32_t tile_state, unsigned timeout_ms);
+
+  // Runs the rendering control list from START to END and waits for it.
   bool Render(uint32_t start, uint32_t end, unsigned timeout_ms);
 
   // Clears a small picture to a known colour through the GPU and checks
@@ -57,6 +63,7 @@ private:
   bool SetUpMmu(void);
   void InvalidateCaches(void);
   void LogState(const char *when);
+  bool Wait(uint32_t counter, uint32_t before, unsigned timeout_ms, const char *what);
 
   uint32_t Hub(uint32_t reg) const;
   void SetHub(uint32_t reg, uint32_t value) const;
