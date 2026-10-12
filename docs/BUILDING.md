@@ -12,11 +12,12 @@ sudo apt-get install build-essential git python3 curl wget xz-utils texinfo imag
 `texinfo` is needed because newlib's build runs `makeinfo`; `wget` fetches
 the Wi-Fi firmware; ImageMagick and Pillow are only used by the PC tests.
 
-The Arm GNU Toolchain 15.2.rel1 (`arm-none-eabi`) is downloaded into
+The Arm GNU Toolchain 15.2.rel1 is downloaded into
 `~/.cache/bma800xl/toolchains` the first time a build needs it
-(`get_gnu_toolchain.sh`). If it can't be downloaded,
-`BMA800XL_ALLOW_ANY_TOOLCHAIN=1` lets the build use whatever
-`arm-none-eabi-gcc` is on the PATH.
+(`get_gnu_toolchain.sh`): `arm-none-eabi` for the 32-bit Pi 2 and Pi 3
+kernels, `aarch64-none-elf` for the 64-bit Pi 4 kernel. If it can't be
+downloaded, `BMA800XL_ALLOW_ANY_TOOLCHAIN=1` lets the build use whatever
+`arm-none-eabi-gcc` (or `aarch64-none-elf-gcc`) is on the PATH.
 
 ## Downloading the files
 
@@ -34,8 +35,9 @@ or, in an existing clone, `git submodule update --init --recursive`.
 
 builds everything from clean and stages the boot partition in
 `build/sdcard`, with a kernel for each board: `kernel8-32.img` for the Pi 3
-and Pi Zero 2 W, `kernel7.img` for the Pi 2. `./build_sdcard.sh pi3` or
-`./build_sdcard.sh pi2` builds just one. Copy the contents of that folder to the root of a FAT32
+and Pi Zero 2 W, `kernel7.img` for the Pi 2, and `kernel8-rpi4.img` (with
+`armstub8-rpi4.bin`) for the Pi 4 B and Pi 400. `./build_sdcard.sh pi3`,
+`./build_sdcard.sh pi2` or `./build_sdcard.sh pi4` builds just one. Copy the contents of that folder to the root of a FAT32
 formatted SD card.
 
 While developing, `./build_sdcard.sh --skip-patches` keeps the third party
@@ -51,18 +53,21 @@ rebooted from there, without touching the SD card.
 
 1. `./clean_all.sh` cleans everything, including the third party builds,
    and resets Circle to its pinned revision.
-2. `./make_all.sh [pi2|pi3] [--skip-patches]` applies `src/patches/` to
+2. `./make_all.sh [pi2|pi3|pi4] [--skip-patches]` applies `src/patches/` to
    Circle, builds circle-stdlib (Circle and newlib) and the Circle addons
    for one board (pi3 if none is given), then the kernel: `kernel8-32.img`
-   for pi3, `kernel7.img` for pi2. It only needs running again after
+   for pi3, `kernel7.img` for pi2, `kernel8-rpi4.img` (64-bit) for pi4,
+   which also builds Circle's `armstub8-rpi4.bin`. It only needs running again after
    `clean_all.sh` or a change to the patches or circle-stdlib. To change
    board, run `clean_all.sh` first (make_all.sh refuses otherwise).
-3. `source get_gnu_toolchain.sh && make` rebuilds just the kernel.
+3. `source get_gnu_toolchain.sh && make` rebuilds just the kernel (for the
+   Pi 4: `BMA800XL_AARCH=64 source get_gnu_toolchain.sh && make`).
 4. `./make_wifi_firmware.sh DIR` puts the Wi-Fi firmware in `DIR/firmware`
    (`build_sdcard.sh` does this).
 
 The Pi 3 kernel also runs on the Pi Zero 2 W. `config.txt` has a section
-per board that picks its kernel.
+per board that picks its kernel. See [PI4.md](PI4.md) for how the Pi 4
+build differs.
 
 ## Testing on a PC
 
@@ -77,6 +82,22 @@ tools/hostsim/run_tests.sh
 
 Screenshots are written to `tools/hostsim/out/` and compared with
 `tools/hostsim/expected/`; `--update` replaces the reference images.
+
+`tools/pi4scaler` tests the Pi 4's smooth scaling and CRT shader
+(`src/pi4/scaler.*`): every pixel is checked against crt-pi worked out in
+floating point, and the pictures are written to `tools/pi4scaler/out/`.
+
+```
+tools/pi4scaler/run_tests.sh
+```
+
+`tools/pi4kms` tests the calculations of the Pi 4's direct display driver
+(`src/pi4kms/`, see [PI4.md](PI4.md)): filter kernels, display lists,
+EDID, the choice of video mode, the AVI InfoFrame and the PHY's settings.
+
+```
+tools/pi4kms/run_tests.sh
+```
 
 ## The web UI
 
@@ -105,4 +126,8 @@ with `tools/gen_webui_assets.py` whenever an asset changes.
 | `sdcard/`                    | Files for the SD card                       |
 | `third_party/atari800`       | atari800 (submodule)                        |
 | `third_party/circle-stdlib`  | Circle and newlib (submodule)               |
+| `src/pi4/`                   | Pi 4 display, smooth scaling / CRT shader, HDMI sound |
+| `src/pi4kms/`                | Pi 4 direct display driver                  |
 | `tools/hostsim`              | PC test harness                             |
+| `tools/pi4scaler`            | PC test of the Pi 4's smooth scaling and CRT shader |
+| `tools/pi4kms`               | PC test of the Pi 4 display driver's calculations |

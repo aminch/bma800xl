@@ -30,9 +30,17 @@ See [BMC64](https://github.com/randyrossi/bmc64) for its source and its accompan
 
 ## Raspberry Pi Firmware
 
-BMA800XL includes the Raspberry Pi boot firmware (`bootcode.bin`, `start.elf`, `fixup.dat`) from the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware).
+BMA800XL includes the Raspberry Pi boot firmware (`bootcode.bin`, `start.elf`, `fixup.dat`, and for the Raspberry Pi 4 `start4.elf`, `fixup4.dat` and its device trees) from the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware).
 
 See the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware/tree/master/boot) for its accompanying copyright and license information.
+
+## crt-pi
+
+BMA800XL uses the crt-pi CRT shader by davej, as included in BMC64, under the [GNU General Public License version 2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
+
+## Circle ARM stub
+
+For the Raspberry Pi 4, BMA800XL includes `armstub8-rpi4.bin`, built from [Circle's `boot/armstub`](https://github.com/rsta2/circle/tree/master/boot/armstub) source, under Circle's [GNU General Public License version 3](https://github.com/rsta2/circle/blob/master/COPYING).
 
 ## Wi-Fi Firmware
 

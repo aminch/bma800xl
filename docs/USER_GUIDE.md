@@ -4,8 +4,8 @@
 
 | File or folder   | What it is                                                 |
 |------------------|------------------------------------------------------------|
-| `kernel8-32.img`, `kernel7.img` | The emulator for the Pi 3 and Zero 2 W, and for the Pi 2 |
-| `bootcode.bin`, `start.elf`, `fixup.dat` | Raspberry Pi firmware              |
+| `kernel8-32.img`, `kernel7.img`, `kernel8-rpi4.img` | The emulator for the Pi 3 and Zero 2 W, the Pi 2, and the Pi 4 and Pi 400 |
+| `bootcode.bin`, `start.elf`, `fixup.dat`, `start4.elf`, `fixup4.dat`, `armstub8-rpi4.bin`, `*.dtb` | Raspberry Pi firmware |
 | `config.txt`     | Raspberry Pi settings: video mode                          |
 | `cmdline.txt`    | Emulator options (see below)                               |
 | `bma800xl.cfg`   | BMA800XL's settings, written by the BMA800XL menu          |
@@ -33,7 +33,7 @@ BMA800XL's own settings:
 | Video | Locking frames to the display, the border, the CRT shader, smooth scaling |
 | Sound | HDMI or headphones, the sound buffer |
 | Logging | Where the log goes: Off, UART (serial port) or File (`bma800xl.log`); changes at once (see Logging) |
-| Reboot, Shut Down | |
+| Reboot, Shut Down | Shut Down also from a keyboard's power key: Fn+F10 on a Pi 400, which switches off; Fn+F10 starts it again |
 
 Settings are saved to `bma800xl.cfg` as soon as you change them. Most take
 effect at once; those marked *(reboot)*, and the network settings, need a
@@ -200,7 +200,8 @@ The web UI has:
 - **Dashboard**: the Pi's model, address, uptime, temperature, power and
   throttling warnings and free space on the card. Buttons to **Hard Reset**
   the Atari (power it off and on), **Reboot** BMA800XL, **Shut Down** (the
-  Pi halts; switch it off, then on again to restart), and **Disable Web UI**
+  Pi halts; switch it off, then on again to restart; a Pi 400 switches
+  itself off, and its power key starts it again), and **Disable Web UI**
   until the next reboot.
 - **Files**: browse the SD card; upload (or drag and drop) files into a
   folder, download, rename, delete, and create folders. Clicking a disk
@@ -244,7 +245,8 @@ edited from the web UI.
 | `crt_shader`        | `0`, `1`                     | `0`      | CRT look (scanlines) from BMC64 |
 | `crt_curvature`     | `0`, `1`                     | `0`      | With `crt_shader`, a curved screen |
 | `vsync`             | `auto`, `on`, `off`          | `auto`   | Lock frames to the display (see PAL and NTSC) |
-| `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes |
+| `video_driver`      | `kms`, `hvs`, `firmware`     | `kms`      | Pi 4 only: `kms` runs the display at the Atari's exact frame rate; `hvs` leaves the mode set in `config.txt`; `firmware` uses the firmware's framebuffer, if the others give trouble (see [PI4.md](PI4.md)) |
+| `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes (`auto`: HDMI, or the headphone jack if the display takes no sound) |
 | `volume`            | 0 to 100                     | `100`    | Sound volume |
 | `audio_buffer_ms`   | 10 or more                   | `40`     | Sound buffer; raise it if the sound breaks up |
 | `keyboard`          | `us`, `uk`, `no`             | `us`     | PC keyboard layout |
