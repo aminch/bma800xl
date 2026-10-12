@@ -25,7 +25,9 @@ armstub=armstub8-rpi4.bin
 # Video: 1280x720 at 50 Hz, the right rate for a PAL Atari (the default).
 # For an NTSC Atari use 60 Hz instead: hdmi_mode=4
 # The emulator's frames are locked to the display when its refresh rate
-# matches the Atari's, which gives perfectly smooth scrolling.
+# matches the Atari's, which gives perfectly smooth scrolling. On the Pi 4
+# and Pi 400 BMA800XL sets the exact rate itself, PAL or NTSC; hdmi_mode
+# only chooses the resolution there.
 disable_overscan=1
 hdmi_group=1
 hdmi_mode=19

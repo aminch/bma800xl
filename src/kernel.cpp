@@ -207,13 +207,13 @@ bool CKernel::Initialize(void) {
   } else if (strcmp(audio_out, "analog") == 0 || strcmp(audio_out, "headphones") == 0) {
     sound_output = Pi4Sound::Output::Headphones;
   }
-  // video_driver: firmware (the default), hvs or kms (docs/PI4.md).
-  const char *video_driver = mOptions.Get("video_driver", "firmware");
-  Pi4Video::Driver driver = Pi4Video::Driver::Firmware;
+  // video_driver: kms (the default), hvs or firmware (docs/PI4.md).
+  const char *video_driver = mOptions.Get("video_driver", "kms");
+  Pi4Video::Driver driver = Pi4Video::Driver::Kms;
   if (strcmp(video_driver, "hvs") == 0) {
     driver = Pi4Video::Driver::Hvs;
-  } else if (strcmp(video_driver, "kms") == 0) {
-    driver = Pi4Video::Driver::Kms;
+  } else if (strcmp(video_driver, "firmware") == 0) {
+    driver = Pi4Video::Driver::Firmware;
   }
   if (!mVideo.Initialize(mOptions.GetBool("crt_shader", false),
                          mOptions.GetBool("smooth", false),
