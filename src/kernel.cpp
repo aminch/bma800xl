@@ -661,9 +661,9 @@ int CKernel::VideoInit(int width, int height, uint8_t **pixels, int *pitch) {
   if (mOptions.GetBool("crt_shader", false)) {
     mFrameBuffer.SetUsesShader(true);
   }
-  if (mOptions.GetBool("smooth", false)) {
-    FrameBufferLayer::SetInterpolation(1);
-  }
+  // The firmware's own scaling kernel is soft, so sharp pixels need the
+  // nearest neighbour kernel set explicitly (as BMC64 does).
+  FrameBufferLayer::SetInterpolation(mOptions.GetBool("smooth", false) ? 1 : 0);
   int ret = mFrameBuffer.Allocate(0 /* 8 bit indexed */, pixels, width,
                                   height, pitch);
   if (ret != 0) {
