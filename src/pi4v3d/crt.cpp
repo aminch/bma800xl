@@ -1,0 +1,197 @@
+//
+// crt.cpp
+//
+// See crt.h.
+//
+// This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
+// Raspberry Pi. See LICENSE for licensing details.
+//
+
+#include "crt.h"
+
+#include "shaders.h"
+
+#include "../pi4/scaler.h"
+
+#include <circle/logger.h>
+#include <circle/synchronize.h>
+
+namespace v3d {
+
+static const char FromGpu[] = "v3d";
+
+namespace {
+
+// crt.frag's push constants.
+struct CrtParameters {
+  float texture_width, texture_height;
+  float filter_width;
+};
+
+} // namespace
+
+Crt::Crt(void)
+    : m_pGpu(0), m_pRenderer(0), m_bReady(false), m_bCrt(false), m_bSmooth(false),
+      m_bCurvature(false), m_nPitch(0), m_nViewX(0), m_nViewY(0), m_nViewW(0), m_nViewH(0),
+      m_nDestW(0), m_nDestH(0) {
+  for (unsigned i = 0; i < 256; i++) {
+    m_Palette[i] = 0xFF000000;
+  }
+}
+
+bool Crt::Initialize(Gpu *gpu, Renderer *renderer, unsigned max_view_width,
+                     unsigned max_view_height) {
+  m_pGpu = gpu;
+  m_pRenderer = renderer;
+  const Program *programs[] = {&CopyProgram, &CrtProgram, &CrtSmoothProgram, &CrtCurveProgram,
+                                 &CrtCurveSmoothProgram};
+  for (const Program *program : programs) {
+    if (!renderer->Load(*program)) {
+      return false;
+    }
+  }
+  return m_Texture.Create(gpu, max_view_width, max_view_height);
+}
+
+void Crt::SetMode(bool crt, bool smooth, bool curvature) {
+  m_bCrt = crt;
+  m_bSmooth = smooth;
+  m_bCurvature = crt && curvature;
+  m_bReady = m_nViewW > 0 && m_Texture.Set(m_nViewW, m_nViewH, m_bSmooth);
+}
+
+bool Crt::Configure(unsigned src_pitch, int vx, int vy, int vw, int vh, unsigned dw,
+                    unsigned dh) {
+  m_nPitch = src_pitch;
+  m_nViewX = vx;
+  m_nViewY = vy;
+  m_nViewW = vw;
+  m_nViewH = vh;
+  m_nDestW = dw;
+  m_nDestH = dh;
+  m_bReady = vw > 0 && vh > 0 && m_Texture.Set(vw, vh, m_bSmooth);
+  return m_bReady;
+}
+
+void Crt::SetPalette(int index, uint32_t rgb) {
+  m_Palette[index & 255] = 0xFF000000 | ((rgb & 0xFF) << 16) | (rgb & 0xFF00) |
+                           ((rgb >> 16) & 0xFF);
+}
+
+// The view, in colour.
+void Crt::Fill(const uint8_t *src) {
+  for (int y = 0; y < m_nViewH; y++) {
+    const uint8_t *line = src + (m_nViewY + y) * m_nPitch + m_nViewX;
+    for (int x = 0; x < m_nViewW; x++) {
+      m_Texture.Pixel(x, y) = m_Palette[line[x]];
+    }
+  }
+  m_Texture.Flush();
+}
+
+bool Crt::Draw(const uint8_t *src, const Target &target, int x, int y) {
+  if (!m_bReady) {
+    return false;
+  }
+  Fill(src);
+  if (!m_bCrt) {
+    return m_pRenderer->Draw(CopyProgram, m_Texture, target, x, y, m_nDestW, m_nDestH, 0xFF000000);
+  }
+  const Program *program;
+  if (m_bCurvature) {
+    program = m_bSmooth ? &CrtCurveSmoothProgram : &CrtCurveProgram;
+  } else {
+    program = m_bSmooth ? &CrtSmoothProgram : &CrtProgram;
+  }
+  CrtParameters parameters = {(float)m_nViewW, (float)m_nViewH,
+                              ((float)m_nViewH / (float)m_nDestH) / 3.0f};
+  return m_pRenderer->Draw(*program, m_Texture, target, x, y, m_nDestW, m_nDestH, 0xFF000000,
+                           &parameters, sizeof parameters);
+}
+
+// An Atari-sized source with a view scaled by 2.86 across and 3.21 down,
+// in all four crt-pi modes. The ARM's floating point reference and the
+// GPU differ in rounding, and where a sample falls just either side of a
+// texel edge; a few pixels may differ.
+bool Crt::Test(void) {
+  const unsigned Pitch = 384, Lines = 240;
+  const int ViewX = 24, ViewY = 8, ViewW = 336, ViewH = 224;
+  const unsigned DestW = 960, DestH = 720;
+  const unsigned Tolerance = 2;          // levels of 255
+  CLogger *log = CLogger::Get();
+
+  uint8_t *src = new uint8_t[Pitch * Lines];
+  uint32_t *pixels = (uint32_t *)m_pGpu->Allocate(DestW * DestH * 4, 4096);
+  Pi4Scaler *scaler = new Pi4Scaler;
+  if (src == 0 || pixels == 0 || scaler == 0) {
+    log->Write(FromGpu, LogWarning, "CRT test: not enough memory");
+    delete[] src;
+    delete scaler;
+    return false;
+  }
+  // Stripes, steps and single pixels, in a palette of varied colours.
+  for (unsigned y = 0; y < Lines; y++) {
+    for (unsigned x = 0; x < Pitch; x++) {
+      src[y * Pitch + x] = (uint8_t)(((x / 3) * 5 + y * 7) ^ ((x * y) & 0x11));
+    }
+  }
+  for (int i = 0; i < 256; i++) {
+    uint32_t rgb = ((i * 37) & 255) << 16 | ((i * 91 + 40) & 255) << 8 | ((i * 13) & 255);
+    SetPalette(i, rgb);
+    scaler->SetPalette(i, rgb);
+  }
+  Target target = {pixels, DestW, DestH, DestW * 4};
+
+  bool all = true;
+  for (unsigned mode = 0; mode < 4; mode++) {
+    bool smooth = mode & 1, curvature = mode & 2;
+    SetMode(true, smooth, curvature);
+    scaler->SetMode(true, smooth, curvature);
+    bool ok = Configure(Pitch, ViewX, ViewY, ViewW, ViewH, DestW, DestH) &&
+              scaler->Configure(Pitch, ViewX, ViewY, ViewW, ViewH, DestW, DestH);
+    CleanAndInvalidateDataCacheRange((uintptr_t)pixels, DestW * DestH * 4);
+    ok = ok && Draw(src, target, 0, 0);
+    InvalidateDataCacheRange((uintptr_t)pixels, DestW * DestH * 4);
+
+    unsigned off = 0, worst = 0, worst_x = 0, worst_y = 0;
+    uint32_t worst_got = 0, worst_expected = 0;
+    for (unsigned y = 0; ok && y < DestH; y++) {
+      for (unsigned x = 0; x < DestW; x++) {
+        uint32_t expected = scaler->Reference(src, x, y);
+        uint32_t p = pixels[y * DestW + x];
+        uint32_t got = (p & 0xFF) << 16 | (p & 0xFF00) | ((p >> 16) & 0xFF);
+        unsigned diff = 0;
+        for (int k = 0; k < 24; k += 8) {
+          int d = (int)((got >> k) & 255) - (int)((expected >> k) & 255);
+          unsigned a = d < 0 ? -d : d;
+          diff = a > diff ? a : diff;
+        }
+        if (diff > Tolerance) {
+          off++;
+        }
+        if (diff > worst) {
+          worst = diff;
+          worst_x = x;
+          worst_y = y;
+          worst_got = got;
+          worst_expected = expected;
+        }
+      }
+    }
+    // At most 1 in 200 pixels off by more than the tolerance.
+    bool passed = ok && off * 200 <= DestW * DestH;
+    all = all && passed;
+    log->Write(FromGpu, passed ? LogNotice : LogWarning,
+               "CRT test%s%s %s: %u of %u pixels off by more than %u; worst %u at %u,%u "
+               "(%06X, expected %06X)%s", smooth ? " smooth" : "",
+               curvature ? " curved" : "", passed ? "passed" : "failed", off,
+               DestW * DestH, Tolerance, worst, worst_x, worst_y, worst_got,
+               worst_expected, ok ? "" : " (the GPU didn't finish)");
+  }
+  delete scaler;
+  delete[] src;
+  m_bReady = false;
+  return all;
+}
+
+} // namespace v3d

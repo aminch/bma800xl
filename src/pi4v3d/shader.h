@@ -22,7 +22,7 @@ namespace v3d {
 // What a uniform holds.
 enum UniformKind {
   UniformConstant,        // DATA itself
-  UniformParameter,       // the shader parameter at byte offset DATA
+  UniformParameter,       // 32-bit word DATA of the shader parameters
   UniformViewportXScale,  // half the viewport width, in 1/256 pixels
   UniformViewportYScale,
   UniformViewportZOffset,

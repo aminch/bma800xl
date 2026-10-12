@@ -44,6 +44,7 @@
 #if RASPPI >= 4
 #include "pi4/sound.h"
 #include "pi4/video.h"
+#include "pi4v3d/crt.h"
 #include "pi4v3d/draw.h"
 #include "pi4v3d/gpu.h"
 #else
@@ -148,6 +149,7 @@ private:
   Pi4Sound mPi4Sound;
   v3d::Gpu mGpu;
   v3d::Renderer mRenderer;
+  v3d::Crt mCrt;
 #else
   FrameBufferLayer mFrameBuffer;
   VchiqSound *mSound;

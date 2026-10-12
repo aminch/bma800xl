@@ -36,7 +36,11 @@ class Texture {
 public:
   Texture(void);
 
-  bool Create(Gpu *gpu, unsigned width, unsigned height, bool smooth);
+  // Room for pictures up to MAX_WIDTH x MAX_HEIGHT.
+  bool Create(Gpu *gpu, unsigned max_width, unsigned max_height);
+
+  // The picture's size, and bilinear (SMOOTH) or nearest sampling.
+  bool Set(unsigned width, unsigned height, bool smooth);
 
   unsigned Width(void) const { return m_nWidth; }
   unsigned Height(void) const { return m_nHeight; }
@@ -61,6 +65,7 @@ private:
   }
 
   unsigned m_nWidth, m_nHeight;
+  unsigned m_nCapacity;     // bytes
   unsigned m_nColumnBytes;
   unsigned m_nBytes;
   uint32_t *m_pPixels;
@@ -106,7 +111,7 @@ private:
                          const void *parameters, unsigned parameter_bytes);
   void *Indirect(unsigned bytes, unsigned align);
 
-  static const unsigned MaxPrograms = 4;
+  static const unsigned MaxPrograms = 8;
 
   Gpu *m_pGpu;
   unsigned m_nMaxWidth, m_nMaxHeight;

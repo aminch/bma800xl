@@ -32,19 +32,31 @@ LIBS = $(BUILD)/src/broadcom/compiler/libbroadcom_compiler.a \
 	$(BUILD)/src/util/blake3/libblake3.a \
 	-lSPIRV-Tools -lstdc++ -lm -lpthread -lz
 
-SHADERS = copy
+SHADERS = copy crt crt_smooth crt_curve crt_curve_smooth
 
 v3dshader: v3dshader.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
-%.vert.spv: %.vert
+rect.vert.spv: rect.vert
 	glslangValidator -V $< -o $@
 
-%.frag.spv: %.frag
+copy.frag.spv: copy.frag
 	glslangValidator -V $< -o $@
 
-../../src/pi4v3d/shader_%.h: %.vert.spv %.frag.spv v3dshader
-	./v3dshader $* $*.vert.spv $*.frag.spv > $@
+crt.frag.spv: crt.frag
+	glslangValidator -V $< -o $@
+
+crt_smooth.frag.spv: crt.frag
+	glslangValidator -V -DSMOOTH $< -o $@
+
+crt_curve.frag.spv: crt.frag
+	glslangValidator -V -DCURVATURE $< -o $@
+
+crt_curve_smooth.frag.spv: crt.frag
+	glslangValidator -V -DCURVATURE -DSMOOTH $< -o $@
+
+../../src/pi4v3d/shader_%.h: rect.vert.spv %.frag.spv v3dshader
+	./v3dshader $* rect.vert.spv $*.frag.spv > $@
 
 headers: $(SHADERS:%=../../src/pi4v3d/shader_%.h)
 

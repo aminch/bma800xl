@@ -10,7 +10,7 @@
 #include "draw.h"
 
 #include "cl.h"
-#include "shader_copy.h"
+#include "shaders.h"
 
 #include <circle/logger.h>
 #include <circle/synchronize.h>
@@ -43,24 +43,29 @@ uint32_t FloatBits(float f) {
 } // namespace
 
 Texture::Texture(void)
-    : m_nWidth(0), m_nHeight(0), m_nColumnBytes(0), m_nBytes(0), m_pPixels(0),
-      m_pState(0), m_pSampler(0) {}
+    : m_nWidth(0), m_nHeight(0), m_nCapacity(0), m_nColumnBytes(0), m_nBytes(0),
+      m_pPixels(0), m_pState(0), m_pSampler(0) {}
+
+bool Texture::Create(Gpu *gpu, unsigned max_width, unsigned max_height) {
+  m_nCapacity = AlignUp(max_width, 32) * AlignUp(max_height, 8) * 4;
+  m_pPixels = (uint32_t *)gpu->Allocate(m_nCapacity, 4096);
+  m_pState = (uint8_t *)gpu->Allocate(32, 32);
+  m_pSampler = (uint8_t *)gpu->Allocate(32, 32);
+  return m_pPixels != 0 && m_pState != 0 && m_pSampler != 0;
+}
 
 // Level 0 only, strictly UIF without XOR, no extra padding: the height is
 // padded to the 8-pixel blocks and the width to the 32-pixel columns.
-bool Texture::Create(Gpu *gpu, unsigned width, unsigned height, bool smooth) {
+bool Texture::Set(unsigned width, unsigned height, bool smooth) {
   unsigned padded_height = AlignUp(height, 8);
+  unsigned bytes = AlignUp(width, 32) * padded_height * 4;
+  if (m_pPixels == 0 || bytes > m_nCapacity) {
+    return false;
+  }
   m_nWidth = width;
   m_nHeight = height;
   m_nColumnBytes = padded_height * 32 * 4;
-  m_nBytes = AlignUp(width, 32) * padded_height * 4;
-  m_pPixels = (uint32_t *)gpu->Allocate(m_nBytes, 4096);
-  m_pState = (uint8_t *)gpu->Allocate(32, 32);
-  m_pSampler = (uint8_t *)gpu->Allocate(32, 32);
-  if (m_pPixels == 0 || m_pState == 0 || m_pSampler == 0) {
-    return false;
-  }
-
+  m_nBytes = bytes;
   PackTextureState(m_pState, Gpu::Address(m_pPixels), width, height);
   PackSamplerState(m_pSampler, smooth);
   CleanAndInvalidateDataCacheRange((uintptr_t)m_pState, 32);
@@ -169,8 +174,8 @@ uint32_t Renderer::WriteUniforms(const Shader &shader, const Texture &texture,
       value = data;
       break;
     case UniformParameter:
-      if (data + 4 <= parameter_bytes) {
-        memcpy(&value, params + data, 4);
+      if (data * 4 + 4 <= parameter_bytes) {
+        memcpy(&value, params + data * 4, 4);
       }
       break;
     case UniformViewportXScale:
@@ -349,7 +354,8 @@ bool Renderer::CopyTest(void) {
   const uint32_t Clear = 0xFF102030;
   Texture texture;
   uint32_t *pixels = (uint32_t *)m_pGpu->Allocate(Width * Height * 4, 4096);
-  if (pixels == 0 || !texture.Create(m_pGpu, Size, Size, false) || !Load(copy)) {
+  if (pixels == 0 || !texture.Create(m_pGpu, Size, Size) ||
+      !texture.Set(Size, Size, false) || !Load(CopyProgram)) {
     CLogger::Get()->Write(FromGpu, LogWarning, "Copy test: not enough memory");
     return false;
   }
@@ -362,7 +368,7 @@ bool Renderer::CopyTest(void) {
   CleanAndInvalidateDataCacheRange((uintptr_t)pixels, Width * Height * 4);
 
   Target target = {pixels, Width, Height, Width * 4};
-  bool ok = Draw(copy, texture, target, Left, Top, Size, Size, Clear);
+  bool ok = Draw(CopyProgram, texture, target, Left, Top, Size, Size, Clear);
   InvalidateDataCacheRange((uintptr_t)pixels, Width * Height * 4);
 
   unsigned wrong = 0, first_x = 0, first_y = 0;
