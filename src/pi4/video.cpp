@@ -154,9 +154,6 @@ bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature, Driver driver) 
     for (unsigned i = 1; i < 4; i++) {
       m_pLine[i] = new uint32_t[m_nWidth];
     }
-    CLogger::Get()->Write(FromVideo, LogNotice, "Drawn by the ARM:%s%s%s",
-                          crt ? " CRT shader" : "", smooth ? " smooth" : "",
-                          crt && curvature ? " curved" : "");
   }
   ClearPages();
   m_pFrameBuffer->SetVirtualOffset(0, 0);
@@ -174,6 +171,13 @@ bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature, Driver driver) 
       // the ARM at up to 1080 lines and scaled the rest of the way.
       CLogger::Get()->Write(FromVideo, LogNotice, "Picture by BMA800XL's display lists on the HVS");
     }
+  }
+  // Under the direct display driver the HVS does smooth scaling itself, so
+  // the ARM only draws the CRT shader.
+  if (m_bFiltered && (m_pKms == 0 || crt)) {
+    CLogger::Get()->Write(FromVideo, LogNotice, "Drawn by the ARM:%s%s%s",
+                          crt ? " CRT shader" : "", smooth ? " smooth" : "",
+                          crt && curvature ? " curved" : "");
   }
 
   __atomic_store_n(&s_pThis, this, __ATOMIC_RELEASE);
