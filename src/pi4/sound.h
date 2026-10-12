@@ -2,8 +2,9 @@
 // sound.h
 //
 // The Pi 4's sound, without the VideoCore firmware: Circle's HDMI sound
-// driver (CHDMISoundBaseDevice), which sends the samples to HDMI0 by DMA,
-// or its PWM sound driver (CPWMSoundBaseDevice) for the headphone jack.
+// driver, adapted for either HDMI port (hdmisound.h), which sends the
+// samples to the port the display is on by DMA, or Circle's PWM sound
+// driver (CPWMSoundBaseDevice) for the headphone jack.
 // The emulator's samples go into the driver's queue (Write()).
 //
 // Sources:

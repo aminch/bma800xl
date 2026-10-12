@@ -9,9 +9,10 @@
 
 #include "sound.h"
 
+#include "hdmisound.h"
+
 #include <circle/logger.h>
 #include <circle/machineinfo.h>
-#include <circle/sound/hdmisoundbasedevice.h>
 #include <circle/sound/pwmsoundbasedevice.h>
 
 static const char FromSound[] = "sound";
@@ -63,8 +64,14 @@ bool Pi4Sound::Initialize(CInterruptSystem *pInterrupt, int volume, Output outpu
     output = Output::Hdmi;
   }
 
+  // The HDMI port with a display on it (HDMI0 if both, or neither).
+  int port = Pi4HdmiSound::ConnectedPort();
+  if (port < 0) {
+    port = 0;
+  }
   if (output != Output::Headphones &&
-      Start(new CHDMISoundBaseDevice(pInterrupt, SAMPLE_RATE, CHUNK_SIZE), "HDMI")) {
+      Start(new Pi4HdmiSound(pInterrupt, (unsigned)port, SAMPLE_RATE, CHUNK_SIZE),
+            port == 0 ? "HDMI0" : "HDMI1")) {
     return true;
   }
   if (output == Output::Hdmi || !has_jack) {

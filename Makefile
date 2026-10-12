@@ -42,7 +42,7 @@ OBJS = src/main.o src/kernel.o src/logging.o src/options.o \
 # (dispmanx, from BMC64); the Pi 4 uses Circle's framebuffer and HDMI sound
 # drivers (src/pi4/, see docs/PI4.md).
 ifeq ($(RASPPI),4)
-OBJS += src/pi4/video.o src/pi4/sound.o src/pi4/scaler.o \
+OBJS += src/pi4/video.o src/pi4/sound.o src/pi4/hdmisound.o src/pi4/scaler.o \
         src/pi4kms/filter.o src/pi4kms/dlist.o src/pi4kms/hvs.o \
         src/pi4kms/display.o src/pi4kms/modes.o src/pi4kms/modeset.o
 # Smooth scaling and the CRT shader are drawn by the ARM: -O3 lets GCC turn
