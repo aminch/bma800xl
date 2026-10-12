@@ -6,14 +6,32 @@
 // property interface. The firmware puts it on the screen; BMA800XL scales
 // the Atari picture into it.
 //
+// Sharp pixels (the default) use an 8-bit indexed framebuffer the size of
+// the display. Smooth scaling and the CRT shader (src/pi4/scaler.h) need
+// a 32-bit one; it is at most 1080 lines high (720 with curvature and
+// smooth both on), and on bigger displays the firmware scales it up.
+// Those pictures are drawn by cores 1, 2 and 3 together: core 1 runs the
+// emulator, cores 2 and 3 have nothing else to do.
+//
 // Sources:
 //  - Circle, include/circle/bcmframebuffer.h and lib/bcmframebuffer.cpp
 //    (R. Stange, GPL 3): the framebuffer class, its palette, page flipping
-//    with SetVirtualOffset() and WaitForVerticalSync().
+//    with SetVirtualOffset() and WaitForVerticalSync(), 32-bit pixels being
+//    ARGB8888 (CDisplay, and COLOR32() in include/circle/screen.h), and
+//    asking for the display's size (PROPTAG_GET_DISPLAY_DIMENSIONS,
+//    include/circle/bcmpropertytags.h), with the same sanity limits.
+//  - Circle, lib/translationtable64.cpp and lib/memory64.cpp: memory above
+//    the ARM's (where the firmware puts the framebuffer) is mapped as
+//    Device-nGnRE, where unaligned accesses fault. Writes to it are 8-byte
+//    aligned pairs (STP), as Circle's own memcpy() and memset() do them.
+//  - Circle, include/circle/multicore.h: CMultiCoreSupport runs
+//    Run(nCore) on cores 1 to 3 (sharing the work: frameshare.h).
+//  - Arm Architecture Reference Manual (Armv8-A): the alignment rule for
+//    Device memory.
 //  - Raspberry Pi firmware wiki, "Mailbox property interface"
 //    (https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface):
 //    the property tags those methods send (allocate buffer, set depth,
-//    set virtual offset, set palette, wait for vsync).
+//    set virtual offset, set palette, wait for vsync, get display size).
 //
 // This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
 // Raspberry Pi. See LICENSE for licensing details.
@@ -21,6 +39,9 @@
 
 #ifndef BMA800XL_PI4_VIDEO_H_
 #define BMA800XL_PI4_VIDEO_H_
+
+#include "frameshare.h"
+#include "scaler.h"
 
 #include <circle/bcmframebuffer.h>
 #include <stdint.h>
@@ -30,9 +51,9 @@ public:
   Pi4Video(void);
   ~Pi4Video(void);
 
-  // Core 0, at start up: takes a double buffered framebuffer the size of
-  // the display.
-  bool Initialize(void);
+  // Core 0, at start up: takes a double buffered framebuffer. CRT, SMOOTH
+  // and CURVATURE are the crt_shader, smooth and crt_curvature options.
+  bool Initialize(bool crt, bool smooth, bool curvature);
 
   // Core 1, from the emulator (see host.h).
   int Allocate(int width, int height, uint8_t **pixels, int *pitch);
@@ -44,17 +65,30 @@ public:
   // Shows a black screen (before halting).
   void Blank(void);
 
+  // Cores 2 and 3 (CEmulatorCore::Run): help draw frames, forever.
+  static void WorkerLoop(unsigned core);
+
 private:
+  bool TakeFrameBuffer(unsigned width, unsigned height, const unsigned *depths,
+                       unsigned count);
   void ClearPages(void);
   void BuildColumnMap(void);
   uint8_t *Page(unsigned page) const;
+  void DrawSharp(uint8_t *page);
+  void CopyLine(uint8_t *dst, uint32_t *line) const;
+
+  // Pi4FrameShare's job.
+  friend class Pi4FrameShare;
+  void Prepare(unsigned item);
+  void Render(unsigned row, unsigned core);
 
   CBcmFrameBuffer *m_pFrameBuffer;
-  unsigned m_nDepth;      // 8 (indexed) or 16 (RGB565)
-  unsigned m_nWidth;      // display size in pixels
+  unsigned m_nDepth;      // 8 (indexed), 16 (RGB565) or 32 (ARGB8888)
+  unsigned m_nWidth;      // framebuffer size in pixels
   unsigned m_nHeight;
   unsigned m_nPitch;      // bytes per framebuffer line
   unsigned m_nBackPage;   // page drawn next: 0 or 1
+  unsigned m_nDisplayWidth, m_nDisplayHeight;
 
   // The emulator draws into this 8-bit indexed buffer.
   uint8_t *m_pSource;
@@ -63,11 +97,23 @@ private:
 
   // The part of it shown, and where it goes on the screen.
   int m_nViewX, m_nViewY, m_nViewW, m_nViewH;
-  unsigned m_nDestX, m_nDestY, m_nDestW, m_nRepeat;
-  uint16_t *m_pColumn;    // source column for each destination column
+  unsigned m_nDestX, m_nDestY, m_nDestW, m_nDestH, m_nRepeat;
+  uint16_t *m_pColumn;    // sharp: source column for each destination column
 
   uint32_t m_Palette[256];   // 0xRRGGBB
   uint16_t m_Palette565[256];
+
+  // Smooth scaling and the CRT shader.
+  bool m_bFiltered;
+  bool m_bScalerReady;
+  Pi4Scaler m_Scaler;
+  uint32_t *m_pLine[4];   // a line of output per core
+
+  // The frame being drawn by several cores.
+  Pi4FrameShare m_Share;
+  uint8_t *volatile m_pJobPage;
+
+  static Pi4Video *s_pThis;
 };
 
 #endif

@@ -75,6 +75,12 @@ void CEmulatorCore::Run(unsigned nCore) {
     }
     bma800xl_main();
   }
+#if RASPPI >= 4
+  // Cores 2 and 3 help draw smoothed and CRT frames (src/pi4/video.h).
+  if (nCore >= 2) {
+    Pi4Video::WorkerLoop(nCore);
+  }
+#endif
 
   // Nothing else runs here.
   for (;;) {
@@ -197,7 +203,9 @@ bool CKernel::Initialize(void) {
     mLogger.Write(FromKernel, LogWarning,
                   "Sound goes to HDMI: the headphone jack isn't supported on the Pi 4 yet");
   }
-  if (!mVideo.Initialize()) {
+  if (!mVideo.Initialize(mOptions.GetBool("crt_shader", false),
+                         mOptions.GetBool("smooth", false),
+                         mOptions.GetBool("crt_curvature", false))) {
     return false;
   }
   // Without sound the emulator still runs.

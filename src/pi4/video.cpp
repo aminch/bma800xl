@@ -9,52 +9,148 @@
 
 #include "video.h"
 
+#include <circle/bcmpropertytags.h>
 #include <circle/logger.h>
+#include <circle/synchronize.h>
 #include <string.h>
 
 static const char FromVideo[] = "video";
 
+Pi4Video *Pi4Video::s_pThis = 0;
+
+namespace {
+
+// Writes BYTES (a multiple of 16) from SRC (8-byte aligned) to framebuffer
+// memory in aligned 8-byte pairs, ORing OR_MASK into every 8 bytes (the
+// alpha bytes of 32-bit pixels). The framebuffer is Device memory (see
+// video.h): no unaligned or vector stores, and no DC ZVA. If DST isn't
+// 8-byte aligned, the mask goes into SRC and Circle's memcpy(), which
+// checks alignment itself, copies it.
+void ToFrameBuffer(void *dst, void *src, unsigned bytes, uint64_t or_mask) {
+  uint64_t *s = (uint64_t *)src;
+  if (((uintptr)dst & 7) != 0 || (bytes & 15) != 0) {
+    if (or_mask != 0) {
+      for (unsigned i = 0; i < bytes / 8; i++) {
+        s[i] |= or_mask;
+      }
+    }
+    memcpy(dst, src, bytes);
+    return;
+  }
+  uint64_t *d = (uint64_t *)dst;
+  for (unsigned i = 0; i < bytes / 8; i += 2) {
+    uint64_t a = s[i] | or_mask;
+    uint64_t b = s[i + 1] | or_mask;
+    asm volatile("stp %x0, %x1, [%2]" : : "r"(a), "r"(b), "r"(d + i) : "memory");
+  }
+}
+
+// Fills BYTES (a multiple of 16, 8-byte aligned) of framebuffer memory.
+void FillFrameBuffer(void *dst, uint64_t value, unsigned long bytes) {
+  uint64_t *d = (uint64_t *)dst;
+  for (unsigned long i = 0; i < bytes / 8; i += 2) {
+    asm volatile("stp %x0, %x0, [%1]" : : "r"(value), "r"(d + i) : "memory");
+  }
+}
+
+} // namespace
+
 Pi4Video::Pi4Video(void)
     : m_pFrameBuffer(0), m_nDepth(0), m_nWidth(0), m_nHeight(0), m_nPitch(0),
-      m_nBackPage(1), m_pSource(0), m_nSourceWidth(0), m_nSourceHeight(0),
-      m_nViewX(0), m_nViewY(0), m_nViewW(0), m_nViewH(0), m_nDestX(0),
-      m_nDestY(0), m_nDestW(0), m_nRepeat(1), m_pColumn(0) {
+      m_nBackPage(1), m_nDisplayWidth(0), m_nDisplayHeight(0), m_pSource(0),
+      m_nSourceWidth(0), m_nSourceHeight(0), m_nViewX(0), m_nViewY(0),
+      m_nViewW(0), m_nViewH(0), m_nDestX(0), m_nDestY(0), m_nDestW(0),
+      m_nDestH(0), m_nRepeat(1), m_pColumn(0), m_bFiltered(false),
+      m_bScalerReady(false), m_pJobPage(0) {
   memset(m_Palette, 0, sizeof m_Palette);
   memset(m_Palette565, 0, sizeof m_Palette565);
+  for (unsigned i = 0; i < 4; i++) {
+    m_pLine[i] = 0;
+  }
 }
 
 Pi4Video::~Pi4Video(void) {
   delete m_pFrameBuffer;
   delete[] m_pSource;
   delete[] m_pColumn;
+  for (unsigned i = 0; i < 4; i++) {
+    delete[] m_pLine[i];
+  }
 }
 
-bool Pi4Video::Initialize(void) {
-  // A width and height of 0 make CBcmFrameBuffer ask the firmware for the
-  // display's size (PROPTAG_GET_DISPLAY_DIMENSIONS). Double buffered: the
-  // virtual height is twice the display's, and SetVirtualOffset() shows one
-  // half or the other. 8-bit indexed colour is what atari800 draws; 16-bit
-  // is the fall back if the firmware refuses it.
-  static const unsigned depths[] = {8, 16};
-  for (unsigned i = 0; i < sizeof depths / sizeof depths[0]; i++) {
-    m_pFrameBuffer = new CBcmFrameBuffer(0, 0, depths[i], 0, 0, 0, TRUE);
+bool Pi4Video::TakeFrameBuffer(unsigned width, unsigned height,
+                               const unsigned *depths, unsigned count) {
+  for (unsigned i = 0; i < count; i++) {
+    m_pFrameBuffer = new CBcmFrameBuffer(width, height, depths[i], 0, 0, 0, TRUE);
     if (m_pFrameBuffer->Initialize()) {
       m_nDepth = depths[i];
-      break;
+      return true;
     }
     delete m_pFrameBuffer;
     m_pFrameBuffer = 0;
   }
-  if (m_pFrameBuffer == 0) {
+  return false;
+}
+
+bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature) {
+  // The display's size, as CBcmFrameBuffer finds it when given 0 x 0
+  // (with the same limits).
+  m_nDisplayWidth = 640;
+  m_nDisplayHeight = 480;
+  CBcmPropertyTags Tags;
+  TPropertyTagDisplayDimensions Dimensions;
+  if (Tags.GetTag(PROPTAG_GET_DISPLAY_DIMENSIONS, &Dimensions, sizeof Dimensions) &&
+      Dimensions.nWidth >= 640 && Dimensions.nWidth <= 4096 &&
+      Dimensions.nHeight >= 480 && Dimensions.nHeight <= 2160) {
+    m_nDisplayWidth = Dimensions.nWidth;
+    m_nDisplayHeight = Dimensions.nHeight;
+  }
+
+  m_bFiltered = crt || smooth;
+  bool ok;
+  if (!m_bFiltered) {
+    // Sharp pixels: 8-bit indexed colour, what atari800 draws, the size of
+    // the display; 16-bit is the fall back if the firmware refuses it.
+    static const unsigned depths[] = {8, 16};
+    ok = TakeFrameBuffer(m_nDisplayWidth, m_nDisplayHeight, depths, 2);
+  } else {
+    // Filtered pictures are drawn a pixel at a time by the ARM, so their
+    // size is limited; the firmware scales a smaller framebuffer up to fill
+    // the display. 32-bit, or 16-bit if that's refused.
+    static const unsigned depths[] = {32, 16};
+    unsigned max_height = curvature && smooth ? 720 : 1080;
+    unsigned width = m_nDisplayWidth, height = m_nDisplayHeight;
+    if (height > max_height) {
+      width = (width * max_height / height) & ~1u;
+      height = max_height;
+    }
+    ok = TakeFrameBuffer(width, height, depths, 2) ||
+         TakeFrameBuffer(m_nDisplayWidth, m_nDisplayHeight, depths, 2);
+  }
+  if (!ok) {
     CLogger::Get()->Write(FromVideo, LogError, "Cannot allocate a framebuffer");
     return false;
   }
   m_nWidth = m_pFrameBuffer->GetWidth();
   m_nHeight = m_pFrameBuffer->GetHeight();
   m_nPitch = m_pFrameBuffer->GetPitch();
-  CLogger::Get()->Write(FromVideo, LogNotice, "Framebuffer %ux%u, %u bit",
-                        m_nWidth, m_nHeight, m_nDepth);
+  CLogger::Get()->Write(FromVideo, LogNotice, "Framebuffer %ux%u, %u bit (display %ux%u)",
+                        m_nWidth, m_nHeight, m_nDepth, m_nDisplayWidth,
+                        m_nDisplayHeight);
+
+  if (m_bFiltered) {
+    m_Scaler.SetMode(crt, smooth, curvature);
+    for (unsigned i = 1; i < 4; i++) {
+      m_pLine[i] = new uint32_t[m_nWidth];
+    }
+    CLogger::Get()->Write(FromVideo, LogNotice, "Drawn by the ARM:%s%s%s",
+                          crt ? " CRT shader" : "", smooth ? " smooth" : "",
+                          crt && curvature ? " curved" : "");
+  }
   ClearPages();
+  __atomic_store_n(&s_pThis, this, __ATOMIC_RELEASE);
+  DataSyncBarrier();
+  SendEvent();
   m_pFrameBuffer->SetVirtualOffset(0, 0);
   m_nBackPage = 1;
   return true;
@@ -66,9 +162,17 @@ uint8_t *Pi4Video::Page(unsigned page) const {
 }
 
 void Pi4Video::ClearPages(void) {
-  // Index 0 is black in the Atari's palette; RGB565 0 is black too.
+  // Index 0 is black in the Atari's palette; RGB565 0 is black; 32-bit
+  // black is opaque.
+  uint64_t black = m_nDepth == 32 ? 0xFF000000FF000000ull : 0;
+  unsigned long bytes = (unsigned long)m_nHeight * m_nPitch;
   for (unsigned page = 0; page < 2; page++) {
-    memset(Page(page), 0, (size_t)m_nHeight * m_nPitch);
+    uint8_t *p = Page(page);
+    if (((uintptr)p & 7) == 0 && (bytes & 15) == 0) {
+      FillFrameBuffer(p, black, bytes);
+    } else {
+      memset(p, 0, bytes);
+    }
   }
 }
 
@@ -87,10 +191,12 @@ int Pi4Video::Allocate(int width, int height, uint8_t **pixels, int *pitch) {
   return 0;
 }
 
-// The view fills the display's height (times SCALE) in whole multiples of
-// its own height, so every Atari line is the same number of display lines.
-// The width follows the aspect ratio; columns are picked nearest
-// neighbour.
+// Sharp: the view fills the display's height (times SCALE) in whole
+// multiples of its own height, so every Atari line is the same number of
+// display lines, and the columns are picked nearest neighbour.
+// Filtered: the view fills the height (times SCALE) exactly, as on the
+// Pi 3. Either way the width follows the aspect ratio, and lines start
+// and end on 16-byte boundaries, for ToFrameBuffer().
 void Pi4Video::SetView(int x, int y, int w, int h, double aspect,
                        double scale) {
   if (m_pFrameBuffer == 0 || w <= 0 || h <= 0) {
@@ -104,23 +210,47 @@ void Pi4Video::SetView(int x, int y, int w, int h, double aspect,
   m_nViewW = w;
   m_nViewH = h;
 
-  unsigned repeat = (unsigned)(m_nHeight * scale) / (unsigned)h;
-  if (repeat == 0) {
-    repeat = 1;
+  unsigned dest_h;
+  if (m_bFiltered) {
+    dest_h = (unsigned)(m_nHeight * scale);
+    m_nRepeat = 1;
+  } else {
+    unsigned repeat = (unsigned)(m_nHeight * scale) / (unsigned)h;
+    if (repeat == 0) {
+      repeat = 1;
+    }
+    m_nRepeat = repeat;
+    dest_h = repeat * h;
   }
-  unsigned dest_h = repeat * h;
   if (dest_h > m_nHeight) {
     dest_h = m_nHeight;
+  }
+  if (dest_h == 0) {
+    dest_h = 1;
   }
   unsigned dest_w = (unsigned)(dest_h * aspect + 0.5);
   if (dest_w > m_nWidth) {
     dest_w = m_nWidth;
   }
-  m_nRepeat = repeat;
+  const unsigned bytes = m_nDepth / 8;
+  dest_w &= ~(16 / bytes - 1);
+  if (dest_w == 0) {
+    dest_w = 16 / bytes;
+  }
   m_nDestW = dest_w;
-  m_nDestX = (m_nWidth - dest_w) / 2;
+  m_nDestH = dest_h;
+  m_nDestX = ((m_nWidth - dest_w) / 2) & ~(8 / bytes - 1);
   m_nDestY = (m_nHeight - dest_h) / 2;
-  BuildColumnMap();
+
+  if (m_bFiltered) {
+    m_bScalerReady = m_Scaler.Configure((unsigned)m_nSourceWidth, x, y, w, h,
+                                        dest_w, dest_h);
+    if (!m_bScalerReady) {
+      CLogger::Get()->Write(FromVideo, LogError, "Not enough memory to scale the picture");
+    }
+  } else {
+    BuildColumnMap();
+  }
   ClearPages();
 }
 
@@ -141,11 +271,12 @@ void Pi4Video::SetPalette(int index, uint32_t rgb) {
   unsigned g = (rgb >> 8) & 0xff;
   unsigned b = rgb & 0xff;
   m_Palette565[index] = (uint16_t)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+  m_Scaler.SetPalette(index, rgb);
 }
 
 void Pi4Video::UpdatePalette(void) {
   if (m_pFrameBuffer == 0 || m_nDepth != 8) {
-    return;  // 16-bit: the colours are converted while drawing.
+    return;  // 16 and 32-bit: the colours are converted while drawing.
   }
   // The firmware's palette entries are 0xAABBGGRR (red in the low byte,
   // as CBcmFrameBuffer::SetPalette() builds them).
@@ -158,17 +289,12 @@ void Pi4Video::UpdatePalette(void) {
   m_pFrameBuffer->UpdatePalette();
 }
 
-void Pi4Video::Present(bool wait_vsync) {
-  if (m_pFrameBuffer == 0 || m_pSource == 0 || m_pColumn == 0) {
-    return;
-  }
-  uint8_t *page = Page(m_nBackPage);
+void Pi4Video::DrawSharp(uint8_t *page) {
   const unsigned bytes = m_nDepth / 8;
-  uint8_t line[4096 * 2];
+  alignas(16) uint8_t line[4096 * 2];
   if (m_nDestW * bytes > sizeof line) {
     return;
   }
-
   for (int y = 0; y < m_nViewH; y++) {
     const uint8_t *src = m_pSource + (size_t)(m_nViewY + y) * m_nSourceWidth;
     if (m_nDepth == 8) {
@@ -184,9 +310,69 @@ void Pi4Video::Present(bool wait_vsync) {
     uint8_t *dst = page + (size_t)(m_nDestY + y * m_nRepeat) * m_nPitch +
                    m_nDestX * bytes;
     for (unsigned r = 0; r < m_nRepeat; r++) {
-      memcpy(dst, line, m_nDestW * bytes);
+      ToFrameBuffer(dst, line, m_nDestW * bytes, 0);
       dst += m_nPitch;
     }
+  }
+}
+
+// One output line, 0xAARRGGBB, into the framebuffer.
+void Pi4Video::CopyLine(uint8_t *dst, uint32_t *line) const {
+  if (m_nDepth == 32) {
+    ToFrameBuffer(dst, line, m_nDestW * 4, 0xFF000000FF000000ull);
+    return;
+  }
+  // RGB565, converted in place (each pixel shrinks).
+  uint16_t *line16 = (uint16_t *)line;
+  for (unsigned i = 0; i < m_nDestW; i++) {
+    uint32_t p = line[i];
+    line16[i] = (uint16_t)(((p >> 8) & 0xF800) | ((p >> 5) & 0x07E0) |
+                           ((p >> 3) & 0x001F));
+  }
+  ToFrameBuffer(dst, line16, m_nDestW * 2, 0);
+}
+
+// Pi4FrameShare's job: the scaler's two steps.
+void Pi4Video::Prepare(unsigned item) { m_Scaler.Prepare(m_pSource, item); }
+
+void Pi4Video::Render(unsigned row, unsigned core) {
+  uint32_t *line = m_pLine[core];
+  m_Scaler.Render(m_pSource, row, line);
+  CopyLine(m_pJobPage + (size_t)(m_nDestY + row) * m_nPitch +
+               m_nDestX * (m_nDepth / 8),
+           line);
+}
+
+void Pi4Video::WorkerLoop(unsigned core) {
+  // Until Initialize() has run there is nothing to help with.
+  while (__atomic_load_n(&s_pThis, __ATOMIC_ACQUIRE) == 0) {
+    WaitForEvent();
+  }
+  Pi4Video *video = s_pThis;
+  if (!video->m_bFiltered || core >= 4 || video->m_pLine[core] == 0) {
+    for (;;) {
+      asm volatile("wfi");
+    }
+  }
+  video->m_Share.Help(*video, core);
+}
+
+void Pi4Video::Present(bool wait_vsync) {
+  if (m_pFrameBuffer == 0 || m_pSource == 0) {
+    return;
+  }
+  uint8_t *page = Page(m_nBackPage);
+  if (!m_bFiltered) {
+    if (m_pColumn != 0) {
+      DrawSharp(page);
+    }
+  } else if (m_bScalerReady) {
+    if (m_pLine[1] == 0) {
+      return;
+    }
+    // Cores 2 and 3 help (see frameshare.h).
+    m_pJobPage = page;
+    m_Share.Run(*this, 1, m_Scaler.PrepareCount(), m_Scaler.Height());
   }
 
   // Show the page just drawn, then wait for the vertical blank: after it
@@ -199,8 +385,8 @@ void Pi4Video::Present(bool wait_vsync) {
 }
 
 void Pi4Video::DisplaySize(int *width, int *height) const {
-  *width = (int)m_nWidth;
-  *height = (int)m_nHeight;
+  *width = (int)m_nDisplayWidth;
+  *height = (int)m_nDisplayHeight;
 }
 
 void Pi4Video::Blank(void) {
