@@ -199,9 +199,11 @@ bool CKernel::Initialize(void) {
 #if RASPPI >= 4
   // Display and sound are set up here, on core 0: Circle's sound drivers
   // must be started on core 0 (see src/pi4/sound.h).
-  if (strcmp(audio_out, "analog") == 0 || strcmp(audio_out, "headphones") == 0) {
-    mLogger.Write(FromKernel, LogWarning,
-                  "Sound goes to HDMI: the headphone jack isn't supported on the Pi 4 yet");
+  Pi4Sound::Output sound_output = Pi4Sound::Output::Auto;
+  if (strcmp(audio_out, "hdmi") == 0) {
+    sound_output = Pi4Sound::Output::Hdmi;
+  } else if (strcmp(audio_out, "analog") == 0 || strcmp(audio_out, "headphones") == 0) {
+    sound_output = Pi4Sound::Output::Headphones;
   }
   // video_driver: firmware (the default), hvs or kms (docs/PI4.md).
   const char *video_driver = mOptions.Get("video_driver", "firmware");
@@ -217,7 +219,7 @@ bool CKernel::Initialize(void) {
     return false;
   }
   // Without sound the emulator still runs.
-  mHdmiSound.Initialize(&mInterrupt, volume);
+  mPi4Sound.Initialize(&mInterrupt, volume, sound_output);
 #else
   if (strcmp(audio_out, "hdmi") == 0) {
     mAudioOut = VCHIQSoundDestinationHDMI;
@@ -635,7 +637,7 @@ void CKernel::VideoPresent(int wait_vsync) {
 unsigned CKernel::SoundOpen(unsigned freq, int channels,
                             unsigned latency_frames) {
   (void)freq; // HDMI runs at Pi4Sound::SAMPLE_RATE.
-  return mHdmiSound.Open(channels, latency_frames);
+  return mPi4Sound.Open(channels, latency_frames);
 }
 
 void CKernel::SoundClose(void) {
@@ -643,11 +645,11 @@ void CKernel::SoundClose(void) {
   // be started on core 0.
 }
 
-unsigned CKernel::SoundFreeFrames(void) { return mHdmiSound.FreeFrames(); }
+unsigned CKernel::SoundFreeFrames(void) { return mPi4Sound.FreeFrames(); }
 
 void CKernel::SoundWrite(const int16_t *samples, unsigned frames) {
   Core1Beat("writing sound (HDMI)");
-  mHdmiSound.Write(samples, frames);
+  mPi4Sound.Write(samples, frames);
   Core1Beat("emulating");
 }
 

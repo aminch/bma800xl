@@ -10,6 +10,9 @@
 #include "sound.h"
 
 #include <circle/logger.h>
+#include <circle/machineinfo.h>
+#include <circle/sound/hdmisoundbasedevice.h>
+#include <circle/sound/pwmsoundbasedevice.h>
 
 static const char FromSound[] = "sound";
 
@@ -26,7 +29,27 @@ Pi4Sound::Pi4Sound(void)
 
 Pi4Sound::~Pi4Sound(void) { delete m_pDevice; }
 
-bool Pi4Sound::Initialize(CInterruptSystem *pInterrupt, int volume) {
+bool Pi4Sound::Start(CSoundBaseDevice *device, const char *name) {
+  // Everything but Write() and the queue level has to happen on core 0,
+  // so the device is set up and started here, before the emulator runs.
+  // Until the emulator writes, the driver sends silence.
+  if (!device->AllocateQueueFrames(SAMPLE_RATE * QUEUE_MS / 1000)) {
+    CLogger::Get()->Write(FromSound, LogError, "Cannot allocate the sound queue");
+    delete device;
+    return false;
+  }
+  device->SetWriteFormat(SoundFormatSigned16, 2);
+  if (!device->Start()) {
+    CLogger::Get()->Write(FromSound, LogWarning, "Cannot start %s sound", name);
+    delete device;
+    return false;
+  }
+  m_pDevice = device;
+  CLogger::Get()->Write(FromSound, LogNotice, "%s sound, %u Hz", name, SAMPLE_RATE);
+  return true;
+}
+
+bool Pi4Sound::Initialize(CInterruptSystem *pInterrupt, int volume, Output output) {
   if (volume < 0) {
     volume = 0;
   } else if (volume > 100) {
@@ -34,21 +57,22 @@ bool Pi4Sound::Initialize(CInterruptSystem *pInterrupt, int volume) {
   }
   m_nGain = volume * 256 / 100;
 
-  // Everything but Write() and the queue level has to happen on core 0,
-  // so the device is set up and started here, before the emulator runs.
-  // Until the emulator writes, the driver sends silence.
-  m_pDevice = new CHDMISoundBaseDevice(pInterrupt, SAMPLE_RATE, CHUNK_SIZE);
-  if (!m_pDevice->AllocateQueueFrames(SAMPLE_RATE * QUEUE_MS / 1000)) {
-    CLogger::Get()->Write(FromSound, LogError, "Cannot allocate the sound queue");
+  bool has_jack = CMachineInfo::Get()->GetMachineModel() != MachineModel400;
+  if (output == Output::Headphones && !has_jack) {
+    CLogger::Get()->Write(FromSound, LogWarning, "The Pi 400 has no headphone jack; sound goes to HDMI");
+    output = Output::Hdmi;
+  }
+
+  if (output != Output::Headphones &&
+      Start(new CHDMISoundBaseDevice(pInterrupt, SAMPLE_RATE, CHUNK_SIZE), "HDMI")) {
+    return true;
+  }
+  if (output == Output::Hdmi || !has_jack) {
     return false;
   }
-  m_pDevice->SetWriteFormat(SoundFormatSigned16, 2);
-  if (!m_pDevice->Start()) {
-    CLogger::Get()->Write(FromSound, LogError, "Cannot start HDMI sound");
-    return false;
-  }
-  CLogger::Get()->Write(FromSound, LogNotice, "HDMI sound, %u Hz", SAMPLE_RATE);
-  return true;
+  // The headphone jack: asked for, or HDMI takes no sound.
+  return Start(new CPWMSoundBaseDevice(pInterrupt, SAMPLE_RATE, CHUNK_SIZE),
+               "Headphone jack");
 }
 
 unsigned Pi4Sound::Open(int channels, unsigned latency_frames) {

@@ -143,7 +143,7 @@ private:
 
 #if RASPPI >= 4
   Pi4Video mVideo;
-  Pi4Sound mHdmiSound;
+  Pi4Sound mPi4Sound;
 #else
   FrameBufferLayer mFrameBuffer;
   VchiqSound *mSound;
