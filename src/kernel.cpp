@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <circle/bcmwatchdog.h>
 #include <circle/machineinfo.h>
 #include <circle/startup.h>
 #include <circle/synchronize.h>
@@ -788,15 +789,27 @@ void CKernel::Reboot(void) {
 }
 
 void CKernel::PowerOff(void) {
+#if RASPPI >= 4
+  // A restart into "partition 63", which the firmware takes as a halt: the
+  // same as Linux's power off on the Raspberry Pi (bcm2835_wdt.c,
+  // bcm2835_power_off). The Pi 4 B's bootloader then halts, waking on
+  // GPIO3 (WAKE_ON_GPIO=1, its default; with 0 and POWER_OFF_ON_HALT=1 it
+  // switches its outputs off); the Pi 400's switches off, and its power key
+  // turns it back on (rpi-eeprom firmware-2711/release-notes.md). Circle:
+  // CBcmWatchdog.
+  mLogger.Write(FromKernel, LogNotice, "Powering off");
+  mLog.Close();
+  mVideo.Blank();
+  CTimer::SimpleMsDelay(100);   // the log out of the UART
+  CBcmWatchdog watchdog;
+  watchdog.Restart(CBcmWatchdog::PartitionHalt);
+#else
   mLogger.Write(FromKernel, LogNotice, "Halting; safe to switch off");
   mLog.Close();
   // Blank the picture so it is clear the Pi has stopped.
-#if RASPPI >= 4
-  mVideo.Blank();
-#else
   mFrameBuffer.Hide();
-#endif
   halt();
+#endif
 }
 
 bool CKernel::SetLogDestination(int destination) {
