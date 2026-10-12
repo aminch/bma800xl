@@ -248,6 +248,15 @@ TShutdownMode CKernel::Run(void) {
 
   mEmulatorCore.Launch();
 
+#if RASPPI >= 4
+  // The GPU, for the CRT shader (crt_gpu=1 in cmdline.txt): start it and check
+  // that it renders. Done here, with the emulator running on core 1, which
+  // also writes the log.
+  if (mOptions.GetBool("crt_gpu", false) && mGpu.Initialize()) {
+    mGpu.ClearTest();
+  }
+#endif
+
   // Core 0 only looks after USB devices coming and going, and watches that
   // the emulator on core 1 keeps going. Interrupts keep being handled here.
   unsigned last_beat = 0;
