@@ -2,7 +2,9 @@
 # Makefile for the BMA800XL kernel image.
 #
 # Run ./make_all.sh once first; it builds circle-stdlib and then this.
-# After that "make" rebuilds the kernel image, kernel8-32.img.
+# After that "make" rebuilds the kernel image for the board circle-stdlib is
+# built for: kernel7.img (Pi 2), kernel8-32.img (Pi 3) or kernel8-rpi4.img
+# (Pi 4, 64-bit).
 # ./build_sdcard.sh stages everything for the SD card in build/sdcard.
 #
 
@@ -13,6 +15,10 @@ $(error circle-stdlib is not configured. Run ./make_all.sh first)
 endif
 
 include third_party/circle-stdlib/Config.mk
+# RASPPI (the board) is in Circle's own Config.mk, which circle-stdlib's
+# configure writes and Circle's Rules.mk reads; it's needed here first to
+# pick the board's display and sound code.
+include $(CIRCLEHOME)/Config.mk
 
 BMA800XL_VERSION ?= $(shell tools/version.sh --semver)
 BMA800XL_GIT ?= $(shell tools/version.sh --git)
@@ -25,13 +31,22 @@ BUILD := build
 A8_OBJS := $(addprefix $(BUILD)/atari800/,$(A8_SRCS:.c=.o))
 A8_LIB := $(BUILD)/libatari800.a
 
-OBJS = src/main.o src/kernel.o src/logging.o src/options.o src/fbl.o src/crt_pi_idx.o \
-       src/crt_pi_rgb.o src/vchiqsound.o src/vchiqsoundbasedevice.o \
+OBJS = src/main.o src/kernel.o src/logging.o src/options.o \
        src/port/platform.o src/port/keyboard.o src/port/menu.o src/port/fswrap.o \
        src/network.o src/network_time_sync.o \
        src/webui/webui.o src/webui/webui_http.o src/webui/webui_fs.o \
        src/webui/webui_machine.o src/webui/webui_assets.o \
        src/sdcard/sd_fs_fatfs.o src/sdcard/sd_fs_file.o
+
+# Display and sound. The Pi 2 and 3 use the VideoCore through VCHIQ
+# (dispmanx, from BMC64); the Pi 4 uses Circle's framebuffer and HDMI sound
+# drivers (src/pi4/, see docs/PI4.md).
+ifeq ($(RASPPI),4)
+OBJS += src/pi4/video.o src/pi4/sound.o
+else
+OBJS += src/fbl.o src/crt_pi_idx.o src/crt_pi_rgb.o src/vchiqsound.o \
+        src/vchiqsoundbasedevice.o
+endif
 
 include $(CIRCLEHOME)/Rules.mk
 
@@ -78,6 +93,18 @@ check-submodule:
 
 $(TARGET).img: check-submodule $(A8_LIB)
 
+ifeq ($(RASPPI),4)
+VIDEOCORE_LIBS :=
+else
+VIDEOCORE_LIBS := \
+	$(CIRCLEHOME)/addon/vc4/vchiq/libvchiq.a \
+	$(CIRCLEHOME)/addon/vc4/interface/bcm_host/libbcm_host.a \
+	$(CIRCLEHOME)/addon/vc4/interface/khronos/libkhrn_client.a \
+	$(CIRCLEHOME)/addon/vc4/interface/vmcs_host/libvmcs_host.a \
+	$(CIRCLEHOME)/addon/vc4/interface/vcos/libvcos.a \
+	$(CIRCLEHOME)/addon/linux/liblinuxemu.a
+endif
+
 LIBS := $(A8_LIB) \
 	$(CIRCLE_STDLIB_INSTALL_DIR)/lib/libm.a \
 	$(CIRCLE_STDLIB_INSTALL_DIR)/lib/libc.a \
@@ -90,17 +117,13 @@ LIBS := $(A8_LIB) \
 	$(CIRCLEHOME)/lib/net/libnet.a \
 	$(CIRCLEHOME)/addon/wlan/hostap/wpa_supplicant/libwpa_supplicant.a \
 	$(CIRCLEHOME)/addon/wlan/libwlan.a \
-	$(CIRCLEHOME)/addon/vc4/vchiq/libvchiq.a \
-	$(CIRCLEHOME)/addon/vc4/interface/bcm_host/libbcm_host.a \
-	$(CIRCLEHOME)/addon/vc4/interface/khronos/libkhrn_client.a \
-	$(CIRCLEHOME)/addon/vc4/interface/vmcs_host/libvmcs_host.a \
-	$(CIRCLEHOME)/addon/vc4/interface/vcos/libvcos.a \
-	$(CIRCLEHOME)/addon/linux/liblinuxemu.a \
+	$(VIDEOCORE_LIBS) \
 	$(CIRCLEHOME)/lib/sound/libsound.a \
 	$(CIRCLEHOME)/lib/sched/libsched.a \
 	$(CIRCLEHOME)/lib/libcircle.a
 
-EXTRACLEAN += $(OBJS) src/port/*.d src/*.d src/webui/*.d src/sdcard/*.d
+EXTRACLEAN += $(OBJS) src/*.o src/port/*.d src/*.d src/webui/*.d src/sdcard/*.d \
+              src/pi4/*.o src/pi4/*.d
 .PHONY: check-submodule distclean
 
 distclean: clean

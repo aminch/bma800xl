@@ -88,12 +88,18 @@ void CEmulatorCore::Run(unsigned nCore) {
 
 CKernel::CKernel(void)
     : mLog(&mSerial), mTimer(&mInterrupt), mLogger(mKernelOptions.GetLogLevel(), &mTimer),
-      mGPIOManager(&mInterrupt), mVCHIQ(CMemorySystem::Get(), &mInterrupt),
+      mGPIOManager(&mInterrupt),
+#if RASPPI <= 3
+      mVCHIQ(CMemorySystem::Get(), &mInterrupt),
+#endif
       mEMMC(&mInterrupt, &mTimer, &mActLED),
       mUSBHCI(&mInterrupt, &mTimer, TRUE), mConsole(&mSerial, &mLog),
-      mEmulatorCore(CMemorySystem::Get()), mSound(0), mSoundChannels(0),
-      mVolume(VCHIQ_SOUND_VOLUME_DEFAULT),
-      mAudioOut(VCHIQSoundDestinationAuto), m_MergedModifiers(0),
+      mEmulatorCore(CMemorySystem::Get()),
+#if RASPPI <= 3
+      mSound(0), mSoundChannels(0), mVolume(VCHIQ_SOUND_VOLUME_DEFAULT),
+      mAudioOut(VCHIQSoundDestinationAuto),
+#endif
+      m_MergedModifiers(0),
       m_KeyQueueHead(0), m_KeyQueueTail(0), m_bGPIOJoysticks(false) {
   s_pThis = this;
   for (unsigned i = 0; i < MAX_KEYBOARDS; i++) {
@@ -111,9 +117,11 @@ CKernel::CKernel(void)
   }
   memset(m_pJoyPins, 0, sizeof m_pJoyPins);
 
+#if RASPPI <= 3
   // The emulator's display is the lowest dispmanx layer.
   mFrameBuffer.SetLayer(0);
   mFrameBuffer.SetTransparency(false);
+#endif
 }
 
 CKernel::~CKernel(void) {}
@@ -137,9 +145,11 @@ bool CKernel::Initialize(void) {
   if (!mGPIOManager.Initialize()) {
     return false;
   }
+#if RASPPI <= 3
   if (!mVCHIQ.Initialize()) {
     return false;
   }
+#endif
   if (!mEMMC.Initialize()) {
     return false;
   }
@@ -171,12 +181,6 @@ bool CKernel::Initialize(void) {
   }
 
   const char *audio_out = mOptions.Get("audio_out", "auto");
-  if (strcmp(audio_out, "hdmi") == 0) {
-    mAudioOut = VCHIQSoundDestinationHDMI;
-  } else if (strcmp(audio_out, "analog") == 0 ||
-             strcmp(audio_out, "headphones") == 0) {
-    mAudioOut = VCHIQSoundDestinationHeadphones;
-  }
 
   // Volume in percent (0..100) of full scale.
   int volume = mOptions.GetInt("volume", 100);
@@ -185,10 +189,31 @@ bool CKernel::Initialize(void) {
   } else if (volume > 100) {
     volume = 100;
   }
+
+#if RASPPI >= 4
+  // Display and sound are set up here, on core 0: Circle's sound drivers
+  // must be started on core 0 (see src/pi4/sound.h).
+  if (strcmp(audio_out, "analog") == 0 || strcmp(audio_out, "headphones") == 0) {
+    mLogger.Write(FromKernel, LogWarning,
+                  "Sound goes to HDMI: the headphone jack isn't supported on the Pi 4 yet");
+  }
+  if (!mVideo.Initialize()) {
+    return false;
+  }
+  // Without sound the emulator still runs.
+  mHdmiSound.Initialize(&mInterrupt, volume);
+#else
+  if (strcmp(audio_out, "hdmi") == 0) {
+    mAudioOut = VCHIQSoundDestinationHDMI;
+  } else if (strcmp(audio_out, "analog") == 0 ||
+             strcmp(audio_out, "headphones") == 0) {
+    mAudioOut = VCHIQSoundDestinationHeadphones;
+  }
   // VCHIQ volume is in 1/100 dB; map 0..100% onto -60..0 dB.
   mVolume = volume == 0 ? VCHIQ_SOUND_VOLUME_MIN : (volume - 100) * 60;
 
   FrameBufferLayer::Initialize();
+#endif
 
   if (mOptions.GetBool("gpio_joysticks", false)) {
     SetupGPIOJoysticks();
@@ -549,6 +574,62 @@ int CKernel::GpioJoystick(int port) {
 // Video
 //
 
+#if RASPPI >= 4
+
+int CKernel::VideoInit(int width, int height, uint8_t **pixels, int *pitch) {
+  return mVideo.Allocate(width, height, pixels, pitch);
+}
+
+void CKernel::VideoSetView(int x, int y, int w, int h, double aspect) {
+  mVideo.SetView(x, y, w, h, aspect, mOptions.GetDouble("scale", 1.0));
+}
+
+void CKernel::VideoSetPalette(int index, uint32_t rgb) {
+  mVideo.SetPalette(index, rgb);
+}
+
+void CKernel::DisplaySize(int *width, int *height) {
+  mVideo.DisplaySize(width, height);
+}
+
+void CKernel::VideoUpdatePalette(void) { mVideo.UpdatePalette(); }
+
+void CKernel::VideoPresent(int wait_vsync) {
+  // Let Circle's tasks (the network, the web UI) run once per frame.
+  Core1Beat("running Circle tasks");
+  CScheduler::Get()->Yield();
+  Core1Beat("writing the log file");
+  mLog.Drain();
+  Core1Beat("showing a frame (framebuffer)");
+  mVideo.Present(wait_vsync != 0);
+  Core1Beat("emulating");
+}
+
+//
+// Sound
+//
+
+unsigned CKernel::SoundOpen(unsigned freq, int channels,
+                            unsigned latency_frames) {
+  (void)freq; // HDMI runs at Pi4Sound::SAMPLE_RATE.
+  return mHdmiSound.Open(channels, latency_frames);
+}
+
+void CKernel::SoundClose(void) {
+  // HDMI sound keeps running (silent when nothing is written); it can only
+  // be started on core 0.
+}
+
+unsigned CKernel::SoundFreeFrames(void) { return mHdmiSound.FreeFrames(); }
+
+void CKernel::SoundWrite(const int16_t *samples, unsigned frames) {
+  Core1Beat("writing sound (HDMI)");
+  mHdmiSound.Write(samples, frames);
+  Core1Beat("emulating");
+}
+
+#else
+
 int CKernel::VideoInit(int width, int height, uint8_t **pixels, int *pitch) {
   if (mOptions.GetBool("crt_shader", false)) {
     mFrameBuffer.SetUsesShader(true);
@@ -660,6 +741,8 @@ void CKernel::SoundWrite(const int16_t *samples, unsigned frames) {
   }
 }
 
+#endif
+
 //
 // System
 //
@@ -678,7 +761,11 @@ void CKernel::PowerOff(void) {
   mLogger.Write(FromKernel, LogNotice, "Halting; safe to switch off");
   mLog.Close();
   // Blank the picture so it is clear the Pi has stopped.
+#if RASPPI >= 4
+  mVideo.Blank();
+#else
   mFrameBuffer.Hide();
+#endif
   halt();
 }
 

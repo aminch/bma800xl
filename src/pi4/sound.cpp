@@ -1,0 +1,93 @@
+//
+// sound.cpp
+//
+// See sound.h for what this is and the sources it follows.
+//
+// This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
+// Raspberry Pi. See LICENSE for licensing details.
+//
+
+#include "sound.h"
+
+#include <circle/logger.h>
+
+static const char FromSound[] = "sound";
+
+// The queue holds up to this much; the emulator keeps it filled to the
+// latency it asks for (audio_buffer_ms), which must be less.
+static const unsigned QUEUE_MS = 200;
+
+// 2 x 384 samples: 384 stereo frames, 8 ms at 48 kHz, per DMA transfer.
+// Circle's default is ten times that, which would add 80 ms of delay.
+static const unsigned CHUNK_SIZE = 384 * 2;
+
+Pi4Sound::Pi4Sound(void)
+    : m_pDevice(0), m_nChannels(1), m_nLatency(0), m_nGain(256) {}
+
+Pi4Sound::~Pi4Sound(void) { delete m_pDevice; }
+
+bool Pi4Sound::Initialize(CInterruptSystem *pInterrupt, int volume) {
+  if (volume < 0) {
+    volume = 0;
+  } else if (volume > 100) {
+    volume = 100;
+  }
+  m_nGain = volume * 256 / 100;
+
+  // Everything but Write() and the queue level has to happen on core 0,
+  // so the device is set up and started here, before the emulator runs.
+  // Until the emulator writes, the driver sends silence.
+  m_pDevice = new CHDMISoundBaseDevice(pInterrupt, SAMPLE_RATE, CHUNK_SIZE);
+  if (!m_pDevice->AllocateQueueFrames(SAMPLE_RATE * QUEUE_MS / 1000)) {
+    CLogger::Get()->Write(FromSound, LogError, "Cannot allocate the sound queue");
+    return false;
+  }
+  m_pDevice->SetWriteFormat(SoundFormatSigned16, 2);
+  if (!m_pDevice->Start()) {
+    CLogger::Get()->Write(FromSound, LogError, "Cannot start HDMI sound");
+    return false;
+  }
+  CLogger::Get()->Write(FromSound, LogNotice, "HDMI sound, %u Hz", SAMPLE_RATE);
+  return true;
+}
+
+unsigned Pi4Sound::Open(int channels, unsigned latency_frames) {
+  if (m_pDevice == 0 || !m_pDevice->IsActive()) {
+    return 0;
+  }
+  m_nChannels = channels == 2 ? 2 : 1;
+  m_nLatency = (unsigned)((unsigned long)latency_frames * SAMPLE_RATE / 44100);
+  unsigned max = SAMPLE_RATE * QUEUE_MS / 1000;
+  if (m_nLatency > max - CHUNK_SIZE) {
+    m_nLatency = max - CHUNK_SIZE;
+  }
+  return SAMPLE_RATE;
+}
+
+unsigned Pi4Sound::FreeFrames(void) {
+  if (m_pDevice == 0 || !m_pDevice->IsActive()) {
+    return 0;
+  }
+  unsigned queued = m_pDevice->GetQueueFramesAvail();
+  return queued >= m_nLatency ? 0 : m_nLatency - queued;
+}
+
+void Pi4Sound::Write(const int16_t *samples, unsigned frames) {
+  if (m_pDevice == 0 || !m_pDevice->IsActive()) {
+    return;
+  }
+  // The queue takes stereo; mono samples go to both sides.
+  int16_t buffer[512 * 2];
+  while (frames > 0) {
+    unsigned n = frames > 512 ? 512 : frames;
+    for (unsigned i = 0; i < n; i++) {
+      int left = samples[i * m_nChannels];
+      int right = samples[i * m_nChannels + m_nChannels - 1];
+      buffer[i * 2] = (int16_t)(left * m_nGain / 256);
+      buffer[i * 2 + 1] = (int16_t)(right * m_nGain / 256);
+    }
+    m_pDevice->Write(buffer, n * 2 * sizeof(int16_t));
+    samples += n * m_nChannels;
+    frames -= n;
+  }
+}
