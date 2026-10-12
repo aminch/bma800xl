@@ -2,9 +2,9 @@
 // hvs.h
 //
 // The direct display driver's use of the HVS: finds the channel that feeds
-// HDMI0, and shows planes on it through display lists BMA800XL writes
-// itself, scaled by the HVS with its own filter kernels. Frames are paced
-// by the channel's frame counter.
+// HDMI0 or, if none does, HDMI1, and shows planes on it through display
+// lists BMA800XL writes itself, scaled by the HVS with its own filter
+// kernels. Frames are paced by the channel's frame counter.
 //
 // Display list memory used (words): the firmware keeps the first 32 and
 // its own lists; BMA800XL uses 88 words from 3072 (or 2048, or 1024,
@@ -30,10 +30,11 @@ class Hvs {
 public:
   Hvs(void);
 
-  // Finds the running channel feeding HDMI0 and its size, and uploads the
-  // filter kernels. False if HDMI0 isn't being fed.
+  // Finds the running channel feeding HDMI0 (or else HDMI1) and its size,
+  // and uploads the filter kernels. False if neither port is being fed.
   bool Attach(void);
 
+  unsigned Port(void) const { return m_nPort; }      // 0 HDMI0, 1 HDMI1
   unsigned Channel(void) const { return m_nChannel; }
   unsigned Width(void) const { return m_nWidth; }
   unsigned Height(void) const { return m_nHeight; }
@@ -61,7 +62,12 @@ private:
   void Write(uint32_t reg, uint32_t value) const;
   void WriteList(unsigned word, uint32_t value) const;
 
+  // The running channel feeding PORT's output, through its running pixel
+  // valve, or false.
+  bool FindChannel(unsigned port);
+
   uintptr_t m_Base;
+  unsigned m_nPort;
   unsigned m_nChannel;
   unsigned m_nWidth, m_nHeight;
   uint32_t m_nFirmwareList;    // the firmware's DISPLISTx, to restore

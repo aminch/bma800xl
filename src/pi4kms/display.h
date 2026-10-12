@@ -36,7 +36,8 @@ public:
   Display(void);
   ~Display(void);
 
-  // Takes over the HVS channel feeding HDMI0. False if it can't.
+  // Takes over the HVS channel feeding HDMI0, or else HDMI1. False if it
+  // can't.
   bool Attach(void);
 
   // The mode's size.

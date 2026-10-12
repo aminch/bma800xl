@@ -30,7 +30,7 @@ const unsigned LbmBase = 32768;
 } // namespace
 
 Hvs::Hvs(void)
-    : m_Base(FromBus(hvs::Bus)), m_nChannel(0), m_nWidth(0), m_nHeight(0),
+    : m_Base(FromBus(hvs::Bus)), m_nPort(0), m_nChannel(0), m_nWidth(0), m_nHeight(0),
       m_nFirmwareList(0), m_nRegion(0), m_nKernelSmooth(0), m_nKernelSharp(0),
       m_nNextSlot(0), m_bAttached(false) {
   m_nSlot[0] = m_nSlot[1] = 0;
@@ -46,24 +46,43 @@ void Hvs::WriteList(unsigned word, uint32_t value) const {
   write32(m_Base + hvs::DlistOffset + 4 * word, value);
 }
 
-bool Hvs::Attach(void) {
-  if (!(Read(hvs::DispCtrl) & Bit(31))) {
+bool Hvs::FindChannel(unsigned port) {
+  // The port's pixel valve must be running too: a mux field the firmware
+  // never set says nothing.
+  uintptr_t pv = FromBus(Ports[port].pv);
+  if (!(read32(pv + pv::Control) & pv::Enable) ||
+      !(read32(pv + pv::VControl) & pv::VideoEnable)) {
     return false;
   }
-  uint32_t mux = GetField(Read(hvs::DispEoln), hvs::Hdmi0MuxHigh, hvs::Hdmi0MuxLow);
+  uint32_t mux = GetField(Read(Ports[port].hvs_mux), hvs::OutputMuxHigh,
+                          hvs::OutputMuxLow);
   if (mux == hvs::MuxNone) {
     return false;
   }
-  m_nChannel = mux;
-  uint32_t ctrl = Read(hvs::DispCtrlX(m_nChannel));
-  uint32_t mode = GetField(Read(hvs::DispStatX(m_nChannel)), hvs::StatModeHigh,
+  uint32_t ctrl = Read(hvs::DispCtrlX(mux));
+  uint32_t mode = GetField(Read(hvs::DispStatX(mux)), hvs::StatModeHigh,
                            hvs::StatModeLow);
   if (!(ctrl & hvs::CtrlEnable) || mode != hvs::ModeRun) {
     return false;
   }
-  m_nWidth = GetField(ctrl, hvs::CtrlWidthHigh, hvs::CtrlWidthLow);
-  m_nHeight = GetField(ctrl, hvs::CtrlHeightHigh, hvs::CtrlHeightLow);
-  if (m_nWidth == 0 || m_nHeight == 0) {
+  unsigned width = GetField(ctrl, hvs::CtrlWidthHigh, hvs::CtrlWidthLow);
+  unsigned height = GetField(ctrl, hvs::CtrlHeightHigh, hvs::CtrlHeightLow);
+  if (width == 0 || height == 0) {
+    return false;
+  }
+  m_nPort = port;
+  m_nChannel = mux;
+  m_nWidth = width;
+  m_nHeight = height;
+  return true;
+}
+
+bool Hvs::Attach(void) {
+  if (!(Read(hvs::DispCtrl) & Bit(31))) {
+    return false;
+  }
+  // The port the firmware shows its picture on; HDMI0 if both.
+  if (!FindChannel(0) && !FindChannel(1)) {
     return false;
   }
   m_nFirmwareList = Read(hvs::DispList(m_nChannel));

@@ -48,12 +48,13 @@ void Display::FreeBuffers(void) {
 bool Display::Attach(void) {
   if (!m_Hvs.Attach()) {
     CLogger::Get()->Write(FromDisplay, LogWarning,
-                          "HDMI0 isn't fed by the HVS; using the firmware's framebuffer");
+                          "Neither HDMI port is fed by the HVS; using the firmware's framebuffer");
     return false;
   }
+  m_ModeSetter.SetPort(m_Hvs.Port());
   m_bAttached = true;
-  CLogger::Get()->Write(FromDisplay, LogNotice, "HVS channel %u, %ux%u",
-                        m_Hvs.Channel(), m_Hvs.Width(), m_Hvs.Height());
+  CLogger::Get()->Write(FromDisplay, LogNotice, "HDMI%u, HVS channel %u, %ux%u",
+                        m_Hvs.Port(), m_Hvs.Channel(), m_Hvs.Width(), m_Hvs.Height());
   return true;
 }
 

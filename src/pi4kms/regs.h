@@ -2,7 +2,7 @@
 // regs.h
 //
 // Addresses and register fields of the BCM2711's display hardware used by
-// the direct display driver: the HVS, pixel valve 2 and HDMI0.
+// the direct display driver: the HVS, pixel valves 2 and 4, HDMI0 and HDMI1.
 //
 // Sources: the BCM2711 device tree (addresses) and the behaviour of the
 // Linux vc4 display driver (registers, fields and values).
@@ -42,8 +42,9 @@ namespace hvs {
 const uint32_t Bus = 0x7E400000;
 
 const uint32_t DispCtrl = 0x00;      // bit 31: HVS enable
+const uint32_t DispDither = 0x14;    // bits 31:30: channel feeding output 5 (HDMI1)
 const uint32_t DispEoln = 0x18;      // bits 31:30: channel feeding output 4 (HDMI0)
-const unsigned Hdmi0MuxHigh = 31, Hdmi0MuxLow = 30;
+const unsigned OutputMuxHigh = 31, OutputMuxLow = 30;
 const uint32_t MuxNone = 3;
 
 inline uint32_t DispList(unsigned chan) { return 0x20 + 4 * chan; }
@@ -119,13 +120,10 @@ const unsigned KernelWords = 11;
 } // namespace hvs
 
 //
-// Pixel valve 2, which times HDMI0.
+// Pixel valves 2 (HDMI0) and 4 (HDMI1); the same registers.
 //
 namespace pv {
-const uint32_t Bus = 0x7E20A000;
 const unsigned PixelsPerClock = 2;
-const unsigned FifoBytes = 256;
-const unsigned HvsLatencyPixels = 6;
 
 const uint32_t Control = 0x00;
 const uint32_t VControl = 0x04;
@@ -145,7 +143,7 @@ const uint32_t ClearAtStart = Bit(14);
 const uint32_t TriggerUnderflow = Bit(13);
 const uint32_t WaitHstart = Bit(12);
 const unsigned PixelRepHigh = 5, PixelRepLow = 4;
-const unsigned ClockSelectHigh = 3, ClockSelectLow = 2;  // 0: HDMI0 on PV2
+const unsigned ClockSelectHigh = 3, ClockSelectLow = 2;  // 0: HDMI on PV2 and PV4
 const uint32_t FifoClear = Bit(1);
 const uint32_t Enable = Bit(0);
 
@@ -161,20 +159,13 @@ const uint32_t VfpStart = Bit(7);
 } // namespace pv
 
 //
-// HDMI0
+// HDMI0 and HDMI1: the same registers in each port's own ranges, except
+// where the port table below says otherwise.
 //
 namespace hdmi {
-const uint32_t CoreBus = 0x7EF00700;   // "hdmi"
-const uint32_t DvpBus = 0x7EF00300;    // "dvp"
-const uint32_t PhyBus = 0x7EF00F00;    // "phy"
-const uint32_t RmBus = 0x7EF00F80;     // "rm", rate manager
-const uint32_t RamBus = 0x7EF01B00;    // "packet"
-const uint32_t CscBus = 0x7EF00200;    // "csc"
-const uint32_t HdBus = 0x7EF20000;     // "hd"
+const uint32_t HdBus = 0x7EF20000;     // "hd", shared by both ports
 
-// hd
-const uint32_t DvpCtl = 0x00;
-const uint32_t VidCtl = 0x44;
+// hd (VID_CTL's offset is per port)
 const uint32_t VidEnable = Bit(31);
 const uint32_t VidUnderflowEnable = Bit(30);
 const uint32_t VidFrameCounterReset = Bit(29);
@@ -270,6 +261,28 @@ const uint32_t ClockHsm = 13;            // M2MC, the "hdmi" clock
 const uint32_t ClockBvb = 14;            // PIXEL_BVB
 const uint32_t HsmMinHz = 120000000;
 } // namespace hdmi
+
+//
+// What differs between the two ports.
+//
+struct Port {
+  uint32_t pv;                 // pixel valve (bus address)
+  uint32_t core, dvp, phy, rm, ram, csc;   // HDMI ranges (bus addresses)
+  uint32_t vid_ctl;            // VID_CTL's offset in "hd"
+  uint32_t hvs_mux;            // HVS register holding the output's channel
+  unsigned pv_fifo_level;      // the pixel valve's FIFO level
+  uint32_t display_id;         // the firmware's display ID
+};
+
+const Port Ports[2] = {
+    // HDMI0: pixel valve 2, HVS output 4. FIFO level: 256 bytes less the
+    // HVS's latency of 6 three-byte pixels.
+    {0x7E20A000, 0x7EF00700, 0x7EF00300, 0x7EF00F00, 0x7EF00F80, 0x7EF01B00,
+     0x7EF00200, 0x44, hvs::DispEoln, 256 - 3 * 6, 2},
+    // HDMI1: pixel valve 4, HVS output 5; PV4 needs a FIFO level of 32.
+    {0x7E216000, 0x7EF05700, 0x7EF05300, 0x7EF05F00, 0x7EF05F80, 0x7EF06B00,
+     0x7EF00280, 0x48, hvs::DispDither, 32, 7},
+};
 
 } // namespace kms
 

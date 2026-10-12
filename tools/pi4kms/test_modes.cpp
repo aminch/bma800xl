@@ -163,6 +163,25 @@ static void TestPhy(void) {
   Check(!ComputePhy(594000000, &phy), "phy 594", "refused (needs scrambling)");
 }
 
+static void TestPhyLanes(void) {
+  unsigned lanes[4];
+  PhyLanes(0, lanes);
+  Check(lanes[0] == 0 && lanes[1] == 1 && lanes[2] == 2 && lanes[3] == 3, "phy lanes",
+        "HDMI0 in order");
+  Check(PhyChannelSwap(0) == 0x3210, "phy lanes", "HDMI0 CHANNEL_SWAP 0x3210");
+  PhyLanes(1, lanes);
+  Check(lanes[0] == 1 && lanes[1] == 0 && lanes[2] == 3 && lanes[3] == 2, "phy lanes",
+        "HDMI1: lane 1, lane 0, clock, lane 2");
+  Check(PhyChannelSwap(1) == 0x2301, "phy lanes", "HDMI1 CHANNEL_SWAP 0x2301");
+  // HDMI1's TX2 output carries the clock, so takes the clock lane's
+  // settings; its clock output carries lane 2, a data lane.
+  PhySettings phy;
+  ComputePhy(148500000, &phy);
+  Check(phy.main_driver[lanes[2]] == 0x0C && phy.res_sel[lanes[2]] == 0x18 &&
+            phy.main_driver[lanes[3]] == 0x09 && phy.res_sel[lanes[3]] == 0x12,
+        "phy lanes", "HDMI1 TX2 gets the clock's settings, the clock output a data lane's");
+}
+
 static void TestAudio(void) {
   // HDMI's recommended pair for 148.5 MHz at 48 kHz: N 6144, CTS 148500.
   Check(AudioCts(148500000, 6144, 48000) == 148500, "audio", "CTS 148500 at 148.5 MHz");
@@ -174,5 +193,6 @@ void RunModeTests(void) {
   TestChooseMode();
   TestInfoFrame();
   TestPhy();
+  TestPhyLanes();
   TestAudio();
 }

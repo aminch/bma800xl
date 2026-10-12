@@ -44,6 +44,9 @@ uint32_t GetClockRate(uint32_t id) {
   return tag.nRate;
 }
 
+// The firmware's "get EDID block for display" tag.
+const uint32_t GetEdidBlockDisplay = 0x00030023;
+
 bool SetClockRate(uint32_t id, uint32_t hz) {
   CBcmPropertyTags tags;
   TPropertyTagSetClockRate tag;
@@ -55,13 +58,22 @@ bool SetClockRate(uint32_t id, uint32_t hz) {
 
 } // namespace
 
-ModeSetter::ModeSetter(void)
-    : m_Pv(FromBus(pv::Bus)), m_Core(FromBus(hdmi::CoreBus)),
-      m_Dvp(FromBus(hdmi::DvpBus)), m_Phy(FromBus(hdmi::PhyBus)),
-      m_Rm(FromBus(hdmi::RmBus)), m_Ram(FromBus(hdmi::RamBus)),
-      m_Csc(FromBus(hdmi::CscBus)), m_Hd(FromBus(hdmi::HdBus)),
-      m_nSavedPackets(0), m_bEdidRead(false), m_nPixelHz(0) {
+ModeSetter::ModeSetter(void) : m_nSavedPackets(0), m_bEdidRead(false), m_nPixelHz(0) {
   memset(&m_Edid, 0, sizeof m_Edid);
+  SetPort(0);
+}
+
+void ModeSetter::SetPort(unsigned port) {
+  const Port &p = Ports[port != 0];
+  m_nPort = port != 0;
+  m_Pv = FromBus(p.pv);
+  m_Core = FromBus(p.core);
+  m_Dvp = FromBus(p.dvp);
+  m_Phy = FromBus(p.phy);
+  m_Rm = FromBus(p.rm);
+  m_Ram = FromBus(p.ram);
+  m_Csc = FromBus(p.csc);
+  m_VidCtl = FromBus(hdmi::HdBus) + p.vid_ctl;
 }
 
 bool ModeSetter::WaitFor(uintptr_t reg, uint32_t mask, bool set,
@@ -76,7 +88,7 @@ bool ModeSetter::WaitFor(uintptr_t reg, uint32_t mask, bool set,
   return true;
 }
 
-// Pixel valve 2's timings, read back (horizontal ones are in pairs).
+// The pixel valve's timings, read back (horizontal ones are in pairs).
 bool ModeSetter::Current(Timing *timing) {
   if (!(Rd(m_Pv + pv::Control) & pv::Enable) ||
       !(Rd(m_Pv + pv::VControl) & pv::VideoEnable)) {
@@ -105,25 +117,57 @@ bool ModeSetter::Current(Timing *timing) {
   return true;
 }
 
+// Block B of the port's EDID, through the tag for a
+// given display (BY_DISPLAY), or the older tag for the default display.
+bool ModeSetter::ReadEdidBlock(unsigned b, bool by_display, uint8_t block[128]) {
+  CBcmPropertyTags tags;
+  if (by_display) {
+    struct {
+      TPropertyTag tag;
+      uint32_t block_number;
+      uint32_t display_id;
+      uint8_t data[128];
+    } PACKED request;
+    request.block_number = b;
+    request.display_id = Ports[m_nPort].display_id;
+    if (!tags.GetTag(GetEdidBlockDisplay, &request, sizeof request, 8)) {
+      return false;
+    }
+    memcpy(block, request.data, 128);
+    return true;
+  }
+  TPropertyTagEDIDBlock tag;
+  tag.nBlockNumber = b;
+  if (!tags.GetTag(PROPTAG_GET_EDID_BLOCK, &tag, sizeof tag, 4) ||
+      tag.nStatus != EDID_STATUS_SUCCESS) {
+    return false;
+  }
+  memcpy(block, tag.Block, 128);
+  return true;
+}
+
 const Edid &ModeSetter::GetEdid(void) {
   if (!m_bEdidRead) {
     m_bEdidRead = true;
     static uint8_t data[4 * 128];
     unsigned blocks = 0;
-    for (unsigned b = 0; b < 4; b++) {
-      CBcmPropertyTags tags;
-      TPropertyTagEDIDBlock tag;
-      tag.nBlockNumber = b;
-      if (!tags.GetTag(PROPTAG_GET_EDID_BLOCK, &tag, sizeof tag, 4) ||
-          tag.nStatus != EDID_STATUS_SUCCESS) {
+    // For HDMI0, the older tag if the newer one gives nothing usable.
+    for (int by_display = 1; by_display >= (m_nPort == 0 ? 0 : 1); by_display--) {
+      // The base block, then its extensions (up to 3).
+      blocks = 0;
+      for (unsigned b = 0; b < 4 && (b == 0 || b <= data[126]); b++) {
+        if (!ReadEdidBlock(b, by_display != 0, data + 128 * b)) {
+          break;
+        }
+        blocks++;
+      }
+      ParseEdid(data, blocks, &m_Edid);
+      if (m_Edid.valid) {
         break;
       }
-      memcpy(data + 128 * b, tag.Block, 128);
-      blocks++;
     }
-    ParseEdid(data, blocks, &m_Edid);
-    CLogger::Get()->Write(FromModeSet, LogNotice, "EDID: %u block(s), %s, %u video modes",
-                          blocks, !m_Edid.valid ? "not valid" : m_Edid.hdmi ? "HDMI" : "DVI",
+    CLogger::Get()->Write(FromModeSet, LogNotice, "EDID (HDMI%u): %u block(s), %s, %u video modes",
+                          m_nPort, blocks, !m_Edid.valid ? "not valid" : m_Edid.hdmi ? "HDMI" : "DVI",
                           m_Edid.vic_count);
   }
   return m_Edid;
@@ -160,16 +204,16 @@ void ModeSetter::Disable(Hvs &hvs) {
   CTimer::SimpleMsDelay(20);
 
   Wr(m_Core + hdmi::RamPacketConfig, 0);
-  SetBits(m_Hd + hdmi::VidCtl, hdmi::VidClearRgb);
+  SetBits(m_VidCtl, hdmi::VidClearRgb);
   CTimer::SimpleMsDelay(1);
-  ClearBits(m_Hd + hdmi::VidCtl, hdmi::VidEnable);
+  ClearBits(m_VidCtl, hdmi::VidEnable);
 
   ClearBits(m_Pv + pv::Control, pv::Enable);
   SetBits(m_Pv + pv::Control, pv::FifoClear);
 
   hvs.StopChannel();
 
-  SetBits(m_Hd + hdmi::VidCtl, hdmi::VidBlankPixels);
+  SetBits(m_VidCtl, hdmi::VidBlankPixels);
   Wr(m_Phy + hdmi::PhyResetCtl, hdmi::PhyLaneResets);
   Wr(m_Phy + hdmi::PhyPowerdownCtl, Bit(10));
 }
@@ -225,26 +269,27 @@ void ModeSetter::SetPhy(uint64_t tmds_hz) {
                                 Field(1, 11, 10) | Field(3, 7, 6) |
                                 Field(4, 19, 17) | Field(6, 16, 12));
 
-  // Lanes 0, 1, 2, clock: pre-emphasis and main driver; res_sel;
-  // termination (with the VCO gain).
+  // Outputs TX0, TX1, TX2, clock, each with the settings of the lane wired
+  // to it: pre-emphasis and main driver; res_sel; termination
+  // (with the VCO gain).
+  unsigned l[4];
+  PhyLanes(m_nPort, l);
   Wr(m_Phy + hdmi::PhyCtl0,
-     Field(phy.preemphasis[0], 15, 13) | Field(phy.main_driver[0], 12, 8) |
-         Field(phy.preemphasis[1], 23, 21) | Field(phy.main_driver[1], 20, 16) |
-         Field(phy.preemphasis[2], 31, 29) | Field(phy.main_driver[2], 28, 24) |
-         Field(phy.preemphasis[3], 7, 5) | Field(phy.main_driver[3], 4, 0));
+     Field(phy.preemphasis[l[0]], 15, 13) | Field(phy.main_driver[l[0]], 12, 8) |
+         Field(phy.preemphasis[l[1]], 23, 21) | Field(phy.main_driver[l[1]], 20, 16) |
+         Field(phy.preemphasis[l[2]], 31, 29) | Field(phy.main_driver[l[2]], 28, 24) |
+         Field(phy.preemphasis[l[3]], 7, 5) | Field(phy.main_driver[l[3]], 4, 0));
   uintptr_t phy1 = m_Phy + hdmi::PhyCtl1;
-  Put(phy1, 9, 5, phy.res_sel[0]);
-  Put(phy1, 14, 10, phy.res_sel[1]);
-  Put(phy1, 19, 15, phy.res_sel[2]);
-  Put(phy1, 4, 0, phy.res_sel[3]);
+  Put(phy1, 9, 5, phy.res_sel[l[0]]);
+  Put(phy1, 14, 10, phy.res_sel[l[1]]);
+  Put(phy1, 19, 15, phy.res_sel[l[2]]);
+  Put(phy1, 4, 0, phy.res_sel[l[3]]);
   Wr(m_Phy + hdmi::PhyCtl2,
-     Field(phy.termination[0], 7, 4) | Field(phy.termination[1], 11, 8) |
-         Field(phy.termination[2], 15, 12) | Field(phy.termination[3], 3, 0) |
+     Field(phy.termination[l[0]], 7, 4) | Field(phy.termination[l[1]], 11, 8) |
+         Field(phy.termination[l[2]], 15, 12) | Field(phy.termination[l[3]], 3, 0) |
          Field(phy.vco_gain, 19, 16));
 
-  // HDMI0's lanes in order.
-  Wr(m_Phy + hdmi::PhyChannelSwap, Field(0, 1, 0) | Field(1, 5, 4) |
-                                       Field(2, 9, 8) | Field(3, 13, 12));
+  Wr(m_Phy + hdmi::PhyChannelSwap, PhyChannelSwap(m_nPort));
 
   ClearBits(m_Phy + hdmi::PhyResetCtl, hdmi::PhyPllResetb | hdmi::PhyPllDivResetb);
   SetBits(m_Phy + hdmi::PhyResetCtl, hdmi::PhyPllResetb | hdmi::PhyPllDivResetb);
@@ -282,8 +327,7 @@ void ModeSetter::SetPixelValve(const Timing &t) {
   Wr(m_Pv + pv::VsyncdEven, 0);
   Wr(m_Pv + pv::MuxCfg, Field(pv::MuxNoSwap, 5, 2));
 
-  // FIFO level: its size less the HVS's latency of 6 three-byte pixels.
-  unsigned level = pv::FifoBytes - 3 * pv::HvsLatencyPixels;
+  unsigned level = Ports[m_nPort].pv_fifo_level;
   Wr(m_Pv + pv::Control, pv::FifoClear |
                              Field(level >> 6, pv::FifoLevelHighHigh, pv::FifoLevelHighLow) |
                              Field(level & 0x3F, pv::FifoLevelHigh, pv::FifoLevelLow) |
@@ -353,7 +397,7 @@ bool ModeSetter::Apply(Hvs &hvs, const Timing &t, bool hdmi_sink, unsigned audio
   }
   hvs.StartChannel(t.h_active, t.v_active);
 
-  // HDMI0 before the PV.
+  // HDMI before the PV.
   SetClocks(t.pixel_hz);
   SetPhy(t.pixel_hz);
   SetBits(m_Core + hdmi::SchedulerControl,
@@ -362,20 +406,20 @@ bool ModeSetter::Apply(Hvs &hvs, const Timing &t, bool hdmi_sink, unsigned audio
 
   SetPixelValve(t);
 
-  // HDMI0 after the PV is enabled, before video.
+  // HDMI after the PV is enabled, before video.
   SetColour(hdmi_sink);
   Wr(m_Core + hdmi::FifoCtl, hdmi::FifoMasterSlave);
 
   SetBits(m_Pv + pv::VControl, pv::VideoEnable);
 
-  // HDMI0 after video enable.
-  uint32_t vid = Rd(m_Hd + hdmi::VidCtl) & ~(hdmi::VidVsyncLow | hdmi::VidHsyncLow);
-  Wr(m_Hd + hdmi::VidCtl, vid | hdmi::VidEnable | hdmi::VidClearRgb |
+  // HDMI after video enable.
+  uint32_t vid = Rd(m_VidCtl) & ~(hdmi::VidVsyncLow | hdmi::VidHsyncLow);
+  Wr(m_VidCtl, vid | hdmi::VidEnable | hdmi::VidClearRgb |
                               hdmi::VidUnderflowEnable | hdmi::VidFrameCounterReset |
                               hdmi::VidBlankInsert |
                               (t.v_positive ? 0 : hdmi::VidVsyncLow) |
                               (t.h_positive ? 0 : hdmi::VidHsyncLow));
-  ClearBits(m_Hd + hdmi::VidCtl, hdmi::VidBlankPixels);
+  ClearBits(m_VidCtl, hdmi::VidBlankPixels);
 
   bool ok = true;
   if (hdmi_sink) {

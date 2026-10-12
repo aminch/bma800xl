@@ -90,6 +90,13 @@ struct PhySettings {
 // False above 340 MHz (no scrambling).
 bool ComputePhy(uint64_t tmds_hz, PhySettings *phy);
 
+// How HDMI PORT's PHY is wired: for each output (TX0, TX1, TX2, clock), the
+// lane it carries, 3 being the clock lane. Each output takes that lane's
+// PhySettings.
+void PhyLanes(unsigned port, unsigned lanes[4]);
+// CHANNEL_SWAP for that wiring: 2 bits per output at 1:0, 5:4, 9:8, 13:12.
+uint32_t PhyChannelSwap(unsigned port);
+
 // HDMI audio clock regeneration: CTS for N at fs samples a second
 // (128 fs = f_TMDS N / CTS).
 uint32_t AudioCts(uint64_t tmds_hz, uint32_t n, uint32_t fs);

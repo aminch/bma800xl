@@ -231,6 +231,22 @@ bool ComputePhy(uint64_t tmds_hz, PhySettings *phy) {
   return true;
 }
 
+void PhyLanes(unsigned port, unsigned lanes[4]) {
+  static const unsigned wiring[2][4] = {
+      {0, 1, 2, 3},   // HDMI0: in order
+      {1, 0, 3, 2},   // HDMI1: lane 1, lane 0, clock, lane 2
+  };
+  for (unsigned out = 0; out < 4; out++) {
+    lanes[out] = wiring[port != 0][out];
+  }
+}
+
+uint32_t PhyChannelSwap(unsigned port) {
+  unsigned lanes[4];
+  PhyLanes(port, lanes);
+  return lanes[0] | lanes[1] << 4 | lanes[2] << 8 | lanes[3] << 12;
+}
+
 uint32_t AudioCts(uint64_t tmds_hz, uint32_t n, uint32_t fs) {
   if (fs == 0) {
     return 0;
