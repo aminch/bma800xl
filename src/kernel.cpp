@@ -18,14 +18,20 @@
 #include <circle/bcmpropertytags.h>
 #include <circle/bcmwatchdog.h>
 #include <circle/machineinfo.h>
+#include <circle/memio.h>
+#if RASPPI >= 5
+#include <circle/bcm2712.h>
+#endif
 #include <circle/startup.h>
 #include <circle/synchronize.h>
 #include <circle/usb/usbhid.h>
 #include <circle_glue.h>
 
 extern "C" {
-// The emulator's entry point, in src/port/platform.c. Runs on core 1.
+// From src/port/platform.c: the emulator's entry point, which runs on core
+// 1, and its Reboot / Shut Down request.
 void bma800xl_main(void);
+void bma_request_power(int power_off);
 }
 
 static const char FromKernel[] = "bma800xl";
@@ -293,12 +299,47 @@ TShutdownMode CKernel::Run(void) {
                     (const char *)s_Core1Stage);
       stalled = true;
     }
+#if RASPPI >= 5
+    CheckPowerButton();
+#endif
 
     asm volatile("wfi");
   }
 
   return ShutdownHalt;
 }
+
+#if RASPPI >= 5
+// The Pi 5's power button, and the Pi 500's power key, as Shut Down: GPIO
+// 20 of the BCM2712's own GPIO block ("gio", Circle's ARM_GPIO1_BASE),
+// low while pressed, held for 50 ms (the device trees' debounce time). It
+// counts only once it has been seen released.
+// Sources: Raspberry Pi Linux device trees, bcm2712-rpi-5-b.dts
+// (pwr_button: gpio-keys, KEY_POWER, <&gio 20 GPIO_ACTIVE_LOW>,
+// debounce-interval 50, pull-up) and bcm2712-rpi-500.dts (the same key);
+// bcm2712.dtsi (gio at 0x7D508500); Circle, include/circle/bcm2712.h
+// (ARM_GPIO1_DATA0, the first bank's levels).
+void CKernel::CheckPowerButton(void) {
+  const u32 Button = 1u << 20;
+  bool down = (read32(ARM_GPIO1_DATA0) & Button) == 0;
+  unsigned now = CTimer::GetClockTicks();
+  if (!down) {
+    m_bPowerButtonSeenUp = true;
+    m_nPowerButtonDown = 0;
+    return;
+  }
+  if (!m_bPowerButtonSeenUp) {
+    return;
+  }
+  if (m_nPowerButtonDown == 0) {
+    m_nPowerButtonDown = now | 1;
+  } else if (now - m_nPowerButtonDown >= CLOCKHZ / 20) {
+    mLogger.Write(FromKernel, LogNotice, "Power button: Shut Down");
+    bma_request_power(1);
+    m_bPowerButtonSeenUp = false;
+  }
+}
+#endif
 
 //
 // USB keyboards
@@ -828,7 +869,9 @@ void CKernel::PowerOff(void) {
   // bcm2835_power_off). The Pi 4 B's bootloader then halts, waking on
   // GPIO3 (WAKE_ON_GPIO=1, its default; with 0 and POWER_OFF_ON_HALT=1 it
   // switches its outputs off); the Pi 400's switches off, and its power key
-  // turns it back on (rpi-eeprom firmware-2711/release-notes.md). Circle:
+  // turns it back on (rpi-eeprom firmware-2711/release-notes.md). The Pi 5,
+  // 500 and 500+ halt until their power button or key is pressed (Raspberry
+  // Pi documentation, "Raspberry Pi 5 power button"). Circle:
   // CBcmWatchdog.
   CBcmWatchdog watchdog;
   watchdog.Restart(CBcmWatchdog::PartitionHalt);

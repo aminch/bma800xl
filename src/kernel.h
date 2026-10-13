@@ -113,6 +113,11 @@ private:
   void SetupUSBKeyboards(void);
   void SetupUSBGamePads(void);
   void SetupGPIOJoysticks(void);
+#if RASPPI >= 5
+  void CheckPowerButton(void);
+  bool m_bPowerButtonSeenUp = false;
+  unsigned m_nPowerButtonDown = 0;   // clock ticks it went down, or 0
+#endif
   void PushKeyEvent(int usage, int pressed);
   void UpdateMergedKeys(void);
 
