@@ -56,9 +56,12 @@ static bool HasOnboardWLAN(TMachineModel model) {
   case MachineModel3BPlus:
   case MachineModel4B:
   case MachineModel400:
+  case MachineModel5:
+  case MachineModel500:
     return true;
   default:
-    return false;
+    // The Pi 500+ is newer than Circle's list of models.
+    return RASPPI >= 5;
   }
 }
 
@@ -67,12 +70,15 @@ static bool HasOnboardEthernet(TMachineModel model) {
   case MachineModel2B:
   case MachineModel3B:
   case MachineModel3BPlus:
-  // The Pi 4's Ethernet is in the SoC (Circle's CBcm54213Device), not on USB.
+  // The Pi 4's Ethernet is in the SoC (Circle's CBcm54213Device), not on
+  // USB; the Pi 5's in its RP1 chip (CMACBDevice).
   case MachineModel4B:
   case MachineModel400:
+  case MachineModel5:
+  case MachineModel500:
     return true;
   default:
-    return false;
+    return RASPPI >= 5;
   }
 }
 

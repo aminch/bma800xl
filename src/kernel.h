@@ -39,8 +39,8 @@
 #include "options.h"
 
 // The Pi 2 and 3 show the picture and play sound through the VideoCore
-// (dispmanx and VCHIQ, from BMC64); the Pi 4 through Circle's framebuffer
-// and HDMI sound drivers (src/pi4/).
+// (dispmanx and VCHIQ, from BMC64); the Pi 4 and 5 through Circle's
+// framebuffer and HDMI sound drivers (src/pi4/).
 #if RASPPI >= 4
 #include "pi4/sound.h"
 #include "pi4/video.h"

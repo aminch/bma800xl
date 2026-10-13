@@ -16,6 +16,7 @@ KERNELS=(
     "kernel7.img"       # Pi 2
     "kernel8-32.img"    # Pi 3, Pi Zero 2 W
     "kernel8-rpi4.img"  # Pi 4 B, Pi 400 (64-bit)
+    "kernel_2712.img"   # Pi 5, Pi 500, Pi 500+ (64-bit)
 )
 
 # What the Pi 4 boots with besides its kernel: needed when kernel8-rpi4.img
@@ -28,6 +29,16 @@ PI4_FILES=(
     "armstub8-rpi4.bin"
     "COPYING.linux"
     "LICENCE.broadcom"
+)
+
+# What the Pi 5 boots with besides its kernel (its firmware is in its
+# EEPROM): needed when kernel_2712.img is on the card.
+PI5_FILES=(
+    "bcm2712-rpi-5-b.dtb"
+    "bcm2712d0-rpi-5-b.dtb"
+    "bcm2712-rpi-500.dtb"
+    "overlays/bcm2712d0.dtbo"
+    "COPYING.linux"
 )
 
 # Files that must be there and not empty.
@@ -145,6 +156,18 @@ then
         if [ ! -s "$RELEASE_DIRECTORY/$pi4_file" ]
         then
             echo "Missing or empty (needed by the Pi 4): $pi4_file"
+            problems=1
+        fi
+    done
+fi
+
+if [ -s "$RELEASE_DIRECTORY/kernel_2712.img" ]
+then
+    for pi5_file in "${PI5_FILES[@]}"
+    do
+        if [ ! -s "$RELEASE_DIRECTORY/$pi5_file" ]
+        then
+            echo "Missing or empty (needed by the Pi 5): $pi5_file"
             problems=1
         fi
     done

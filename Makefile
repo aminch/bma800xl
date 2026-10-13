@@ -3,8 +3,8 @@
 #
 # Run ./make_all.sh once first; it builds circle-stdlib and then this.
 # After that "make" rebuilds the kernel image for the board circle-stdlib is
-# built for: kernel7.img (Pi 2), kernel8-32.img (Pi 3) or kernel8-rpi4.img
-# (Pi 4, 64-bit).
+# built for: kernel7.img (Pi 2), kernel8-32.img (Pi 3), kernel8-rpi4.img
+# (Pi 4, 64-bit) or kernel_2712.img (Pi 5, 64-bit).
 # ./build_sdcard.sh stages everything for the SD card in build/sdcard.
 #
 
@@ -39,9 +39,9 @@ OBJS = src/main.o src/kernel.o src/logging.o src/options.o \
        src/sdcard/sd_fs_fatfs.o src/sdcard/sd_fs_file.o
 
 # Display and sound. The Pi 2 and 3 use the VideoCore through VCHIQ
-# (dispmanx, from BMC64); the Pi 4 uses Circle's framebuffer and HDMI sound
-# drivers (src/pi4/, see docs/PI4.md).
-ifeq ($(RASPPI),4)
+# (dispmanx, from BMC64); the Pi 4 and 5 use Circle's framebuffer and HDMI
+# sound drivers (src/pi4/, shared by both; see docs/PI4.md and docs/PI5.md).
+ifneq ($(filter 4 5,$(RASPPI)),)
 OBJS += src/pi4/video.o src/pi4/sound.o src/pi4/hdmisound.o src/pi4/scaler.o \
         src/pi4kms/filter.o src/pi4kms/dlist.o src/pi4kms/hvs.o \
         src/pi4kms/display.o src/pi4kms/modes.o src/pi4kms/modeset.o \
@@ -100,7 +100,7 @@ check-submodule:
 
 $(TARGET).img: check-submodule $(A8_LIB)
 
-ifeq ($(RASPPI),4)
+ifneq ($(filter 4 5,$(RASPPI)),)
 VIDEOCORE_LIBS :=
 else
 VIDEOCORE_LIBS := \

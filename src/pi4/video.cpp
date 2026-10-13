@@ -167,6 +167,14 @@ bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature, Driver driver) 
   m_pFrameBuffer->SetVirtualOffset(0, 0);
   m_nBackPage = 1;
 
+#if RASPPI >= 5
+  // The Pi 5's display hardware isn't the Pi 4's: the firmware's
+  // framebuffer only, for now.
+  if (driver != Driver::Firmware) {
+    CLogger::Get()->Write(FromVideo, LogNotice, "Picture by the firmware's framebuffer");
+    driver = Driver::Firmware;
+  }
+#endif
   // The direct display driver takes over from the firmware's framebuffer,
   // which stays as the fall back if it can't.
   if (driver != Driver::Firmware) {

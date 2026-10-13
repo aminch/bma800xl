@@ -35,6 +35,9 @@ supported, with the display run at the Atari's exact refresh rate on either
 HDMI port, and sound over HDMI or the Pi 4 B's 3.5mm jack. See
 [docs/PI4.md](docs/PI4.md).
 
+The Raspberry Pi 5, Pi 500 and Pi 500+ (`kernel_2712.img`, 64-bit) are
+supported too. See [docs/PI5.md](docs/PI5.md).
+
 ## Getting started
 
 1. Format an SD card as FAT32.

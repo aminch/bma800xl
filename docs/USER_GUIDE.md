@@ -4,8 +4,8 @@
 
 | File or folder   | What it is                                                 |
 |------------------|------------------------------------------------------------|
-| `kernel8-32.img`, `kernel7.img`, `kernel8-rpi4.img` | The emulator for the Pi 3 and Zero 2 W, the Pi 2, and the Pi 4 and Pi 400 |
-| `bootcode.bin`, `start.elf`, `fixup.dat`, `start4.elf`, `fixup4.dat`, `armstub8-rpi4.bin`, `*.dtb` | Raspberry Pi firmware |
+| `kernel8-32.img`, `kernel7.img`, `kernel8-rpi4.img`, `kernel_2712.img` | The emulator for the Pi 3 and Zero 2 W, the Pi 2, the Pi 4 and Pi 400, and the Pi 5, 500 and 500+ |
+| `bootcode.bin`, `start.elf`, `fixup.dat`, `start4.elf`, `fixup4.dat`, `armstub8-rpi4.bin`, `*.dtb`, `overlays/` | Raspberry Pi firmware |
 | `config.txt`     | Raspberry Pi settings: video mode                          |
 | `cmdline.txt`    | Emulator options (see below)                               |
 | `bma800xl.cfg`   | BMA800XL's settings, written by the BMA800XL menu          |

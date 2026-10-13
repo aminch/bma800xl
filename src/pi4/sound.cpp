@@ -58,6 +58,12 @@ bool Pi4Sound::Initialize(CInterruptSystem *pInterrupt, int volume, Output outpu
   }
   m_nGain = volume * 256 / 100;
 
+#if RASPPI >= 5
+  // The Pi 5's HDMI and sound hardware isn't the Pi 4's.
+  CLogger::Get()->Write(FromSound, LogWarning, "No sound on the Pi 5 yet");
+  return false;
+#endif
+
   bool has_jack = CMachineInfo::Get()->GetMachineModel() != MachineModel400;
   if (output == Output::Headphones && !has_jack) {
     CLogger::Get()->Write(FromSound, LogWarning, "The Pi 400 has no headphone jack; sound goes to HDMI");

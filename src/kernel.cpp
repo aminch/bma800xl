@@ -248,7 +248,7 @@ TShutdownMode CKernel::Run(void) {
 
   mEmulatorCore.Launch();
 
-#if RASPPI >= 4
+#if RASPPI == 4
   // The 3D GPU draws the smooth and CRT pictures instead of the ARM (unless
   // crt_gpu=0 in cmdline.txt; crt_gpu_test=1 also checks its pictures
   // against the ARM's). Started here, with the emulator running on core 1,

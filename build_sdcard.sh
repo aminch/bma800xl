@@ -4,11 +4,12 @@
 # build/sdcard. Copy the contents of that folder to the root of a FAT32
 # formatted SD card.
 #
-#   ./build_sdcard.sh [pi2|pi3|pi4] [--skip-patches]
+#   ./build_sdcard.sh [pi2|pi3|pi4|pi5] [--skip-patches]
 #
 #   pi3     kernel8-32.img: Pi 3 and Pi Zero 2 W
 #   pi2     kernel7.img: Pi 2
 #   pi4     kernel8-rpi4.img and armstub8-rpi4.bin: Pi 4 B and Pi 400
+#   pi5     kernel_2712.img: Pi 5, Pi 500 and Pi 500+
 #   (none)  all of them, as a release has
 #
 # Without --skip-patches each board is built from clean_all.sh. With it, the
@@ -26,22 +27,22 @@ BUILD_DIR="$SRC_DIR/build"
 STAGING_DIR="$BUILD_DIR/sdcard"
 # circle-stdlib's configure writes the board (RASPPI) into Circle's Config.mk.
 CIRCLE_CONFIG="$SRC_DIR/third_party/circle-stdlib/libs/circle/Config.mk"
-ALL_BOARDS=(pi2 pi3 pi4)
+ALL_BOARDS=(pi2 pi3 pi4 pi5)
 BOARDS=()
 SKIP_PATCHES=0
 
 for arg in "$@"
 do
     case "$arg" in
-        pi2|pi3|pi4) BOARDS=("$arg") ;;
+        pi2|pi3|pi4|pi5) BOARDS=("$arg") ;;
         --skip-patches) SKIP_PATCHES=1 ;;
-        *) echo "Usage: $0 [pi2|pi3|pi4] [--skip-patches]" >&2; exit 1 ;;
+        *) echo "Usage: $0 [pi2|pi3|pi4|pi5] [--skip-patches]" >&2; exit 1 ;;
     esac
 done
 
 cd "$SRC_DIR"
 
-# The board circle-stdlib is built for (pi2, pi3, pi4), if any.
+# The board circle-stdlib is built for (pi2, pi3, pi4, pi5), if any.
 built_board() {
     local raspi
     raspi=$(sed -n 's/^RASPPI = //p' "$CIRCLE_CONFIG" 2>/dev/null || true)
@@ -56,6 +57,7 @@ kernel_name() {
         pi2) echo kernel7.img ;;
         pi3) echo kernel8-32.img ;;
         pi4) echo kernel8-rpi4.img ;;
+        pi5) echo kernel_2712.img ;;
     esac
 }
 
@@ -73,8 +75,9 @@ fi
 rm -rf "$STAGING_DIR"
 mkdir -p "$STAGING_DIR"
 
-# Raspberry Pi firmware, Wi-Fi firmware and settings.
-cp "$SRC_DIR"/sdcard/firmware/* "$STAGING_DIR/"
+# Raspberry Pi firmware (with the Pi 5's overlays/ folder), Wi-Fi firmware
+# and settings.
+cp -r "$SRC_DIR"/sdcard/firmware/* "$STAGING_DIR/"
 if ! "$SRC_DIR/make_wifi_firmware.sh" "$STAGING_DIR"
 then
     echo "Wi-Fi firmware could not be fetched (it is cached once it has been)." >&2
@@ -108,7 +111,7 @@ do
     echo "=============================================================="
     if [ "$SKIP_PATCHES" -eq 1 ] && [ "$(built_board)" = "$board" ]
     then
-        if [ "$board" = "pi4" ]
+        if [ "$board" = "pi4" ] || [ "$board" = "pi5" ]
         then
             export BMA800XL_AARCH=64
         else
