@@ -42,6 +42,8 @@ hdmi_mode=19
 # Other useful modes (hdmi_group=1):
 #   hdmi_mode=19  720p  50 Hz        hdmi_mode=4   720p  60 Hz
 #   hdmi_mode=31  1080p 50 Hz        hdmi_mode=16  1080p 60 Hz
+# The CRT shader looks best at 1080p, especially with curvature; sharp
+# pixels then have black bars above and below.
 
 # Uncomment if you get no picture
 #hdmi_safe=1
