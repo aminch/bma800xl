@@ -28,6 +28,7 @@
 #define BMA800XL_PI5KMS_DISPLAY_H_
 
 #include "hvs.h"
+#include "modeset.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -66,9 +67,9 @@ public:
   // Shows it from the next frame on; with WAIT_VSYNC, waits until it is.
   void EndFrame(bool wait_vsync);
 
-  // Switches the video mode to run at FPS frames a second, if it can.
-  // AUDIO_FS is the HDMI sound's sample rate. True if the mode was changed
-  // (or a failed change undone). For now the firmware's mode is kept.
+  // Switches the video mode to run at FPS frames a second, if it can (see
+  // modeset.h). AUDIO_FS is the HDMI sound's sample rate. True if the mode
+  // was changed (or a failed change undone).
   bool MatchRate(double fps, unsigned audio_fs);
 
   // A black screen (before halting).
@@ -84,8 +85,11 @@ private:
   uint64_t HvsAddress(const uint32_t *buffer) const;
   // As Hvs::WaitForChange(), running Circle's tasks while it waits.
   bool WaitForFlip(unsigned from);
+  // Puts the picture's display list back (after the channel restarts).
+  static void Reinstall(void *param);
 
   Hvs m_Hvs;
+  ModeSetter m_ModeSetter;
   bool m_bAttached;
   uint8_t *m_pFramebuffer;
   size_t m_nFramebufferBytes;

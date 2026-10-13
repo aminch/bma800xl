@@ -1,9 +1,10 @@
 //
 // test_pi5.cpp
 //
-// Tests the Pi 5's display list entries (src/pi5kms/dlist.cpp) on a PC,
-// against values worked out by hand from the BCM2712 HVS's entry layout:
-// a 384x288 picture shown 1440x1080 at (240, 0), and unscaled.
+// Tests the Pi 5's display list entries (src/pi5kms/dlist.cpp) and HDMI
+// PHY settings (phy.cpp) on a PC, against values worked out by hand: a
+// 384x288 picture shown 1440x1080 at (240, 0), and unscaled; the PLL's
+// divider and rate manager offset for the standard TMDS rates.
 //
 //   tools/pi4kms/run_tests.sh
 //
@@ -12,6 +13,7 @@
 //
 
 #include "../../src/pi5kms/dlist.h"
+#include "../../src/pi5kms/phy.h"
 
 #include <stdio.h>
 
@@ -116,7 +118,39 @@ static void TestSizes(void) {
   Check(kms::BuildList(small, m, false, w) == 0, name, "shrinking past 2/3 refused");
 }
 
+static void TestPhy(void) {
+  const char *name = "pi5 phy";
+  struct {
+    uint64_t hz;
+    unsigned divider;
+    uint32_t offset;
+    uint32_t data, clock;
+  } cases[] = {
+      {27000000, 37, 0x97200000, 0x80828700, 0x80828700},
+      {74250000, 13, 0x96580000, 0x80828700, 0x80828700},
+      {148500000, 7, 0x98100000, 0x80828700, 0x80828700},
+      {297000000, 3, 0x94A00000, 0xC0870000, 0xC0870800},
+  };
+  for (const auto &c : cases) {
+    kms::Pi5Phy phy;
+    bool ok = kms::ComputePi5Phy(c.hz, &phy) && phy.vco_divider == c.divider &&
+              phy.rm_offset == c.offset && phy.data_lane == c.data &&
+              phy.clock_lane == c.clock && phy.word_select == 0;
+    char what[80];
+    snprintf(what, sizeof what, "%llu Hz: divider, offset, lanes",
+             (unsigned long long)c.hz);
+    Check(ok, name, what);
+  }
+  // The Atari's rates: 0.28 % and 0.13 % below 148.5 MHz.
+  kms::Pi5Phy phy;
+  Check(kms::ComputePi5Phy(148084800, &phy) && phy.vco_divider == 7 &&
+            phy.vco_hz >= 8000000000ull && phy.vco_hz < 12000000000ull,
+        name, "148.08 MHz: VCO in range");
+  Check(!kms::ComputePi5Phy(340000000, &phy), name, "340 MHz refused (no scrambling)");
+}
+
 int main(void) {
+  TestPhy();
   TestScaled();
   TestUnscaled();
   TestSizes();

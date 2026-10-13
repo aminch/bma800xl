@@ -52,7 +52,8 @@ ifeq ($(RASPPI),4)
 OBJS += src/pi4kms/dlist.o src/pi4kms/hvs.o src/pi4kms/display.o \
         src/pi4kms/modes.o src/pi4kms/modeset.o
 else
-OBJS += src/pi5kms/dlist.o src/pi5kms/hvs.o src/pi5kms/display.o
+OBJS += src/pi5kms/dlist.o src/pi5kms/hvs.o src/pi5kms/display.o \
+        src/pi5kms/phy.o src/pi5kms/modeset.o src/pi4kms/modes.o
 endif
 # Smooth scaling and the CRT shader are drawn by the ARM: -O3 lets GCC turn
 # their per-pixel loops into NEON code (tools/pi4scaler tests the same).

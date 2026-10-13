@@ -12,9 +12,9 @@ device trees and `overlays/bcm2712d0.dtbo`.
 ## Picture
 
 BMA800XL shows the picture through the Pi 5's HVS with its own display
-driver (`src/pi5kms/`), as on the Pi 4 (see `video_driver` in
-[PI4.md](PI4.md)), at the resolution the firmware chooses for the display;
-`video_driver=firmware` uses the firmware's framebuffer instead, and it is
+driver (`src/pi5kms/`), and runs the display at the Atari's frame rate, as
+on the Pi 4 (see `video_driver` in [PI4.md](PI4.md)), at the resolution the
+firmware chooses for the display; `video_driver=firmware` uses the firmware's framebuffer instead, and it is
 the fall back if the driver can't take over. The CRT shader, and smooth
 scaling on the framebuffer, are drawn by the Pi 5's 3D GPU (V3D 7.1), with
 the same options as on the Pi 4 (`crt_gpu`, `crt_gpu_test`); if the GPU
@@ -30,8 +30,3 @@ if both are). The Pi 5 and Pi 500 have no headphone jack.
 *Shut Down* (menu, web UI, a keyboard's power key, or a short press of the
 Pi 5's power button or the Pi 500's power key) halts the Pi; the power
 button or key starts it again.
-
-## Not yet
-
-Setting the video mode to the Atari's frame rate (`video_driver=kms`) is
-for later: on the Pi 5 `kms` keeps the firmware's mode, as `hvs` does.

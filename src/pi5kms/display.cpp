@@ -84,6 +84,7 @@ bool Display::Attach(void) {
   bool known = fw != 0 && arm != 0 && m_Hvs.FirmwarePitch() == m_nFramebufferPitch;
   m_bPool = known && fw != arm;
   m_nPoolAddress = fw;
+  m_ModeSetter.SetPort(m_Hvs.Port());
   m_bAttached = true;
   log->Write(FromDisplay, LogNotice, "HDMI%u, HVS %c channel %u, %ux%u", m_Hvs.Port(),
              m_Hvs.SteppingD() ? 'D' : 'C', m_Hvs.Channel(), m_Hvs.Width(), m_Hvs.Height());
@@ -209,9 +210,37 @@ bool Display::WaitForFlip(unsigned from) {
 }
 
 bool Display::MatchRate(double fps, unsigned audio_fs) {
-  (void)fps;
-  (void)audio_fs;
-  return false;
+  if (!m_bAttached) {
+    return false;
+  }
+  Timing current, wanted;
+  if (!m_ModeSetter.Current(&current)) {
+    return false;
+  }
+  if (!ChooseMode(current, fps, m_ModeSetter.GetEdid(), &wanted)) {
+    CLogger::Get()->Write(FromDisplay, LogNotice,
+                          "No %ux%u mode at %.2f Hz the display lists; keeping %.2f Hz",
+                          current.h_active, current.v_active, fps, current.Refresh());
+    return false;
+  }
+  if (wanted.vic == current.vic &&
+      (wanted.pixel_hz > current.pixel_hz ? wanted.pixel_hz - current.pixel_hz
+                                          : current.pixel_hz - wanted.pixel_hz) < 1000) {
+    return false;
+  }
+  m_ModeSetter.Set(m_Hvs, wanted, audio_fs, Reinstall, this);
+  return true;
+}
+
+void Display::Reinstall(void *param) {
+  Display *display = (Display *)param;
+  // The buffer last shown is the front one.
+  if (display->m_bHavePicture && display->m_Plane.address != 0) {
+    display->m_Hvs.Show(&display->m_Plane);
+  } else {
+    display->m_Hvs.Show(0);
+  }
+  display->m_bFlipPending = false;
 }
 
 void Display::Blank(void) {
