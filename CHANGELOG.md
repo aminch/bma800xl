@@ -1,3 +1,10 @@
+## 1.2.0 – 2026-10-13
+
+- Raspberry Pi 4 B and Pi 400: the 3D GPU draws the CRT shader and smooth scaling (`crt_gpu=0` in `cmdline.txt` for the ARM)
+  - CRT shader with curvature and smooth scaling at the full 1080 lines
+- CRT Curvature in the Video menu
+- `config.txt`: 1080p recommended for the CRT shader
+
 ## 1.1.0 – 2026-10-12
 
 - Raspberry Pi 4 B and Pi 400 support
