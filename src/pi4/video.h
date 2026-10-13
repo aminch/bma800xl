@@ -160,6 +160,8 @@ private:
   v3d::Crt *m_pGpu;
   bool m_bGpuReady;
   unsigned m_nKmsSrcW, m_nKmsSrcH;
+  double m_fKmsAspect, m_fKmsScale;  // the last SetViewKms()'s
+  bool m_bKmsResize;                 // SetViewKms() again at the next frame
 
   static Pi4Video *s_pThis;
 };

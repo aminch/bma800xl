@@ -71,7 +71,8 @@ Pi4Video::Pi4Video(void)
       m_bScalerReady(false), m_pJobPage(0), m_pKms(0),
       m_Driver(Driver::Firmware), m_pKmsTarget(0),
       m_nKmsPitch(0), m_pGpuOffered(0), m_pGpu(0), m_bGpuReady(false),
-      m_nKmsSrcW(0), m_nKmsSrcH(0) {
+      m_nKmsSrcW(0), m_nKmsSrcH(0), m_fKmsAspect(1.0), m_fKmsScale(1.0),
+      m_bKmsResize(false) {
   memset(m_Palette, 0, sizeof m_Palette);
   memset(m_Palette565, 0, sizeof m_Palette565);
   for (unsigned i = 0; i < 256; i++) {
@@ -422,7 +423,12 @@ void Pi4Video::Present(bool wait_vsync) {
         m_pGpu->SetPalette(i, m_Palette[i]);
       }
       m_pGpu->SetMode(m_bCrt, m_bSmooth, m_bCurvature);
-      ConfigureGpu();
+      if (m_pKms != 0 && m_nViewW > 0) {
+        // The picture's size may change with the GPU drawing it.
+        SetViewKms(m_nViewX, m_nViewY, m_nViewW, m_nViewH, m_fKmsAspect, m_fKmsScale);
+      } else {
+        ConfigureGpu();
+      }
       if (m_pGpu != 0) {
         CLogger::Get()->Write(FromVideo, LogNotice, "Drawn by the GPU from now on");
       }
@@ -432,6 +438,10 @@ void Pi4Video::Present(bool wait_vsync) {
     }
   }
   if (m_pKms != 0) {
+    if (m_bKmsResize && m_nViewW > 0) {
+      m_bKmsResize = false;
+      SetViewKms(m_nViewX, m_nViewY, m_nViewW, m_nViewH, m_fKmsAspect, m_fKmsScale);
+    }
     PresentKms(wait_vsync);
     return;
   }
@@ -535,6 +545,8 @@ void Pi4Video::SetViewKms(int x, int y, int w, int h, double aspect,
   m_nViewY = y;
   m_nViewW = w;
   m_nViewH = h;
+  m_fKmsAspect = aspect;
+  m_fKmsScale = scale;
 
   const unsigned width = m_pKms->Width(), height = m_pKms->Height();
   unsigned dest_h;
@@ -560,7 +572,9 @@ void Pi4Video::SetViewKms(int x, int y, int w, int h, double aspect,
   unsigned src_w = (unsigned)w, src_h = (unsigned)h;
   bool nearest = !m_bSmooth;
   if (m_bCrt) {
-    unsigned max_height = m_bCurvature && m_bSmooth ? 720 : 1080;
+    // The ARM can't draw curved and smooth at more than 720 lines; the GPU
+    // can.
+    unsigned max_height = m_bCurvature && m_bSmooth && m_pGpu == 0 ? 720 : 1080;
     unsigned divide = (dest_h + max_height - 1) / max_height;
     src_w = dest_w / divide;
     src_h = dest_h / divide;
@@ -670,4 +684,6 @@ void Pi4Video::DropGpu(const char *why) {
   CLogger::Get()->Write(FromVideo, LogWarning, "Drawn by the ARM, not the GPU: %s", why);
   m_pGpu = 0;
   m_bGpuReady = false;
+  // Back to the size the ARM can draw, from the next frame.
+  m_bKmsResize = m_pKms != 0 && m_bCrt;
 }
