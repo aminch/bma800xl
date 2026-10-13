@@ -34,9 +34,9 @@ hdmi_mode=19
 
 # The same for the Pi 4's second HDMI port (HDMI1), which the lines above
 # don't cover.
-[HDMI:1]
-hdmi_group=1
-hdmi_mode=19
+[pi4]
+hdmi_group:1=1
+hdmi_mode:1=19
 [all]
 
 # Other useful modes (hdmi_group=1):

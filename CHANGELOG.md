@@ -4,6 +4,7 @@
   - CRT shader with curvature and smooth scaling at the full 1080 lines
 - CRT Curvature in the Video menu
 - `config.txt`: 1080p recommended for the CRT shader
+- Fix Pi 2/3 starting in 1080p instead of 720p 50 Hz
 
 ## 1.1.0 – 2026-10-12
 
