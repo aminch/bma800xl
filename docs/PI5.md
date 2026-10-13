@@ -13,7 +13,9 @@ device trees and `overlays/bcm2712d0.dtbo`.
 
 The picture is the firmware's framebuffer, at the resolution the firmware
 chooses for the display. Smooth scaling and the CRT shader are drawn by the
-ARM cores, as on the Pi 4 with `crt_gpu=0`.
+Pi 5's 3D GPU (V3D 7.1), with the same options as on the Pi 4
+(`crt_gpu`, `crt_gpu_test`); if the GPU doesn't start, the ARM cores draw
+them.
 
 ## Sound
 
@@ -28,5 +30,4 @@ button or key starts it again.
 
 ## Not yet
 
-The 3D GPU and BMA800XL's own display driver (`video_driver`) are for
-later.
+BMA800XL's own display driver (`video_driver`) is for later.

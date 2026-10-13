@@ -179,10 +179,10 @@ uint32_t Renderer::WriteUniforms(const Shader &shader, const Texture &texture,
       }
       break;
     case UniformViewportXScale:
-      value = FloatBits(target.width * 0.5f * 256.0f);
+      value = FloatBits(target.width * 0.5f * ClipperXyGranularity);
       break;
     case UniformViewportYScale:
-      value = FloatBits(target.height * 0.5f * 256.0f);
+      value = FloatBits(target.height * 0.5f * ClipperXyGranularity);
       break;
     case UniformViewportZOffset:
     case UniformViewportZScale:
@@ -242,7 +242,11 @@ bool Renderer::Draw(const Program &program, const Texture &texture, const Target
   }
   const uint32_t code[] = {loaded->fs, loaded->vs, loaded->cs};
   const uint32_t uniforms[] = {fs_uniforms, vs_uniforms, cs_uniforms};
+#if RASPPI >= 5
+  PackShaderRecord(record, program, code, uniforms, m_pGpu->DrawIndexRecord());
+#else
   PackShaderRecord(record, program, code, uniforms, Gpu::Address(m_pDefaults));
+#endif
   PackAttributeRecord(record + ShaderRecordBytes, Gpu::Address(vertices), program, 16);
 
   // Binning.
@@ -306,8 +310,7 @@ bool Renderer::Draw(const Program &program, const Texture &texture, const Target
   // Rendering.
   Cl rcl(m_pRcl, RclBytes);
   rcl.RenderingModeCommon(width, height, 1, InternalBpp32);
-  rcl.RenderingModeClearColor(clear, 0);
-  rcl.RenderingModeColor(InternalBpp32, InternalType8, ClampNone);
+  rcl.RenderingModeRenderTarget0(clear);
   rcl.RenderingModeZsClear(1.0f, 0);
   rcl.TileListInitialBlockSize(0, true);
   rcl.MulticoreTileListSetBase(Gpu::Address(m_pTileAlloc));

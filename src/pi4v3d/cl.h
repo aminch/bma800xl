@@ -1,13 +1,17 @@
 //
 // cl.h
 //
-// Writes V3D 4.2 control list packets (an opcode byte, then the packet's
-// fields at their bit positions, little endian) and the records they point
-// to. Only the packets and records BMA800XL uses.
+// Writes control list packets (an opcode byte, then the packet's fields at
+// their bit positions, little endian) and the records they point to, for
+// V3D 4.2 (the Pi 4) or V3D 7.1 (the Pi 5). Only the packets and records
+// BMA800XL uses.
 //
 // Packet codes, field positions and values from Mesa,
 // src/broadcom/cle/v3d_packet.xml (Copyright (C) 2016 Broadcom, MIT
-// licence); packing rules from src/broadcom/cle/gen_pack_header.py.
+// licence); packing rules from src/broadcom/cle/gen_pack_header.py; the
+// V3D 7.1 render target and texture settings from
+// src/gallium/drivers/v3d/v3dx_rcl.c, v3dx_emit.c and v3dx_state.c, and
+// src/broadcom/common/v3d_util.c (tile size, render target stride).
 //
 // This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
 // Raspberry Pi. See LICENSE for licensing details.
@@ -41,6 +45,18 @@ const unsigned TextureRgba8 = 4;
 const unsigned SwizzleRed = 2, SwizzleGreen = 3, SwizzleBlue = 4, SwizzleAlpha = 5;
 const unsigned WrapClamp = 1;
 const unsigned FlagsZeroed = 1;          // Varying Flags Action
+#if RASPPI >= 5
+const unsigned TypeClamp8 = 8;           // Render Target Type Clamp: 8-bit
+const unsigned ZClipMinusOneToOne = 1;   // Z Clip Mode
+const unsigned Log2Tile64 = 3;           // 64 pixel tiles
+const unsigned TileWidth = 64;
+
+// The clipper's XY scale is in 1/64 pixels.
+const float ClipperXyGranularity = 64.0f;
+#else
+// The clipper's XY scale is in 1/256 pixels.
+const float ClipperXyGranularity = 256.0f;
+#endif
 
 // Fields packed at their bit positions, for packets and for the records
 // that packets point to.
@@ -162,12 +178,16 @@ public:
     Emit(92, f);
   }
 
-  // Cfg Bits: both faces drawn, depth test COMPARE, no depth writes.
+  // Cfg Bits: both faces drawn, depth test COMPARE, no depth writes; on
+  // V3D 7.1 Z clipped to -1..1.
   void CfgBits(unsigned compare) {
     Bits f;
     f.Set(0, 1, 1);
     f.Set(1, 1, 1);
     f.Set(12, 3, compare);
+#if RASPPI >= 5
+    f.Set(22, 2, ZClipMinusOneToOne);
+#endif
     Emit(96, f, 3);
   }
 
@@ -218,8 +238,8 @@ public:
   // Half the viewport width and height, in pixels.
   void ClipperXyScaling(float half_width, float half_height) {
     Bits f;
-    f.SetFloat(0, half_width * 256.0f);
-    f.SetFloat(32, half_height * 256.0f);
+    f.SetFloat(0, half_width * ClipperXyGranularity);
+    f.SetFloat(32, half_height * ClipperXyGranularity);
     Emit(110, f);
   }
 
@@ -230,14 +250,22 @@ public:
     Emit(111, f);
   }
 
-  // Tile Binning Mode Cfg: 64-byte tile allocation blocks.
+  // Tile Binning Mode Cfg: 64-byte tile allocation blocks. V3D 7.1 takes
+  // the tile size (64x64) instead of the render targets.
   void TileBinningModeCfg(unsigned width, unsigned height, unsigned targets,
                           unsigned max_bpp) {
     Bits f;
     f.Set(2, 2, 0);
     f.Set(4, 2, 0);
+#if RASPPI >= 5
+    (void)targets;
+    (void)max_bpp;
+    f.Set(8, 3, Log2Tile64);
+    f.Set(11, 3, Log2Tile64);
+#else
     f.Set(8, 4, targets - 1);
     f.Set(12, 2, max_bpp);
+#endif
     f.Set(32, 16, width - 1);
     f.Set(48, 16, height - 1);
     Emit(120, f);
@@ -257,11 +285,18 @@ public:
     Emit(23, f);
   }
 
+  // On V3D 7.1 Clear Render Targets, which takes no fields.
   void ClearTileBuffers(bool render_targets, bool z_stencil) {
+#if RASPPI >= 5
+    (void)render_targets;
+    (void)z_stencil;
+    Op(25);
+#else
     Bits f;
     f.Set(0, 1, render_targets);
     f.Set(1, 1, z_stencil);
     Emit(25, f);
+#endif
   }
 
   // Store Tile Buffer General: BUFFER to raster memory at ADDRESS, STRIDE
@@ -277,7 +312,8 @@ public:
     Emit(29, f);
   }
 
-  // Tile Rendering Mode Cfg (Common), sub-id 0.
+  // Tile Rendering Mode Cfg (Common), sub-id 0. On V3D 7.1 the tile size
+  // (64x64) instead of the largest bpp.
   void RenderingModeCommon(unsigned width, unsigned height, unsigned targets,
                            unsigned max_bpp) {
     Bits f;
@@ -285,41 +321,62 @@ public:
     f.Set(4, 4, targets - 1);
     f.Set(8, 16, width);
     f.Set(24, 16, height);
+#if RASPPI >= 5
+    (void)max_bpp;
+    f.Set(52, 3, Log2Tile64);
+    f.Set(55, 3, Log2Tile64);
+#else
     f.Set(40, 2, max_bpp);
+#endif
     f.Set(46, 1, 1);                    // early Z disable
     f.Set(47, 4, InternalDepth24);
     Emit(121, f, 8);
   }
 
-  // Tile Rendering Mode Cfg (Color), sub-id 1: render target 0 only.
-  void RenderingModeColor(unsigned bpp, unsigned type, unsigned clamp) {
+  // Render target 0, 32 bpp, 8-bit unsigned normalised, unclamped, cleared
+  // to CLEAR. V3D 4.2: Tile Rendering Mode Cfg (Clear Colors Part1), sub-id
+  // 3, and (Color), sub-id 1. V3D 7.1: (Render Target Part1), sub-id 2,
+  // at the start of the tile buffer, 64 pixels a row.
+  void RenderingModeRenderTarget0(uint32_t clear) {
+#if RASPPI >= 5
+    Bits f;
+    f.Set(0, 3, 2);
+    f.Set(3, 3, 0);
+    f.Set(7, 11, 0);                    // base address
+    f.Set(18, 7, TileWidth * 1 / 2 - 1); // stride: 128 bits, two rows
+    f.Set(25, 2, InternalBpp32);
+    f.Set(27, 5, TypeClamp8);
+    f.Set(32, 32, clear);
+    Emit(121, f, 8);
+#else
+    Bits c;
+    c.Set(0, 4, 3);
+    c.Set(4, 4, 0);
+    c.Set(8, 32, clear);
+    c.Set(40, 24, 0);
+    Emit(121, c, 8);
     Bits f;
     f.Set(0, 4, 1);
-    f.Set(4, 2, bpp);
-    f.Set(6, 4, type);
-    f.Set(10, 2, clamp);
+    f.Set(4, 2, InternalBpp32);
+    f.Set(6, 4, InternalType8);
+    f.Set(10, 2, ClampNone);
     Emit(121, f, 8);
+#endif
   }
 
-  // Tile Rendering Mode Cfg (ZS Clear Values), sub-id 2.
+  // Tile Rendering Mode Cfg (ZS Clear Values): sub-id 2 on V3D 4.2, 1 on
+  // V3D 7.1.
   void RenderingModeZsClear(float z, unsigned stencil) {
     uint32_t zbits;
     memcpy(&zbits, &z, 4);
     Bits f;
+#if RASPPI >= 5
+    f.Set(0, 4, 1);
+#else
     f.Set(0, 4, 2);
+#endif
     f.Set(8, 8, stencil);
     f.Set(16, 32, zbits);
-    Emit(121, f, 8);
-  }
-
-  // Tile Rendering Mode Cfg (Clear Colors Part1), sub-id 3: the low 56
-  // bits of the clear colour of render target 0.
-  void RenderingModeClearColor(uint32_t low, uint32_t next24) {
-    Bits f;
-    f.Set(0, 4, 3);
-    f.Set(4, 4, 0);
-    f.Set(8, 32, low);
-    f.Set(40, 24, next24);
     Emit(121, f, 8);
   }
 
@@ -385,11 +442,57 @@ private:
 };
 
 // Records that control lists point to.
+#if RASPPI >= 5
+const unsigned ShaderRecordBytes = 32;
+#else
 const unsigned ShaderRecordBytes = 36;
+#endif
 const unsigned AttributeRecordBytes = 16;
 const unsigned TextureStateBytes = 24;
 const unsigned SamplerStateBytes = 24;
 
+#if RASPPI >= 5
+// GL Shader State Record for PROGRAM: CODE and UNIFORMS are the addresses
+// for its fragment, vertex and coordinate shaders, in that order. DRAW_INDEX:
+// the layout with the draw index fields (Gpu::DrawIndexRecord()). There are
+// no default attribute values on V3D 7.1.
+inline void PackShaderRecord(void *to, const Program &program, const uint32_t code[3],
+                             const uint32_t uniforms[3], bool draw_index) {
+  const Shader &vs = program.vs, &cs = program.cs;
+  Bits f;
+  f.Set(1, 1, 1);                       // clipping
+  f.Set(2, 1, cs.uses_vertex_id);
+  f.Set(3, 1, cs.uses_instance_id);
+  unsigned at = draw_index ? 7 : 5;     // vertex shader flags
+  f.Set(at, 1, vs.uses_vertex_id);
+  f.Set(at + 1, 1, vs.uses_instance_id);
+  at = draw_index ? 12 : 8;             // fragment shader flags
+  f.Set(at, 1, program.writes_z);
+  f.Set(at + 1, 1, program.disable_early_z);
+  at = draw_index ? 15 : 12;
+  f.Set(at, 1, program.uses_centre_w);
+  f.Set(at + 5, 1, program.scoreboard_wait_on_first_switch);
+  f.Set(at + 6, 1, !program.implicit_point_line_varyings);
+  f.Set(24, 8, program.varyings);
+  f.Set(32, 4, cs.vpm_output_size);
+  f.Set(36, 4, program.bin.ve);
+  f.Set(40, 4, cs.vpm_input_size);
+  f.Set(44, 4, program.bin.as - 1);
+  f.Set(48, 4, vs.vpm_output_size);
+  f.Set(52, 4, program.render.ve);
+  f.Set(56, 4, vs.vpm_input_size);
+  f.Set(60, 4, program.render.as - 1);
+  const Shader *shaders[] = {&program.fs, &program.vs, &program.cs};
+  for (unsigned i = 0; i < 3; i++) {
+    at = 64 + i * 64;
+    f.Set(at, 32, code[i]);
+    f.Set(at, 1, shaders[i]->threads == 4);
+    f.Set(at + 1, 1, shaders[i]->single_segment);
+    f.Set(at + 32, 32, uniforms[i]);
+  }
+  f.Write(to, ShaderRecordBytes);
+}
+#else
 // GL Shader State Record for PROGRAM: CODE and UNIFORMS are the addresses
 // for its fragment, vertex and coordinate shaders, in that order; DEFAULTS
 // the default attribute values.
@@ -430,6 +533,7 @@ inline void PackShaderRecord(void *to, const Program &program, const uint32_t co
   }
   f.Write(to, ShaderRecordBytes);
 }
+#endif
 
 // GL Shader State Attribute Record: 4 floats a vertex at ADDRESS, STRIDE
 // bytes apart. The coordinate shader must read at least one (GFXH-930).
@@ -447,10 +551,17 @@ inline void PackAttributeRecord(void *to, uint32_t address, const Program &progr
 }
 
 // Texture Shader State: an RGBA8 picture at ADDRESS, level 0 only, strictly
-// UIF without XOR and without extra padding.
+// UIF without XOR and without extra padding. On V3D 7.1 the chroma
+// settings as Mesa sets them for every texture.
 inline void PackTextureState(void *to, uint32_t address, unsigned width, unsigned height) {
   Bits f;
   f.Set(0, 32, address);
+#if RASPPI >= 5
+  f.Set(136, 1, 1);                     // chroma offset x
+  f.Set(137, 1, 1);                     // chroma offset y
+  f.Set(138, 26, address >> 6);         // Cb base
+  f.Set(164, 26, address >> 6);         // Cr base
+#endif
   f.Set(58, 14, width);
   f.Set(72, 14, height);
   f.Set(86, 14, 1);                     // depth

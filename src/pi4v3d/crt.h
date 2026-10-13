@@ -1,11 +1,11 @@
 //
 // crt.h
 //
-// The Pi 4's picture drawn by the 3D GPU: the Atari's 8-bit indexed screen
-// is turned into colour in a texture by the ARM, and the GPU scales it to
-// the output, with crt-pi (tools/v3dshader/crt.frag) or as a plain copy,
-// sharp or smooth. The same pictures as src/pi4/scaler.h draws on the ARM
-// cores, which the self-test checks.
+// The picture drawn by the 3D GPU of the Pi 4 or Pi 5: the Atari's 8-bit
+// indexed screen is turned into colour in a texture by the ARM, and the GPU
+// scales it to the output, with crt-pi (tools/v3dshader/crt.frag) or as a
+// plain copy, sharp or smooth. The same pictures as src/pi4/scaler.h draws
+// on the ARM cores, which the self-test checks.
 //
 // Pixels are 32-bit words 0xAARRGGBB, as the framebuffer and the HVS take
 // them. The GPU sees them as red in the low byte, but every channel is

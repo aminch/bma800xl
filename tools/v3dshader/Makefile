@@ -1,6 +1,7 @@
 # Builds v3dshader against a built Mesa source tree (see README):
 #   make MESA=/path/to/mesa
-# and the shader headers for src/pi4v3d/:
+# and the shader headers for src/pi4v3d/, for V3D 4.2 (shader_NAME.h) and
+# V3D 7.1 (shader71_NAME.h):
 #   make MESA=/path/to/mesa headers
 
 MESA ?= mesa
@@ -58,7 +59,10 @@ crt_curve_smooth.frag.spv: crt.frag
 ../../src/pi4v3d/shader_%.h: rect.vert.spv %.frag.spv v3dshader
 	./v3dshader $* rect.vert.spv $*.frag.spv > $@
 
-headers: $(SHADERS:%=../../src/pi4v3d/shader_%.h)
+../../src/pi4v3d/shader71_%.h: rect.vert.spv %.frag.spv v3dshader
+	./v3dshader -71 $* rect.vert.spv $*.frag.spv > $@
+
+headers: $(SHADERS:%=../../src/pi4v3d/shader_%.h) $(SHADERS:%=../../src/pi4v3d/shader71_%.h)
 
 clean:
 	rm -f v3dshader *.spv

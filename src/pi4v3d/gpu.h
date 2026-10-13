@@ -1,15 +1,20 @@
 //
 // gpu.h
 //
-// The Pi 4's 3D GPU (V3D 4.2): powers it up, sets up its MMU and runs
-// rendering jobs written as control lists (cl.h).
+// The 3D GPU, V3D 4.2 on the Pi 4 and V3D 7.1 on the Pi 5: powers it up,
+// sets up its MMU and runs rendering jobs written as control lists (cl.h).
 //
 // Sources:
 //  - Linux, drivers/gpu/drm/v3d/ (v3d_drv.c, v3d_gem.c, v3d_mmu.c,
 //    v3d_sched.c), Copyright (C) 2014-2018 Broadcom, GPL 2.0 or later: the
-//    start-up order, cache and MMU set-up, starting a job.
+//    start-up order, cache and MMU set-up, starting a job, the V3D 7.1
+//    SMS power-up and reset.
 //  - Linux, drivers/pmdomain/bcm/bcm2835-power.c (GPL 2.0 or later): the
-//    BCM2711 V3D reset and bus bridges.
+//    BCM2711 V3D reset and bus bridges; the BCM2712 GRAFX power-up and
+//    V3D reset.
+//  - Mesa, src/broadcom/common/v3d_device_info.c and v3d_device_info.h
+//    (MIT licence): the VPM size and revision, and the revision with the
+//    draw index shader record.
 //  - Raspberry Pi firmware mailbox: the V3D power domain and clock.
 //  - Mesa, src/broadcom/vulkan/v3dvx_meta_common.c (Copyright (C) 2021
 //    Raspberry Pi Ltd, MIT licence): a rendering job without binning.
@@ -58,6 +63,10 @@ public:
   // it. Logs the result.
   bool ClearTest(void);
 
+  // V3D 7.1.10 and later (the BCM2712 D0) take the shader state record
+  // with draw index fields.
+  bool DrawIndexRecord(void) const { return m_nRevision >= 10; }
+
   // The GPU address of memory from Allocate().
   static uint32_t Address(const void *p) { return (uint32_t)(uintptr_t)p; }
 
@@ -81,6 +90,7 @@ private:
   void SetCore(uint32_t reg, uint32_t value) const;
 
   bool m_bReady;
+  unsigned m_nRevision;
   unsigned m_nBinUs, m_nRenderUs;
   uint32_t *m_pPageTable;
   uint8_t *m_pScratch;

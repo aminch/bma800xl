@@ -26,16 +26,40 @@ static const char FromGpu[] = "v3d";
 
 namespace {
 
-// Waits until (read32(ADDRESS) & MASK) is 0, at most TIMEOUT_US.
-bool WaitClear(uintptr_t address, uint32_t mask, unsigned timeout_us) {
+// Waits until DONE() is true, at most TIMEOUT_US.
+template <typename Done> bool WaitUntil(Done done, unsigned timeout_us) {
   u64 start = CTimer::GetClockTicks64();
   u64 limit = (u64)timeout_us * (CLOCKHZ / 1000000);
-  while (read32(address) & mask) {
+  while (!done()) {
     if (CTimer::GetClockTicks64() - start > limit) {
-      return false;
+      return done();
     }
   }
   return true;
+}
+
+// Waits until (read32(ADDRESS) & MASK) is 0, at most TIMEOUT_US.
+bool WaitClear(uintptr_t address, uint32_t mask, unsigned timeout_us) {
+  return WaitUntil([=] { return (read32(address) & mask) == 0; }, timeout_us);
+}
+
+// Sets the V3D clock to its highest rate through the firmware; the rate
+// set, or 0.
+uint32_t SetClock(void) {
+  CBcmPropertyTags tags;
+  TPropertyTagClockRate max;
+  max.nClockId = ClockV3d;
+  if (!tags.GetTag(PROPTAG_GET_MAX_CLOCK_RATE, &max, sizeof max, 4) || max.nRate == 0) {
+    return 0;
+  }
+  TPropertyTagSetClockRate set;
+  set.nClockId = ClockV3d;
+  set.nRate = max.nRate;
+  set.nSkipSettingTurbo = SKIP_SETTING_TURBO;
+  if (!tags.GetTag(PROPTAG_SET_CLOCK_RATE, &set, sizeof set, 12)) {
+    return 0;
+  }
+  return set.nRate;
 }
 
 // The first 1 GB of memory is mapped one to one; HEAP_DMA30 memory is in
@@ -46,7 +70,8 @@ const unsigned TablePages = (1ull << 32) >> PageShift;
 } // namespace
 
 Gpu::Gpu(void)
-    : m_bReady(false), m_nBinUs(0), m_nRenderUs(0), m_pPageTable(0), m_pScratch(0) {}
+    : m_bReady(false), m_nRevision(0), m_nBinUs(0), m_nRenderUs(0), m_pPageTable(0),
+      m_pScratch(0) {}
 
 uint32_t Gpu::Hub(uint32_t reg) const { return read32(HubBase + reg); }
 void Gpu::SetHub(uint32_t reg, uint32_t value) const { write32(HubBase + reg, value); }
@@ -64,6 +89,73 @@ void *Gpu::Allocate(size_t bytes, size_t align) {
   return p;
 }
 
+#if RASPPI >= 5
+// The firmware turns the V3D clock on and sets it. The GRAFX power domain
+// is powered up (unless the firmware has), the V3D's reset released, and
+// its SMS taken out of power off and reset, as Linux does on the BCM2712.
+// The GPU isn't read before then.
+bool Gpu::PowerUp(void) {
+  CLogger *log = CLogger::Get();
+  struct {
+    TPropertyTag tag;
+    u32 clock;
+    u32 state;
+  } PACKED clock_on;
+  clock_on.clock = ClockV3d;
+  clock_on.state = 1;
+  CBcmPropertyTags tags;
+  bool on = tags.GetTag(TagSetClockState, &clock_on, sizeof clock_on, 8);
+  uint32_t rate = SetClock();
+  uintptr_t grafx = PmBase + PmGrafx;
+  uintptr_t reset = PmBase + PmGrafx2712;
+  log->Write(FromGpu, LogNotice, "Clock %s, %u Hz, GRAFX %08X, V3D reset %08X",
+             on ? "on" : "not answered", rate, read32(grafx), read32(reset));
+
+  if ((read32(grafx) & PmPowUp) == 0) {
+    // Power up, raising the inrush current allowed until power is good.
+    bool good = false;
+    for (uint32_t inrush = 0; inrush <= 3 && !good; inrush++) {
+      write32(grafx, PmPassword | (read32(grafx) & 0x00FFFFFF & ~PmInrushMask) |
+                         (inrush << PmInrushShift) | PmPowUp);
+      good = WaitUntil([=] { return (read32(grafx) & PmPowOk) != 0; }, 5);
+    }
+    if (!good) {
+      log->Write(FromGpu, LogWarning, "GRAFX power not good: %08X", read32(grafx));
+      return false;
+    }
+    write32(grafx, PmPassword | (read32(grafx) & 0x00FFFFFF) | PmIsPow);
+    write32(grafx, PmPassword | (read32(grafx) & 0x00FFFFFF) | PmMemRep);
+    if (!WaitUntil([=] { return (read32(grafx) & PmMrDone) != 0; }, 1000)) {
+      log->Write(FromGpu, LogWarning, "GRAFX memory repair timed out");
+      return false;
+    }
+    write32(grafx, PmPassword | (read32(grafx) & 0x00FFFFFF) | PmIsFunc);
+    log->Write(FromGpu, LogNotice, "GRAFX powered up: %08X", read32(grafx));
+  }
+
+  CTimer::SimpleusDelay(1);
+  write32(reset, PmPassword | (read32(reset) & 0x00FFFFFF) | PmV3dResetN);
+  CTimer::SimpleusDelay(1);
+
+  write32(SmsBase + SmsTeeCs, SmsClearPowerOff);
+  if (!WaitUntil([] { return (read32(SmsBase + SmsTeeCs) & SmsStateMask) == SmsIdle; },
+                 100000)) {
+    log->Write(FromGpu, LogWarning, "SMS didn't power up: %08X", read32(SmsBase + SmsTeeCs));
+    return false;
+  }
+  write32(SmsBase + SmsReeCs, SmsReset);
+  if (!WaitUntil(
+          [] {
+            uint32_t state = read32(SmsBase + SmsReeCs) & SmsStateMask;
+            return state != SmsIsolatingForReset && state != SmsResetting;
+          },
+          100000)) {
+    log->Write(FromGpu, LogWarning, "SMS reset timed out: %08X", read32(SmsBase + SmsReeCs));
+    return false;
+  }
+  return Present(true);
+}
+#else
 // The firmware turns on the V3D power domain and its clock; if the GPU
 // still doesn't answer, its reset is released and its bus bridges opened,
 // as Linux does on the BCM2711.
@@ -74,18 +166,7 @@ bool Gpu::PowerUp(void) {
   domain.nDeviceId = DomainV3d;
   domain.nState = POWER_STATE_ON;
   bool on = tags.GetTag(TagSetDomainState, &domain, sizeof domain, 8);
-  TPropertyTagClockRate max;
-  max.nClockId = ClockV3d;
-  uint32_t rate = 0;
-  if (tags.GetTag(PROPTAG_GET_MAX_CLOCK_RATE, &max, sizeof max, 4) && max.nRate != 0) {
-    TPropertyTagSetClockRate set;
-    set.nClockId = ClockV3d;
-    set.nRate = max.nRate;
-    set.nSkipSettingTurbo = SKIP_SETTING_TURBO;
-    if (tags.GetTag(PROPTAG_SET_CLOCK_RATE, &set, sizeof set, 12)) {
-      rate = set.nRate;
-    }
-  }
+  uint32_t rate = SetClock();
   log->Write(FromGpu, LogNotice, "Power domain %s, clock %u Hz", on ? "on" : "not answered",
              rate);
   CTimer::SimpleMsDelay(1);
@@ -108,7 +189,29 @@ bool Gpu::PowerUp(void) {
   }
   return Present(true);
 }
+#endif
 
+#if RASPPI >= 5
+// HUB_IDENT1 gives the version, 7.1 on the BCM2712, and HUB_IDENT3 the
+// revision; the core's IDENT1 its VPM size, which must be at least the
+// 16 KB the shaders were compiled for (tools/v3dshader).
+bool Gpu::Present(bool log_failure) {
+  uint32_t ident1 = Hub(HubIdent1);
+  unsigned tech = ident1 & 0xF, version = (ident1 >> 4) & 0xF;
+  m_nRevision = (Hub(HubIdent3) >> 8) & 0xFF;
+  unsigned vpm = (Core(CtlIdent1) >> 28) * 8192;
+  bool found = tech == 7 && version == 1 && vpm >= 16384;
+  if (!found && !log_failure) {
+    return false;
+  }
+  CLogger::Get()->Write(FromGpu, LogNotice,
+                        "IDENT0 %08X IDENT1 %08X IDENT2 %08X IDENT3 %08X: V3D %u.%u.%u, "
+                        "%u core(s), VPM %u bytes",
+                        Hub(HubIdent0), ident1, Hub(HubIdent2), Hub(HubIdent3), tech, version,
+                        m_nRevision, (ident1 >> 8) & 0xF, vpm);
+  return found;
+}
+#else
 // HUB_IDENT1 gives the version: 4.2 on the BCM2711. LOG_FAILURE: log what
 // was read even if it isn't a V3D 4.2.
 bool Gpu::Present(bool log_failure) {
@@ -123,6 +226,7 @@ bool Gpu::Present(bool log_failure) {
                         (ident1 >> 8) & 0xF);
   return found;
 }
+#endif
 
 bool Gpu::SetUpMmu(void) {
   m_pPageTable = (uint32_t *)Allocate(TablePages * 4, 4096);
@@ -257,8 +361,7 @@ bool Gpu::ClearTest(void) {
 
   Cl rcl(rcl_mem, 4096);
   rcl.RenderingModeCommon(Width, Height, 1, InternalBpp32);
-  rcl.RenderingModeClearColor(Colour, 0);
-  rcl.RenderingModeColor(InternalBpp32, InternalType8, ClampNone);
+  rcl.RenderingModeRenderTarget0(Colour);
   rcl.RenderingModeZsClear(1.0f, 0);
   rcl.TileListInitialBlockSize(0, true);
   rcl.MulticoreTileListSetBase(Address(tile_alloc));

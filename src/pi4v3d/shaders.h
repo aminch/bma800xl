@@ -2,7 +2,8 @@
 // shaders.h
 //
 // The compiled GPU shader programs (tools/v3dshader): the generated
-// shader_*.h headers, each included once, in shaders.cpp.
+// headers, shader_*.h for V3D 4.2 or shader71_*.h for V3D 7.1, each
+// included once, in shaders.cpp.
 //
 // This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
 // Raspberry Pi. See LICENSE for licensing details.

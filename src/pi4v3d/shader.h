@@ -23,7 +23,7 @@ namespace v3d {
 enum UniformKind {
   UniformConstant,        // DATA itself
   UniformParameter,       // 32-bit word DATA of the shader parameters
-  UniformViewportXScale,  // half the viewport width, in 1/256 pixels
+  UniformViewportXScale,  // half the viewport width, in the clipper's units
   UniformViewportYScale,
   UniformViewportZOffset,
   UniformViewportZScale,

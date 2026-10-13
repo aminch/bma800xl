@@ -1,7 +1,7 @@
 //
 // draw.h
 //
-// Drawing with the Pi 4's 3D GPU: a textured rectangle drawn through a
+// Drawing with the 3D GPU (Pi 4 and Pi 5): a textured rectangle drawn through a
 // compiled shader program (shader.h) into an RGBA picture in memory. A
 // binning job sorts the rectangle into 64x64 tiles; a rendering job runs
 // the fragment shader on each tile and stores it.

@@ -40,11 +40,11 @@ BMA800XL uses the crt-pi CRT shader by davej, as included in BMC64, under the [G
 
 ## Mesa
 
-For the Raspberry Pi 4's 3D GPU, BMA800XL adapts parts of the [Mesa 3D graphics library](https://mesa3d.org/)'s Broadcom V3D drivers (`src/pi4v3d/`, `tools/v3dshader/`), under the MIT license. The GPU shaders are compiled with Mesa 25.2.8's V3D compiler.
+For the 3D GPU of the Raspberry Pi 4 and Pi 5, BMA800XL adapts parts of the [Mesa 3D graphics library](https://mesa3d.org/)'s Broadcom V3D drivers (`src/pi4v3d/`, `tools/v3dshader/`), under the MIT license. The GPU shaders are compiled with Mesa 25.2.8's V3D compiler.
 
 ## Linux
 
-For the Raspberry Pi 4's 3D GPU, BMA800XL adapts parts of the Linux kernel's V3D driver and BCM2835 power domain driver (`src/pi4v3d/`), under the [GNU General Public License version 2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
+For the 3D GPU of the Raspberry Pi 4 and Pi 5, BMA800XL adapts parts of the Linux kernel's V3D driver and BCM2835 power domain driver (`src/pi4v3d/`), under the [GNU General Public License version 2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 
 ## Circle ARM stub
 
