@@ -15,6 +15,7 @@
 
 #include <circle/logger.h>
 #include <circle/synchronize.h>
+#include <circle/timer.h>
 
 namespace v3d {
 
@@ -33,7 +34,7 @@ struct CrtParameters {
 Crt::Crt(void)
     : m_pGpu(0), m_pRenderer(0), m_bReady(false), m_bCrt(false), m_bSmooth(false),
       m_bCurvature(false), m_nPitch(0), m_nViewX(0), m_nViewY(0), m_nViewW(0), m_nViewH(0),
-      m_nDestW(0), m_nDestH(0) {
+      m_nDestW(0), m_nDestH(0), m_nFrames(0), m_nFillUs(0), m_nBinUs(0), m_nRenderUs(0) {
   for (unsigned i = 0; i < 256; i++) {
     m_Palette[i] = 0xFF000000;
   }
@@ -70,6 +71,8 @@ bool Crt::Configure(unsigned src_pitch, int vx, int vy, int vw, int vh, unsigned
   m_nDestW = dw;
   m_nDestH = dh;
   m_bReady = vw > 0 && vh > 0 && m_Texture.Set(vw, vh, m_bSmooth);
+  m_nFrames = 0;
+  m_nFillUs = m_nBinUs = m_nRenderUs = 0;
   return m_bReady;
 }
 
@@ -92,20 +95,35 @@ bool Crt::Draw(const uint8_t *src, const Target &target, int x, int y) {
   if (!m_bReady) {
     return false;
   }
+  u64 start = CTimer::GetClockTicks64();
   Fill(src);
+  m_nFillUs += (CTimer::GetClockTicks64() - start) * 1000000 / CLOCKHZ;
+  bool ok;
   if (!m_bCrt) {
-    return m_pRenderer->Draw(CopyProgram, m_Texture, target, x, y, m_nDestW, m_nDestH, 0xFF000000);
-  }
-  const Program *program;
-  if (m_bCurvature) {
-    program = m_bSmooth ? &CrtCurveSmoothProgram : &CrtCurveProgram;
+    ok = m_pRenderer->Draw(CopyProgram, m_Texture, target, x, y, m_nDestW, m_nDestH,
+                           0xFF000000);
   } else {
-    program = m_bSmooth ? &CrtSmoothProgram : &CrtProgram;
-  }
-  CrtParameters parameters = {(float)m_nViewW, (float)m_nViewH,
-                              ((float)m_nViewH / (float)m_nDestH) / 3.0f};
-  return m_pRenderer->Draw(*program, m_Texture, target, x, y, m_nDestW, m_nDestH, 0xFF000000,
+    const Program *program;
+    if (m_bCurvature) {
+      program = m_bSmooth ? &CrtCurveSmoothProgram : &CrtCurveProgram;
+    } else {
+      program = m_bSmooth ? &CrtSmoothProgram : &CrtProgram;
+    }
+    CrtParameters parameters = {(float)m_nViewW, (float)m_nViewH,
+                                ((float)m_nViewH / (float)m_nDestH) / 3.0f};
+    ok = m_pRenderer->Draw(*program, m_Texture, target, x, y, m_nDestW, m_nDestH, 0xFF000000,
                            &parameters, sizeof parameters);
+  }
+  m_nBinUs += m_pGpu->BinMicroseconds();
+  m_nRenderUs += m_pGpu->RenderMicroseconds();
+  if (++m_nFrames == 250) {
+    CLogger::Get()->Write(FromGpu, LogNotice,
+                          "Frame times (average of %u, %ux%u): texture %u us, binning %u us, "
+                          "rendering %u us", m_nFrames, m_nDestW, m_nDestH,
+                          (unsigned)(m_nFillUs / m_nFrames), (unsigned)(m_nBinUs / m_nFrames),
+                          (unsigned)(m_nRenderUs / m_nFrames));
+  }
+  return ok;
 }
 
 // An Atari-sized source with a view scaled by 2.86 across and 3.21 down,

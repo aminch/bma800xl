@@ -50,6 +50,10 @@ public:
   // Runs the rendering control list from START to END and waits for it.
   bool Render(uint32_t start, uint32_t end, unsigned timeout_ms);
 
+  // How long the last Bin() and Render() took, in microseconds.
+  unsigned BinMicroseconds(void) const { return m_nBinUs; }
+  unsigned RenderMicroseconds(void) const { return m_nRenderUs; }
+
   // Clears a small picture to a known colour through the GPU and checks
   // it. Logs the result.
   bool ClearTest(void);
@@ -77,6 +81,7 @@ private:
   void SetCore(uint32_t reg, uint32_t value) const;
 
   bool m_bReady;
+  unsigned m_nBinUs, m_nRenderUs;
   uint32_t *m_pPageTable;
   uint8_t *m_pScratch;
 };

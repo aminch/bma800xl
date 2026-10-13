@@ -581,9 +581,11 @@ void Pi4Video::SetViewKms(int x, int y, int w, int h, double aspect,
     nearest = true;
     m_nKmsSrcW = src_w;
     m_nKmsSrcH = src_h;
-    m_bScalerReady = m_Scaler.Configure((unsigned)m_nSourceWidth, x, y, w, h,
-                                        src_w, src_h);
-    if (!m_bScalerReady) {
+    // While the GPU draws, the ARM's scaler isn't needed (it is set up
+    // again if the ARM takes over).
+    m_bScalerReady = m_pGpu == 0 && m_Scaler.Configure((unsigned)m_nSourceWidth, x, y, w,
+                                                       h, src_w, src_h);
+    if (m_pGpu == 0 && !m_bScalerReady) {
       CLogger::Get()->Write(FromVideo, LogError, "Not enough memory to scale the picture");
       return;
     }

@@ -45,7 +45,8 @@ const unsigned TablePages = (1ull << 32) >> PageShift;
 
 } // namespace
 
-Gpu::Gpu(void) : m_bReady(false), m_pPageTable(0), m_pScratch(0) {}
+Gpu::Gpu(void)
+    : m_bReady(false), m_nBinUs(0), m_nRenderUs(0), m_pPageTable(0), m_pScratch(0) {}
 
 uint32_t Gpu::Hub(uint32_t reg) const { return read32(HubBase + reg); }
 void Gpu::SetHub(uint32_t reg, uint32_t value) const { write32(HubBase + reg, value); }
@@ -208,9 +209,12 @@ bool Gpu::Bin(uint32_t start, uint32_t end, uint32_t tile_alloc, uint32_t size,
   SetCore(CleCt0Qma, tile_alloc);
   SetCore(CleCt0Qms, size);
   SetCore(CleCt0Qts, CleCt0QtsEnable | tile_state);
+  u64 begin = CTimer::GetClockTicks64();
   SetCore(CleCt0Qba, start);
   SetCore(CleCt0Qea, end);
-  return Wait(CleBfc, done, timeout_ms, "Binning timed out");
+  bool ok = Wait(CleBfc, done, timeout_ms, "Binning timed out");
+  m_nBinUs = (unsigned)((CTimer::GetClockTicks64() - begin) * 1000000 / CLOCKHZ);
+  return ok;
 }
 
 bool Gpu::Render(uint32_t start, uint32_t end, unsigned timeout_ms) {
@@ -219,9 +223,12 @@ bool Gpu::Render(uint32_t start, uint32_t end, unsigned timeout_ms) {
   }
   InvalidateCaches();
   uint32_t done = Core(CleRfc);
+  u64 begin = CTimer::GetClockTicks64();
   SetCore(CleCt1Qba, start);
   SetCore(CleCt1Qea, end);
-  return Wait(CleRfc, done, timeout_ms, "Rendering timed out");
+  bool ok = Wait(CleRfc, done, timeout_ms, "Rendering timed out");
+  m_nRenderUs = (unsigned)((CTimer::GetClockTicks64() - begin) * 1000000 / CLOCKHZ);
+  return ok;
 }
 
 // A 256x256 picture in 64x64 tiles, cleared by the tile buffer and stored to

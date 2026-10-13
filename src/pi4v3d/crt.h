@@ -65,6 +65,10 @@ private:
   int m_nViewX, m_nViewY, m_nViewW, m_nViewH;
   unsigned m_nDestW, m_nDestH;
   uint32_t m_Palette[256];  // 0xFFRRGGBB
+
+  // Time spent on the frames drawn so far (microseconds), logged once.
+  unsigned m_nFrames;
+  uint64_t m_nFillUs, m_nBinUs, m_nRenderUs;
 };
 
 } // namespace v3d
