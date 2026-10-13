@@ -167,18 +167,13 @@ bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature, Driver driver) 
   m_pFrameBuffer->SetVirtualOffset(0, 0);
   m_nBackPage = 1;
 
-#if RASPPI >= 5
-  // The Pi 5's display hardware isn't the Pi 4's: the firmware's
-  // framebuffer only, for now.
-  if (driver != Driver::Firmware) {
-    CLogger::Get()->Write(FromVideo, LogNotice, "Picture by the firmware's framebuffer");
-    driver = Driver::Firmware;
-  }
-#endif
   // The direct display driver takes over from the firmware's framebuffer,
   // which stays as the fall back if it can't.
   if (driver != Driver::Firmware) {
     m_pKms = new kms::Display;
+#if RASPPI >= 5
+    m_pKms->SetFramebuffer(Page(0), (size_t)2 * m_nHeight * m_nPitch, m_nPitch);
+#endif
     if (!m_pKms->Attach()) {
       delete m_pKms;
       m_pKms = 0;
@@ -536,7 +531,7 @@ void Pi4Video::Blank(void) {
 }
 
 //
-// The direct display driver (src/pi4kms/).
+// The direct display driver (src/pi4kms/, or src/pi5kms/ on the Pi 5).
 //
 
 // As SetView() does for the framebuffer, on the mode's size: sharp in whole
@@ -676,8 +671,14 @@ void Pi4Video::ConfigureGpu(void) {
   }
   bool ok;
   if (m_pKms != 0) {
+#if RASPPI >= 5
+    ok = m_pKms->BuffersBelow(v3d::Gpu::MappedBytes) &&
+         m_pGpu->Configure((unsigned)m_nSourceWidth, m_nViewX, m_nViewY, m_nViewW, m_nViewH,
+                           m_nKmsSrcW, m_nKmsSrcH);
+#else
     ok = m_pGpu->Configure((unsigned)m_nSourceWidth, m_nViewX, m_nViewY, m_nViewW, m_nViewH,
                            m_nKmsSrcW, m_nKmsSrcH);
+#endif
   } else {
     ok = v3d::Gpu::Reachable(Page(0), (size_t)2 * m_nHeight * m_nPitch) &&
          m_pGpu->Configure((unsigned)m_nSourceWidth, m_nViewX, m_nViewY, m_nViewW, m_nViewH,

@@ -11,11 +11,14 @@ device trees and `overlays/bcm2712d0.dtbo`.
 
 ## Picture
 
-The picture is the firmware's framebuffer, at the resolution the firmware
-chooses for the display. Smooth scaling and the CRT shader are drawn by the
-Pi 5's 3D GPU (V3D 7.1), with the same options as on the Pi 4
-(`crt_gpu`, `crt_gpu_test`); if the GPU doesn't start, the ARM cores draw
-them.
+BMA800XL shows the picture through the Pi 5's HVS with its own display
+driver (`src/pi5kms/`), as on the Pi 4 (see `video_driver` in
+[PI4.md](PI4.md)), at the resolution the firmware chooses for the display;
+`video_driver=firmware` uses the firmware's framebuffer instead, and it is
+the fall back if the driver can't take over. The CRT shader, and smooth
+scaling on the framebuffer, are drawn by the Pi 5's 3D GPU (V3D 7.1), with
+the same options as on the Pi 4 (`crt_gpu`, `crt_gpu_test`); if the GPU
+doesn't start, the ARM cores draw them.
 
 ## Sound
 
@@ -30,4 +33,5 @@ button or key starts it again.
 
 ## Not yet
 
-BMA800XL's own display driver (`video_driver`) is for later.
+Setting the video mode to the Atari's frame rate (`video_driver=kms`) is
+for later: on the Pi 5 `kms` keeps the firmware's mode, as `hvs` does.

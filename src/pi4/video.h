@@ -48,7 +48,11 @@
 
 #include "frameshare.h"
 #include "scaler.h"
+#if RASPPI >= 5
+#include "../pi5kms/display.h"
+#else
 #include "../pi4kms/display.h"
+#endif
 #include "../pi4v3d/crt.h"
 
 #include <circle/bcmframebuffer.h>
@@ -61,7 +65,7 @@ public:
 
   // Which driver puts the picture on the screen (the video_driver option):
   // the firmware's framebuffer, or BMA800XL's own display lists on the HVS
-  // (src/pi4kms/, docs/PI4.md), on the firmware's video mode or (Kms)
+  // (src/pi4kms/ or, on the Pi 5, src/pi5kms/; docs/PI4.md), on the firmware's video mode or (Kms)
   // with BMA800XL setting the mode too.
   enum class Driver { Firmware, Hvs, Kms };
 
