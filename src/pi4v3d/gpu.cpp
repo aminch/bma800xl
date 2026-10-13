@@ -88,10 +88,11 @@ bool Gpu::PowerUp(void) {
   log->Write(FromGpu, LogNotice, "Power domain %s, clock %u Hz", on ? "on" : "not answered",
              rate);
   CTimer::SimpleMsDelay(1);
-  if (Present()) {
+  if (Present(false)) {
     return true;
   }
 
+  // On the BCM2711 the firmware leaves the GPU in reset; this is expected.
   log->Write(FromGpu, LogNotice, "Releasing the reset and opening the bus bridges");
   uintptr_t grafx = PmBase + PmGrafx;
   write32(grafx, PmPassword | (read32(grafx) & 0x00FFFFFF) | PmV3dResetN);
@@ -104,17 +105,22 @@ bool Gpu::PowerUp(void) {
       log->Write(FromGpu, LogWarning, "Bus bridge %02X didn't open", reg);
     }
   }
-  return Present();
+  return Present(true);
 }
 
-// HUB_IDENT1 gives the version: 4.2 on the BCM2711.
-bool Gpu::Present(void) {
+// HUB_IDENT1 gives the version: 4.2 on the BCM2711. LOG_FAILURE: log what
+// was read even if it isn't a V3D 4.2.
+bool Gpu::Present(bool log_failure) {
   uint32_t ident1 = Hub(HubIdent1);
   unsigned tech = ident1 & 0xF, rev = (ident1 >> 4) & 0xF;
+  bool found = tech == 4 && rev == 2;
+  if (!found && !log_failure) {
+    return false;
+  }
   CLogger::Get()->Write(FromGpu, LogNotice, "IDENT0 %08X IDENT1 %08X IDENT2 %08X: V3D %u.%u, %u core(s)",
                         Hub(HubIdent0), ident1, Hub(HubIdent2), tech, rev,
                         (ident1 >> 8) & 0xF);
-  return tech == 4 && rev == 2;
+  return found;
 }
 
 bool Gpu::SetUpMmu(void) {

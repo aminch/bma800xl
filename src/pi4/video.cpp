@@ -426,6 +426,9 @@ void Pi4Video::Present(bool wait_vsync) {
       if (m_pGpu != 0) {
         CLogger::Get()->Write(FromVideo, LogNotice, "Drawn by the GPU from now on");
       }
+    } else {
+      CLogger::Get()->Write(FromVideo, LogNotice,
+                            "The GPU isn't needed: this picture isn't drawn by the ARM");
     }
   }
   if (m_pKms != 0) {

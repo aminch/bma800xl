@@ -65,7 +65,7 @@ public:
 
 private:
   bool PowerUp(void);
-  bool Present(void);
+  bool Present(bool log_failure);
   bool SetUpMmu(void);
   void InvalidateCaches(void);
   void LogState(const char *when);
