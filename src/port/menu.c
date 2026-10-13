@@ -664,7 +664,7 @@ static void controllers_menu(void)
 
 static void video_menu(void)
 {
-	enum { V_LOCK, V_BORDER, V_SHADER, V_SMOOTH };
+	enum { V_LOCK, V_BORDER, V_SHADER, V_CURVATURE, V_SMOOTH };
 	static const char *const locks[] = {"auto", "on", "off", NULL};
 	static const char *const lock_names[] = {"Automatic", "On", "Off", NULL};
 	static const char *const borders[] = {"normal", "none", "full", NULL};
@@ -676,6 +676,7 @@ static void video_menu(void)
 		UI_MENU_ACTION_PREFIX(V_LOCK, "Frames Locked to Display: ", lock),
 		UI_MENU_ACTION_PREFIX(V_BORDER, "Border: ", border),
 		UI_MENU_CHECK(V_SHADER, "CRT Shader (reboot)"),
+		UI_MENU_CHECK(V_CURVATURE, "CRT Curvature (reboot)"),
 		UI_MENU_CHECK(V_SMOOTH, "Smooth Scaling (reboot)"),
 		UI_MENU_END
 	};
@@ -690,7 +691,8 @@ static void video_menu(void)
 		Util_strlcpy(lock, lock_names[lock_index], sizeof(lock));
 		Util_strlcpy(border, border_names[border_index], sizeof(border));
 		items[4].flags = check_flags(setting_on("crt_shader", FALSE));
-		items[5].flags = check_flags(setting_on("smooth", FALSE));
+		items[5].flags = check_flags(setting_on("crt_curvature", FALSE));
+		items[6].flags = check_flags(setting_on("smooth", FALSE));
 
 		option = UI_driver->fSelect("Video", 0, option, items, NULL);
 		switch (option) {
@@ -712,6 +714,10 @@ static void video_menu(void)
 		}
 		case V_SHADER:
 			save_setting("crt_shader", setting_on("crt_shader", FALSE) ? "0" : "1");
+			reboot_needed = TRUE;
+			break;
+		case V_CURVATURE:
+			save_setting("crt_curvature", setting_on("crt_curvature", FALSE) ? "0" : "1");
 			reboot_needed = TRUE;
 			break;
 		case V_SMOOTH:

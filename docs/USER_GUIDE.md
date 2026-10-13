@@ -30,7 +30,7 @@ BMA800XL's own settings:
 | Network | Ethernet or Wi-Fi, **Scan for Wi-Fi Networks**, the Wi-Fi network, password and country (written to `wpa_supplicant.conf`), the web UI and its PIN, the time zone |
 | Emulator Menu (atari800) | atari800's own menu (see below) |
 | Controllers | Which gamepad is which joystick, the keypad and arrow keys as joystick 1, GPIO joysticks, the keyboard layout, and a **Joystick Test** that shows live what the Atari sees on each joystick port |
-| Video | Locking frames to the display, the border, the CRT shader, smooth scaling |
+| Video | Locking frames to the display, the border, the CRT shader and its curvature, smooth scaling |
 | Sound | HDMI or headphones, the sound buffer |
 | Logging | Where the log goes: Off, UART (serial port) or File (`bma800xl.log`); changes at once (see Logging) |
 | Reboot, Shut Down | Shut Down also from a keyboard's power key: Fn+F10 on a Pi 400, which switches off; Fn+F10 starts it again |
