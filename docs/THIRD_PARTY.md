@@ -56,6 +56,8 @@ BMA800XL includes the Wi-Fi firmware for the Raspberry Pi's wireless chip from t
 
 See the `firmware/` folder on the SD card for the Broadcom, Cypress and Synaptics licenses that accompany it.
 
+The Pi 5's files (`brcmfmac43455-sdio.raspberrypi,5-model-b.*`) are copies of the `brcmfmac43455-sdio.*` files under the name Circle looks for on the Pi 5, under the same Cypress license.
+
 ## Other Third-Party Components
 
 Additional third-party components and supporting materials may be present in the BMA800XL source tree. Where such material is accompanied by its own copyright, license, or attribution notices, those notices and terms continue to apply.
