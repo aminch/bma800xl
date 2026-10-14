@@ -68,9 +68,12 @@ public:
   void EndFrame(bool wait_vsync);
 
   // Switches the video mode to run at FPS frames a second, if it can (see
-  // modeset.h). AUDIO_FS is the HDMI sound's sample rate. True if the mode
-  // was changed (or a failed change undone).
-  bool MatchRate(double fps, unsigned audio_fs);
+  // modeset.h), at 1920x1080 or 1280x720 if LINES is 1080 or 720 and the
+  // display lists it, else at the size the firmware chose. AUDIO_FS is the
+  // HDMI sound's sample rate. True if the mode was changed (or a failed
+  // change undone). After a change of size there is no picture until
+  // SetPicture().
+  bool MatchRate(double fps, unsigned audio_fs, unsigned lines);
 
   // A black screen (before halting).
   void Blank(void);
@@ -105,6 +108,7 @@ private:
   Plane m_Plane;
   bool m_bHavePicture;
   bool m_bTimedOut;
+  unsigned m_nFirmwareWidth, m_nFirmwareHeight;   // the firmware's mode
 };
 
 } // namespace kms

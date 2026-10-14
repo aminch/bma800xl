@@ -664,17 +664,21 @@ static void controllers_menu(void)
 
 static void video_menu(void)
 {
-	enum { V_LOCK, V_BORDER, V_SHADER, V_CURVATURE, V_SMOOTH };
+	enum { V_LOCK, V_BORDER, V_RESOLUTION, V_SHADER, V_CURVATURE, V_SMOOTH };
 	static const char *const locks[] = {"auto", "on", "off", NULL};
 	static const char *const lock_names[] = {"Automatic", "On", "Off", NULL};
 	static const char *const borders[] = {"normal", "none", "full", NULL};
 	static const char *const border_names[] = {"Normal", "None", "Full", NULL};
-	static char display[40], lock[16], border[16];
+	/* The Pi 5 only: its firmware ignores hdmi_mode. */
+	static const char *const resolutions[] = {"auto", "1920x1080", "1280x720", NULL};
+	static const char *const resolution_names[] = {"Auto", "1920x1080", "1280x720", NULL};
+	static char display[40], lock[16], border[16], resolution[16];
 	static UI_tMenuItem items[] = {
 		UI_MENU_LABEL(display),
 		UI_MENU_LABEL(""),
 		UI_MENU_ACTION_PREFIX(V_LOCK, "Frames Locked to Display: ", lock),
 		UI_MENU_ACTION_PREFIX(V_BORDER, "Border: ", border),
+		UI_MENU_ACTION_PREFIX(V_RESOLUTION, "Resolution: ", resolution),
 		UI_MENU_CHECK(V_SHADER, "CRT Shader (reboot)"),
 		UI_MENU_CHECK(V_CURVATURE, "CRT Curvature (reboot)"),
 		UI_MENU_CHECK(V_SMOOTH, "Smooth Scaling (reboot)"),
@@ -686,13 +690,16 @@ static void video_menu(void)
 		int w, h;
 		int lock_index = value_index(locks, host_option("vsync", "auto"));
 		int border_index = value_index(borders, host_option("border", "normal"));
+		int resolution_index = value_index(resolutions, host_option("resolution", "auto"));
 		host_display_size(&w, &h);
 		snprintf(display, sizeof(display), "Display: %dx%d, %.2f Hz", w, h, BMA_RefreshRate());
 		Util_strlcpy(lock, lock_names[lock_index], sizeof(lock));
 		Util_strlcpy(border, border_names[border_index], sizeof(border));
-		items[4].flags = check_flags(setting_on("crt_shader", FALSE));
-		items[5].flags = check_flags(setting_on("crt_curvature", FALSE));
-		items[6].flags = check_flags(setting_on("smooth", FALSE));
+		Util_strlcpy(resolution, resolution_names[resolution_index], sizeof(resolution));
+		items[4].flags = host_display_resolution_choice() ? UI_ITEM_ACTION : UI_ITEM_HIDDEN;
+		items[5].flags = check_flags(setting_on("crt_shader", FALSE));
+		items[6].flags = check_flags(setting_on("crt_curvature", FALSE));
+		items[7].flags = check_flags(setting_on("smooth", FALSE));
 
 		option = UI_driver->fSelect("Video", 0, option, items, NULL);
 		switch (option) {
@@ -709,6 +716,14 @@ static void video_menu(void)
 			if (i >= 0) {
 				save_setting("border", borders[i]);
 				BMA_VideoSettingsChanged();
+			}
+			break;
+		}
+		case V_RESOLUTION: {
+			int i = choose("Resolution", resolution_names, resolution_index);
+			if (i >= 0 && i != resolution_index) {
+				save_setting("resolution", resolutions[i]);
+				BMA_DisplayModeChanged();
 			}
 			break;
 		}

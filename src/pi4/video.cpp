@@ -535,11 +535,30 @@ void Pi4Video::DisplaySize(int *width, int *height) const {
   *height = (int)m_nDisplayHeight;
 }
 
-bool Pi4Video::MatchRate(double fps, unsigned audio_fs) {
+bool Pi4Video::MatchRate(double fps, unsigned audio_fs, unsigned lines) {
   if (m_pKms == 0 || m_Driver != Driver::Kms) {
     return false;
   }
+#if RASPPI >= 5
+  unsigned width = m_pKms->Width(), height = m_pKms->Height();
+  bool changed = m_pKms->MatchRate(fps, audio_fs, lines);
+  if (m_pKms->Width() != width || m_pKms->Height() != height) {
+    // A new size: the picture is laid out again before the next frame.
+    m_bKmsResize = true;
+  }
+  return changed;
+#else
+  (void)lines;
   return m_pKms->MatchRate(fps, audio_fs);
+#endif
+}
+
+bool Pi4Video::ResolutionChoice(void) const {
+#if RASPPI >= 5
+  return m_pKms != 0 && m_Driver == Driver::Kms;
+#else
+  return false;
+#endif
 }
 
 void Pi4Video::Blank(void) {
@@ -719,5 +738,5 @@ void Pi4Video::DropGpu(const char *why) {
   m_pGpu = 0;
   m_bGpuReady = false;
   // Back to the size the ARM can draw, from the next frame.
-  m_bKmsResize = m_pKms != 0 && m_bCrt;
+  m_bKmsResize = m_bKmsResize || (m_pKms != 0 && m_bCrt);
 }

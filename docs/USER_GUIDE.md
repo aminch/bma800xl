@@ -30,7 +30,7 @@ BMA800XL's own settings:
 | Network | Ethernet or Wi-Fi, **Scan for Wi-Fi Networks**, the Wi-Fi network, password and country (written to `wpa_supplicant.conf`), the web UI and its PIN, the time zone |
 | Emulator Menu (atari800) | atari800's own menu (see below) |
 | Controllers | Which gamepad is which joystick, the keypad and arrow keys as joystick 1, GPIO joysticks, the keyboard layout, and a **Joystick Test** that shows live what the Atari sees on each joystick port |
-| Video | Locking frames to the display, the border, the CRT shader and its curvature, smooth scaling |
+| Video | Locking frames to the display, the border, the resolution (Pi 5), the CRT shader and its curvature, smooth scaling |
 | Sound | HDMI or headphones, the sound buffer |
 | Logging | Where the log goes: Off, UART (serial port) or File (`bma800xl.log`); changes at once (see Logging) |
 | Reboot, Shut Down | Shut Down also from a keyboard's power key: Fn+F10 on a Pi 400, which switches off; Fn+F10 starts it again |
@@ -246,6 +246,7 @@ edited from the web UI.
 | `crt_curvature`     | `0`, `1`                     | `0`      | With `crt_shader`, a curved screen |
 | `crt_gpu`           | `0`, `1`                     | `1`      | Pi 4 only: the 3D GPU draws the smooth and CRT pictures; `0` has the ARM draw them (see [PI4.md](PI4.md)) |
 | `vsync`             | `auto`, `on`, `off`          | `auto`   | Lock frames to the display (see PAL and NTSC) |
+| `resolution`        | `auto`, `1920x1080`, `1280x720` | `auto` | Pi 5 only, with `video_driver=kms`: the display's resolution; `auto` keeps the one the firmware chose (the Pi 5's firmware ignores `hdmi_mode`) |
 | `video_driver`      | `kms`, `hvs`, `firmware`     | `kms`      | Pi 4 only: `kms` runs the display at the Atari's exact frame rate; `hvs` leaves the mode set in `config.txt`; `firmware` uses the firmware's framebuffer, if the others give trouble (see [PI4.md](PI4.md)) |
 | `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes (`auto`: HDMI, or the headphone jack if the display takes no sound) |
 | `volume`            | 0 to 100                     | `100`    | Sound volume |

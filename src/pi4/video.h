@@ -82,8 +82,12 @@ public:
   void Present(bool wait_vsync);
   void DisplaySize(int *width, int *height) const;
   // With the Kms driver: runs the display at FPS frames a second if it
-  // can. AUDIO_FS: the HDMI sound's sample rate. True if the mode changed.
-  bool MatchRate(double fps, unsigned audio_fs);
+  // can. AUDIO_FS: the HDMI sound's sample rate. LINES (the Pi 5 only):
+  // 1080 or 720 for that size, 0 for the firmware's. True if the mode
+  // changed.
+  bool MatchRate(double fps, unsigned audio_fs, unsigned lines = 0);
+  // True if MatchRate()'s LINES is used: the Pi 5 with the Kms driver.
+  bool ResolutionChoice(void) const;
   // Shows a black screen (before halting).
   void Blank(void);
 

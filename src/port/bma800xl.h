@@ -23,6 +23,7 @@ void bma800xl_main(void);
 const char *BMA_SdRoot(void);
 double BMA_RefreshRate(void);
 void BMA_VideoSettingsChanged(void);
+void BMA_DisplayModeChanged(void);
 void bma_request_power(int power_off);
 
 /* menu.c: returns TRUE to go on to atari800's menu. */

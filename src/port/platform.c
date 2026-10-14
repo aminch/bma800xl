@@ -671,6 +671,20 @@ void BMA_VideoSettingsChanged(void)
 	apply_view();
 }
 
+/* The display's resolution setting changed (the Pi 5): the mode is set
+   again, as after a PAL/NTSC switch. */
+void BMA_DisplayModeChanged(void)
+{
+	if (host_display_match_rate(atari_fps())) {
+		measure_refresh_rate();
+		refresh_refined = FALSE;
+		vbl_count = 0;
+	}
+	update_sync_mode();
+	restart_sound();
+	apply_view();
+}
+
 /* Builds atari800's command line from cmdline.txt options. */
 static int build_args(char **argv, int max)
 {

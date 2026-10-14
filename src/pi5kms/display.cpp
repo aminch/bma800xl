@@ -29,7 +29,7 @@ Display::Display(void)
       m_nFramebufferPitch(0), m_bPool(false),
       m_nPoolAddress(0), m_nPitch(0), m_nBufferWords(0), m_nBack(0),
       m_bFlipPending(false), m_nFlipCount(0), m_bHavePicture(false),
-      m_bTimedOut(false) {
+      m_bTimedOut(false), m_nFirmwareWidth(0), m_nFirmwareHeight(0) {
   m_pBuffer[0] = m_pBuffer[1] = 0;
   memset(&m_Plane, 0, sizeof m_Plane);
 }
@@ -209,13 +209,42 @@ bool Display::WaitForFlip(unsigned from) {
   return true;
 }
 
-bool Display::MatchRate(double fps, unsigned audio_fs) {
+bool Display::MatchRate(double fps, unsigned audio_fs, unsigned lines) {
   if (!m_bAttached) {
     return false;
   }
   Timing current, wanted;
   if (!m_ModeSetter.Current(&current)) {
     return false;
+  }
+  if (m_nFirmwareWidth == 0) {
+    m_nFirmwareWidth = current.h_active;
+    m_nFirmwareHeight = current.v_active;
+  }
+  // The size asked for (ChooseMode() takes the size from its first
+  // argument).
+  Timing size = current;
+  size.h_active = lines == 1080 ? 1920 : lines == 720 ? 1280 : m_nFirmwareWidth;
+  size.v_active = lines == 1080 ? 1080 : lines == 720 ? 720 : m_nFirmwareHeight;
+  bool resize = size.h_active != current.h_active || size.v_active != current.v_active;
+  if (resize && !ChooseMode(size, fps, m_ModeSetter.GetEdid(), &wanted)) {
+    CLogger::Get()->Write(FromDisplay, LogNotice,
+                          "No %ux%u mode at %.2f Hz the display lists; keeping %ux%u",
+                          size.h_active, size.v_active, fps, current.h_active,
+                          current.v_active);
+    resize = false;
+  }
+  if (resize) {
+    // The picture is laid out for the old size: the background until
+    // SetPicture().
+    bool had = m_bHavePicture;
+    m_bHavePicture = false;
+    if (!m_ModeSetter.Set(m_Hvs, wanted, audio_fs, Reinstall, this)) {
+      // Back at the old size (or as near as it got): the picture as it was.
+      m_bHavePicture = had;
+      Reinstall(this);
+    }
+    return true;
   }
   if (!ChooseMode(current, fps, m_ModeSetter.GetEdid(), &wanted)) {
     CLogger::Get()->Write(FromDisplay, LogNotice,
