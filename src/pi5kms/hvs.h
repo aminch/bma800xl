@@ -2,7 +2,7 @@
 // hvs.h
 //
 // The Pi 5's direct display driver's use of the BCM2712's HVS: finds the
-// channel that feeds HDMI0 or, if none does, HDMI1, and shows planes on it
+// channel that feeds the HDMI port in use, and shows planes on it
 // through display lists BMA800XL writes itself, scaled by the HVS with its
 // own filter kernels. Frames are paced by the channel's frame counter.
 //
@@ -30,8 +30,9 @@ class Hvs {
 public:
   Hvs(void);
 
-  // Finds the running channel feeding HDMI0 (or else HDMI1) and its size,
-  // and uploads the filter kernels. False if neither port is being fed.
+  // Finds the running channel feeding the HDMI port with a display plugged
+  // in (else HDMI0, else HDMI1) and its size, and uploads the filter
+  // kernels. False if neither port is being fed.
   bool Attach(void);
 
   unsigned Port(void) const { return m_nPort; }      // 0 HDMI0, 1 HDMI1

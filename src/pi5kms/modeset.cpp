@@ -91,7 +91,7 @@ bool ModeSetter::WaitFor(uintptr_t reg, uint32_t mask, bool set,
   return true;
 }
 
-// The pixel valve's timings, read back (one pixel a clock).
+// The pixel valve's timings, read back.
 bool ModeSetter::Current(Timing *timing) {
   if (!(Rd(m_Pv + pv::Control) & pv::Enable) ||
       !(Rd(m_Pv + pv::VControl) & pv::VideoEnable)) {

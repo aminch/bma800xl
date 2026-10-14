@@ -44,8 +44,8 @@ public:
   // until Attach().
   void SetFramebuffer(void *base, size_t bytes, unsigned pitch);
 
-  // Takes over the HVS channel feeding HDMI0, or else HDMI1. False if it
-  // can't.
+  // Takes over the HVS channel feeding the HDMI port with a display
+  // plugged in (else HDMI0, else HDMI1). False if it can't.
   bool Attach(void);
 
   // True if the buffers are below LIMIT (for the 3D GPU).

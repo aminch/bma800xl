@@ -148,7 +148,9 @@ const unsigned KernelWords = 11;
 } // namespace hvs
 
 //
-// Pixel valves 0 (HDMI0) and 1 (HDMI1): one pixel a clock, 64-byte FIFO.
+// Pixel valves 0 (HDMI0) and 1 (HDMI1), 64-byte FIFO. The firmware runs
+// them at one or two pixels a clock; mode changes keep its choice, these
+// are the defaults if its mode can't be read.
 //
 namespace pv {
 const unsigned PixelsPerClock = 1;
@@ -179,7 +181,7 @@ const uint32_t FifoClear = Bit(1);
 const uint32_t Enable = Bit(0);
 
 // V_CONTROL
-const uint32_t OddTiming = Bit(29);      // one pixel a clock
+const uint32_t OddTiming = Bit(29);      // with one pixel a clock
 const uint32_t Continuous = Bit(1);
 const uint32_t VideoEnable = Bit(0);
 
