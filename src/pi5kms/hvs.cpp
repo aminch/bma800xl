@@ -159,14 +159,20 @@ bool Hvs::Overlaps(unsigned base, unsigned size, const unsigned (*areas)[2],
   return false;
 }
 
-// The lowest free stretch: at 0, or just past one of the areas.
+// The highest free stretch, away from the firmware's allocations (which
+// start at the bottom, and may not all be read): at the top, or just below
+// one of the areas.
 bool Hvs::FindFree(unsigned size, unsigned total, const unsigned (*areas)[2],
                    unsigned count, unsigned *base) const {
   bool found = false;
   unsigned best = 0;
   for (unsigned i = 0; i <= count; i++) {
-    unsigned at = i == count ? 0 : areas[i][0] + areas[i][1];
-    if (at + size <= total && !Overlaps(at, size, areas, count) && (!found || at < best)) {
+    unsigned end = i == count ? total : areas[i][0];
+    if (end < size || end > total) {
+      continue;
+    }
+    unsigned at = end - size;
+    if (!Overlaps(at, size, areas, count) && (!found || at > best)) {
       best = at;
       found = true;
     }
@@ -184,8 +190,15 @@ bool Hvs::Attach(void) {
   if (!(Read(hvs::Control) & hvs::ControlEnable)) {
     return false;
   }
-  // The port the firmware shows its picture on; HDMI0 if both.
-  if (!FindChannel(0) && !FindChannel(1)) {
+  // The port the firmware shows its picture on, with a display plugged in
+  // (the firmware may run the other port without one); else the first
+  // running port.
+  bool found = false;
+  for (unsigned port = 0; port < 2 && !found; port++) {
+    found = (read32(FromBus(Ports[port].core) + hdmi::Hotplug) & hdmi::HotplugConnected) &&
+            FindChannel(port);
+  }
+  if (!found && !FindChannel(0) && !FindChannel(1)) {
     return false;
   }
   m_nFirmwareList = GetField(ReadChannel(m_nChannel, hvs::Dl(m_bD)), hvs::ListHigh,

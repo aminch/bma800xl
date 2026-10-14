@@ -18,7 +18,7 @@
 CLogDevice::CLogDevice(CDevice *pSerial)
     : m_pSerial(pSerial), m_Destination(HOST_LOG_UART), m_pFile(0),
       m_QueueRead(0), m_QueueWrite(0), m_QueueLength(0), m_Dropped(0),
-      m_LastSync(0) {}
+      m_LastSync(0), m_bUnsynced(false) {}
 
 bool CLogDevice::SetDestination(int destination) {
   if (destination == m_Destination) {
@@ -70,7 +70,18 @@ int CLogDevice::Write(const void *pBuffer, size_t nCount) {
 }
 
 void CLogDevice::Drain(void) {
-  if (m_pFile == 0 || (m_QueueLength == 0 && m_Dropped == 0)) {
+  if (m_pFile == 0) {
+    return;
+  }
+  if (m_QueueLength == 0 && m_Dropped == 0) {
+    // Nothing more to write: what was written goes to the card half a
+    // second later, so the last lines aren't lost at power off.
+    if (m_bUnsynced && CTimer::GetClockTicks() - m_LastSync >= CLOCKHZ / 2) {
+      if (sd_sync(m_pFile) == SD_OK) {
+        m_bUnsynced = false;
+      }
+      m_LastSync = CTimer::GetClockTicks();
+    }
     return;
   }
 
@@ -98,14 +109,26 @@ void CLogDevice::Drain(void) {
   }
   // Push it to the card every few seconds: the Pi can be switched off at
   // any time.
+  m_bUnsynced = true;
   if (ok && CTimer::GetClockTicks() - m_LastSync >= 3 * CLOCKHZ) {
     ok = sd_sync(m_pFile) == SD_OK;
+    m_bUnsynced = !ok;
     m_LastSync = CTimer::GetClockTicks();
   }
   if (!ok) {
     m_Destination = HOST_LOG_OFF;
     sd_close(m_pFile);
     m_pFile = 0;
+  }
+}
+
+void CLogDevice::Flush(void) {
+  while (m_pFile != 0 && (m_QueueLength != 0 || m_Dropped != 0)) {
+    Drain();
+  }
+  if (m_pFile != 0 && sd_sync(m_pFile) == SD_OK) {
+    m_LastSync = CTimer::GetClockTicks();
+    m_bUnsynced = false;
   }
 }
 

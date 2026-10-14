@@ -150,6 +150,7 @@ bool CKernel::Initialize(void) {
   if (!mLogger.Initialize(&mLog)) {
     return false;
   }
+  mLogger.RegisterPanicHandler(PanicHandler);
   mLogger.Write(FromKernel, LogNotice, "BMA800XL " BMA800XL_VERSION " (" BMA800XL_GIT
                 ", atari800 " A8_VERSION ")");
 
@@ -185,14 +186,17 @@ bool CKernel::Initialize(void) {
     return false;
   }
   CGlueStdioInit(mConsole);
+  mLog.Flush();
 
   // Before USB, as BMC64 does: the Pi 3's Ethernet is a USB device and
   // joins the network stack once USB finds it.
   NetworkInitialize(&mOptions);
+  mLog.Flush();
 
   if (!mUSBHCI.Initialize()) {
     return false;
   }
+  mLog.Flush();
 
   const char *audio_out = mOptions.Get("audio_out", "auto");
 
@@ -226,8 +230,10 @@ bool CKernel::Initialize(void) {
                          mOptions.GetBool("crt_curvature", false), driver)) {
     return false;
   }
+  mLog.Flush();
   // Without sound the emulator still runs.
   mPi4Sound.Initialize(&mInterrupt, volume, sound_output);
+  mLog.Flush();
 #else
   if (strcmp(audio_out, "hdmi") == 0) {
     mAudioOut = VCHIQSoundDestinationHDMI;
@@ -245,12 +251,16 @@ bool CKernel::Initialize(void) {
     SetupGPIOJoysticks();
   }
 
-  return mEmulatorCore.Initialize();
+  bool ok = mEmulatorCore.Initialize();
+  mLog.Flush();
+  return ok;
 }
 
 TShutdownMode CKernel::Run(void) {
   SetupUSBKeyboards();
   SetupUSBGamePads();
+  mLog.Flush();
+  mStarting = false;
 
   mEmulatorCore.Launch();
 
@@ -298,6 +308,11 @@ TShutdownMode CKernel::Run(void) {
                     "Emulator has not moved for 3 s; last seen: %s",
                     (const char *)s_Core1Stage);
       stalled = true;
+      // Core 1 writes the log file; while it is stuck (other than in the
+      // file system), core 0 writes it, so the log shows where.
+      if (strcmp((const char *)s_Core1Stage, "writing the log file") != 0) {
+        mLog.Flush();
+      }
     }
 #if RASPPI >= 5
     CheckPowerButton();
@@ -882,6 +897,17 @@ void CKernel::PowerOff(void) {
   mFrameBuffer.Hide();
   halt();
 #endif
+}
+
+// A crash during start up: the log so far, with the crash report, goes to
+// the card before the Pi halts.
+void CKernel::PanicHandler(void) { FlushStartupLog(); }
+
+void FlushStartupLog(void) {
+  CKernel *kernel = CKernel::Get();
+  if (kernel != 0 && kernel->mStarting) {
+    kernel->mLog.Flush();
+  }
 }
 
 bool CKernel::SetLogDestination(int destination) {

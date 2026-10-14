@@ -233,6 +233,8 @@ const uint32_t GcpConfig = 0x194;
 const uint32_t GcpEnable = Bit(31);
 const uint32_t GcpWord1 = 0x198;                // 15:8 depth, 7:0 byte 0
 const uint32_t GcpClearAvMute = Bit(4);
+const uint32_t Hotplug = 0x1C8;
+const uint32_t HotplugConnected = Bit(0);
 
 // dvp
 const uint32_t ClockStop = 0x0BC;

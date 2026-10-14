@@ -21,6 +21,11 @@
 
 #define LOG_FILE "/bma800xl.log"
 
+// During start up, writes the log to the card now if it goes to the file
+// (see CLogDevice::Flush()); afterwards does nothing. Implemented by the
+// kernel.
+void FlushStartupLog(void);
+
 class CLogDevice : public CDevice {
 public:
   CLogDevice(CDevice *pSerial);
@@ -36,6 +41,9 @@ public:
 
   // Writes queued text to the file. Core 1 only (FatFs).
   void Drain(void);
+  // Writes everything queued to the card, for start up (on core 0, before
+  // core 1 uses FatFs), so a start up that stops leaves its log.
+  void Flush(void);
   // Writes everything queued and closes the file, before a reboot.
   void Close(void);
 
@@ -53,6 +61,7 @@ private:
   volatile unsigned m_QueueLength;
   unsigned m_Dropped;
   unsigned m_LastSync;
+  bool m_bUnsynced;          // written to the file since the last sync
 };
 
 #endif

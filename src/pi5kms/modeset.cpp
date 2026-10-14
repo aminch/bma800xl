@@ -59,7 +59,9 @@ const uint32_t GetEdidBlockDisplay = 0x00030023;
 
 } // namespace
 
-ModeSetter::ModeSetter(void) : m_nSavedPackets(0), m_bEdidRead(false), m_nPixelHz(0) {
+ModeSetter::ModeSetter(void)
+    : m_nSavedPackets(0), m_bEdidRead(false), m_nPixelHz(0), m_bPvRead(false),
+      m_nPpc(pv::PixelsPerClock), m_nOddTiming(pv::OddTiming), m_nPipeInit(pv::PipeInit) {
   memset(&m_Edid, 0, sizeof m_Edid);
   SetPort(0);
 }
@@ -97,14 +99,31 @@ bool ModeSetter::Current(Timing *timing) {
   }
   uint32_t horza = Rd(m_Pv + pv::HorzA), horzb = Rd(m_Pv + pv::HorzB);
   uint32_t verta = Rd(m_Pv + pv::VertA), vertb = Rd(m_Pv + pv::VertB);
-  unsigned ppc = pv::PixelsPerClock;
-  unsigned h_active = GetField(horzb, 15, 0) * ppc;
-  unsigned h_total = (GetField(horzb, 31, 16) + GetField(horzb, 15, 0) +
-                      GetField(horza, 15, 0) + GetField(horza, 31, 16)) * ppc;
+  // The firmware may run the pixel valve at one pixel a clock or two.
   unsigned v_active = GetField(vertb, 15, 0);
   unsigned v_total = GetField(vertb, 31, 16) + v_active + GetField(verta, 15, 0) +
                      GetField(verta, 31, 16);
-  const Timing *known = FindMode(h_active, h_total, v_active, v_total);
+  unsigned h_active = 0, h_total = 0, ppc = 1;
+  const Timing *known = 0;
+  for (ppc = 1; ppc <= 2; ppc++) {
+    h_active = GetField(horzb, 15, 0) * ppc;
+    h_total = (GetField(horzb, 31, 16) + GetField(horzb, 15, 0) +
+               GetField(horza, 15, 0) + GetField(horza, 31, 16)) * ppc;
+    known = FindMode(h_active, h_total, v_active, v_total);
+    if (known != 0) {
+      break;
+    }
+  }
+  if (!m_bPvRead) {
+    m_bPvRead = true;
+    uint32_t vcontrol = Rd(m_Pv + pv::VControl), pipe = Rd(m_Pv + pv::PipeInitCtrl);
+    if (known != 0) {
+      m_nPpc = ppc;
+      m_nOddTiming = vcontrol & pv::OddTiming;
+      m_nPipeInit = pipe;
+      CLogger::Get()->Write(FromModeSet, LogNotice, "Pixel valve at %u pixel(s) a clock", ppc);
+    }
+  }
   if (known == 0) {
     CLogger::Get()->Write(FromModeSet, LogNotice,
                           "Video mode %ux%u (totals %ux%u) isn't one BMA800XL switches",
@@ -293,15 +312,16 @@ void ModeSetter::SetHdmiTimings(const Timing &t) {
 
 // Sets up and enables the pixel valve.
 void ModeSetter::SetPixelValve(const Timing &t) {
-  unsigned ppc = pv::PixelsPerClock;
+  // As the firmware set it up: pixels a clock, odd timing, pipe init.
+  unsigned ppc = m_nPpc;
   Wr(m_Pv + pv::HorzA, Field(t.h_back / ppc, 31, 16) | Field(t.h_sync / ppc, 15, 0));
   Wr(m_Pv + pv::HorzB, Field(t.h_front / ppc, 31, 16) | Field(t.h_active / ppc, 15, 0));
-  Wr(m_Pv + pv::VControl, pv::Continuous | pv::OddTiming);
+  Wr(m_Pv + pv::VControl, pv::Continuous | m_nOddTiming);
   Wr(m_Pv + pv::VsyncdEven, 0);
   Wr(m_Pv + pv::VertA, Field(t.v_back, 31, 16) | Field(t.v_sync, 15, 0));
   Wr(m_Pv + pv::VertB, Field(t.v_front, 31, 16) | Field(t.v_active, 15, 0));
   Wr(m_Pv + pv::MuxCfg, Field(pv::MuxNoSwap, 5, 2));
-  Wr(m_Pv + pv::PipeInitCtrl, pv::PipeInit);
+  Wr(m_Pv + pv::PipeInitCtrl, m_nPipeInit);
 
   unsigned level = pv::FifoLevel;
   Wr(m_Pv + pv::Control, pv::FifoClear |

@@ -22,11 +22,14 @@ kernel_address=0x80000
 kernel=kernel8-rpi4.img
 armstub=armstub8-rpi4.bin
 # The Pi 5, Pi 500 and Pi 500+ (all match [pi5]). As in Circle's
-# boot/config64.txt; the Pi 5 needs no ARM stub.
+# boot/config64.txt; the Pi 5 needs no ARM stub. Its firmware sets the
+# framebuffer's depth from here rather than as asked: 32 bit.
 [pi5]
 arm_64bit=1
 kernel_address=0x80000
 kernel=kernel_2712.img
+framebuffer_depth=32
+framebuffer_ignore_alpha=1
 [all]
 
 # Video: 1280x720 at 50 Hz, the right rate for a PAL Atari (the default).

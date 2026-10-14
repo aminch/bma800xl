@@ -9,6 +9,8 @@
 
 #include "video.h"
 
+#include "../logging.h"
+
 #include <circle/bcmpropertytags.h>
 #include <circle/logger.h>
 #include <circle/sched/scheduler.h>
@@ -62,7 +64,7 @@ void FillFrameBuffer(void *dst, uint64_t value, unsigned long bytes) {
 
 Pi4Video::Pi4Video(void)
     : m_pFrameBuffer(0), m_nDepth(0), m_nWidth(0), m_nHeight(0), m_nPitch(0),
-      m_nBackPage(1), m_nDisplayWidth(0), m_nDisplayHeight(0),
+      m_nPages(2), m_nBackPage(1), m_nDisplayWidth(0), m_nDisplayHeight(0),
       m_nLastVsync(0), m_nVsyncPeriod(0), m_pSource(0),
       m_nSourceWidth(0), m_nSourceHeight(0), m_nViewX(0), m_nViewY(0),
       m_nViewW(0), m_nViewH(0), m_nDestX(0), m_nDestY(0), m_nDestW(0),
@@ -98,8 +100,17 @@ bool Pi4Video::TakeFrameBuffer(unsigned width, unsigned height,
   for (unsigned i = 0; i < count; i++) {
     m_pFrameBuffer = new CBcmFrameBuffer(width, height, depths[i], 0, 0, 0, TRUE);
     if (m_pFrameBuffer->Initialize()) {
-      m_nDepth = depths[i];
-      return true;
+      // The depth and size the firmware actually gave, from the pitch and
+      // the buffer's size: the Pi 5's firmware keeps the depth set in
+      // config.txt, and may leave out the second page.
+      unsigned w = m_pFrameBuffer->GetWidth(), h = m_pFrameBuffer->GetHeight();
+      unsigned pitch = m_pFrameBuffer->GetPitch();
+      unsigned bytes = w != 0 ? pitch / w : 0;
+      if ((bytes == 1 || bytes == 2 || bytes == 4) && h != 0) {
+        m_nDepth = bytes * 8;
+        m_nPages = m_pFrameBuffer->GetSize() >= 2ull * h * pitch ? 2 : 1;
+        return true;
+      }
     }
     delete m_pFrameBuffer;
     m_pFrameBuffer = 0;
@@ -153,9 +164,11 @@ bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature, Driver driver) 
   m_nWidth = m_pFrameBuffer->GetWidth();
   m_nHeight = m_pFrameBuffer->GetHeight();
   m_nPitch = m_pFrameBuffer->GetPitch();
-  CLogger::Get()->Write(FromVideo, LogNotice, "Framebuffer %ux%u, %u bit (display %ux%u)",
-                        m_nWidth, m_nHeight, m_nDepth, m_nDisplayWidth,
-                        m_nDisplayHeight);
+  CLogger::Get()->Write(FromVideo, LogNotice,
+                        "Framebuffer %ux%u, %u bit, %u page(s) (display %ux%u), pitch %u, %u bytes at %p",
+                        m_nWidth, m_nHeight, m_nDepth, m_nPages, m_nDisplayWidth,
+                        m_nDisplayHeight, m_nPitch, m_pFrameBuffer->GetSize(), Page(0));
+  FlushStartupLog();
 
   if (m_bFiltered) {
     m_Scaler.SetMode(crt, smooth, curvature);
@@ -172,7 +185,7 @@ bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature, Driver driver) 
   if (driver != Driver::Firmware) {
     m_pKms = new kms::Display;
 #if RASPPI >= 5
-    m_pKms->SetFramebuffer(Page(0), (size_t)2 * m_nHeight * m_nPitch, m_nPitch);
+    m_pKms->SetFramebuffer(Page(0), (size_t)m_nPages * m_nHeight * m_nPitch, m_nPitch);
 #endif
     if (!m_pKms->Attach()) {
       delete m_pKms;
@@ -183,6 +196,7 @@ bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature, Driver driver) 
       CLogger::Get()->Write(FromVideo, LogNotice, "Picture by BMA800XL's display lists on the HVS");
     }
   }
+  FlushStartupLog();
   // Under the direct display driver the HVS does smooth scaling itself, so
   // the ARM only draws the CRT shader.
   if (m_bFiltered && (m_pKms == 0 || crt)) {
@@ -199,7 +213,7 @@ bool Pi4Video::Initialize(bool crt, bool smooth, bool curvature, Driver driver) 
 
 uint8_t *Pi4Video::Page(unsigned page) const {
   return (uint8_t *)(uintptr)m_pFrameBuffer->GetBuffer() +
-         (size_t)page * m_nHeight * m_nPitch;
+         (size_t)(page % m_nPages) * m_nHeight * m_nPitch;
 }
 
 void Pi4Video::ClearPages(void) {
@@ -207,7 +221,7 @@ void Pi4Video::ClearPages(void) {
   // black is opaque.
   uint64_t black = m_nDepth == 32 ? 0xFF000000FF000000ull : 0;
   unsigned long bytes = (unsigned long)m_nHeight * m_nPitch;
-  for (unsigned page = 0; page < 2; page++) {
+  for (unsigned page = 0; page < m_nPages; page++) {
     uint8_t *p = Page(page);
     if (((uintptr)p & 7) == 0 && (bytes & 15) == 0) {
       FillFrameBuffer(p, black, bytes);
@@ -341,7 +355,7 @@ void Pi4Video::UpdatePalette(void) {
 
 void Pi4Video::DrawSharp(uint8_t *page) {
   const unsigned bytes = m_nDepth / 8;
-  alignas(16) uint8_t line[4096 * 2];
+  alignas(16) uint8_t line[4096 * 4];
   if (m_nDestW * bytes > sizeof line) {
     return;
   }
@@ -350,6 +364,12 @@ void Pi4Video::DrawSharp(uint8_t *page) {
     if (m_nDepth == 8) {
       for (unsigned i = 0; i < m_nDestW; i++) {
         line[i] = src[m_pColumn[i]];
+      }
+    } else if (m_nDepth == 32) {
+      // The Pi 5's firmware gives the depth set in config.txt.
+      uint32_t *line32 = (uint32_t *)line;
+      for (unsigned i = 0; i < m_nDestW; i++) {
+        line32[i] = m_Palette32[src[m_pColumn[i]]];
       }
     } else {
       uint16_t *line16 = (uint16_t *)line;
@@ -469,7 +489,10 @@ void Pi4Video::Present(bool wait_vsync) {
 
   // Show the page just drawn, then wait for the vertical blank: after it
   // the other page is off screen and free to draw the next frame into.
-  m_pFrameBuffer->SetVirtualOffset(0, m_nBackPage * m_nHeight);
+  // With one page the frame is drawn where it is shown.
+  if (m_nPages == 2) {
+    m_pFrameBuffer->SetVirtualOffset(0, m_nBackPage * m_nHeight);
+  }
   if (wait_vsync) {
     WaitForVerticalSync();
   }
@@ -680,7 +703,7 @@ void Pi4Video::ConfigureGpu(void) {
                            m_nKmsSrcW, m_nKmsSrcH);
 #endif
   } else {
-    ok = v3d::Gpu::Reachable(Page(0), (size_t)2 * m_nHeight * m_nPitch) &&
+    ok = v3d::Gpu::Reachable(Page(0), (size_t)m_nPages * m_nHeight * m_nPitch) &&
          m_pGpu->Configure((unsigned)m_nSourceWidth, m_nViewX, m_nViewY, m_nViewW, m_nViewH,
                            m_nDestW, m_nDestH);
   }

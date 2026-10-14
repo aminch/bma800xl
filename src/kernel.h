@@ -189,6 +189,11 @@ private:
   CSpinLock m_Lock;
 
   static CKernel *s_pThis;
+  // Until the emulator is launched only core 0 runs, and may write the log
+  // file itself.
+  bool mStarting = true;
+  static void PanicHandler(void);
+  friend void FlushStartupLog(void);
 };
 
 #endif

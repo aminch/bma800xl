@@ -68,6 +68,12 @@ private:
   bool m_bEdidRead;
   Edid m_Edid;
   uint32_t m_nPixelHz;        // the pixel clock last set here (0: firmware's)
+  // The firmware's pixel valve set-up, kept when re-timing: pixels a
+  // clock, V_CONTROL's odd timing bit and PIPE_INIT_CTRL (read once).
+  bool m_bPvRead;
+  unsigned m_nPpc;
+  uint32_t m_nOddTiming;
+  uint32_t m_nPipeInit;
 };
 
 } // namespace kms

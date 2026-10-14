@@ -120,6 +120,7 @@ private:
   unsigned m_nWidth;      // framebuffer size in pixels
   unsigned m_nHeight;
   unsigned m_nPitch;      // bytes per framebuffer line
+  unsigned m_nPages;      // 2, or 1 if the firmware gave room for one only
   unsigned m_nBackPage;   // page drawn next: 0 or 1
   unsigned m_nDisplayWidth, m_nDisplayHeight;
   u64 m_nLastVsync;       // when the last wait for vsync ended (clock ticks)

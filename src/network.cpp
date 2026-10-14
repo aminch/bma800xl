@@ -99,9 +99,16 @@ static bool HasWifiFirmware(void) {
       // The Pi 400 (Circle's addon/wlan/ether4330.c: chip 0x4345 rev 9).
       "brcmfmac43456-sdio.bin",  "brcmfmac43456-sdio.txt",
       "brcmfmac43456-sdio.clm_blob",
+#if RASPPI >= 5
+      // The Pi 5, 500 and 500+ (Circle's addon/wlan/firmware/Makefile:
+      // the 43455 files under the board's name).
+      "brcmfmac43455-sdio.raspberrypi,5-model-b.bin",
+      "brcmfmac43455-sdio.raspberrypi,5-model-b.txt",
+      "brcmfmac43455-sdio.raspberrypi,5-model-b.clm_blob",
+#endif
   };
   for (unsigned i = 0; i < sizeof files / sizeof files[0]; i++) {
-    char path[64];
+    char path[96];
     snprintf(path, sizeof path, "%s%s", FIRMWARE_PATH, files[i]);
     if (!FileExists(path)) {
       return false;

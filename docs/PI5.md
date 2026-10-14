@@ -7,7 +7,9 @@ USB keyboards and gamepads, networking (Ethernet and Wi-Fi) and the web UI
 work as on the other boards.
 
 The Pi 5's firmware is in its EEPROM, so the card only adds the Pi 5's
-device trees and `overlays/bcm2712d0.dtbo`.
+device trees, `overlays/bcm2712d0.dtbo`, and the Wi-Fi firmware under the
+name Circle looks for on the Pi 5
+(`firmware/brcmfmac43455-sdio.raspberrypi,5-model-b.*`).
 
 ## Picture
 
@@ -19,6 +21,10 @@ the fall back if the driver can't take over. The CRT shader, and smooth
 scaling on the framebuffer, are drawn by the Pi 5's 3D GPU (V3D 7.1), with
 the same options as on the Pi 4 (`crt_gpu`, `crt_gpu_test`); if the GPU
 doesn't start, the ARM cores draw them.
+
+The firmware's framebuffer on the Pi 5 is 32-bit (`framebuffer_depth` in
+`config.txt`) and has a single page, so with `video_driver=firmware` fast
+movement can tear.
 
 ## Sound
 
