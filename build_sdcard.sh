@@ -4,10 +4,11 @@
 # build/sdcard. Copy the contents of that folder to the root of a FAT32
 # formatted SD card.
 #
-#   ./build_sdcard.sh [pi2|pi3|pi4|pi5] [--skip-patches]
+#   ./build_sdcard.sh [pi0|pi2|pi3|pi4|pi5] [--skip-patches]
 #
 #   pi3     kernel8-32.img: Pi 3 and Pi Zero 2 W
 #   pi2     kernel7.img: Pi 2
+#   pi0     kernel.img: Pi Zero and Zero W
 #   pi4     kernel8-rpi4.img and armstub8-rpi4.bin: Pi 4 B and Pi 400
 #   pi5     kernel_2712.img: Pi 5, Pi 500 and Pi 500+
 #   (none)  all of them, as a release has
@@ -27,26 +28,30 @@ BUILD_DIR="$SRC_DIR/build"
 STAGING_DIR="$BUILD_DIR/sdcard"
 # circle-stdlib's configure writes the board (RASPPI) into Circle's Config.mk.
 CIRCLE_CONFIG="$SRC_DIR/third_party/circle-stdlib/libs/circle/Config.mk"
-ALL_BOARDS=(pi2 pi3 pi4 pi5)
+ALL_BOARDS=(pi0 pi2 pi3 pi4 pi5)
 BOARDS=()
 SKIP_PATCHES=0
 
 for arg in "$@"
 do
     case "$arg" in
-        pi2|pi3|pi4|pi5) BOARDS=("$arg") ;;
+        pi0|pi2|pi3|pi4|pi5) BOARDS=("$arg") ;;
         --skip-patches) SKIP_PATCHES=1 ;;
-        *) echo "Usage: $0 [pi2|pi3|pi4|pi5] [--skip-patches]" >&2; exit 1 ;;
+        *) echo "Usage: $0 [pi0|pi2|pi3|pi4|pi5] [--skip-patches]" >&2; exit 1 ;;
     esac
 done
 
 cd "$SRC_DIR"
 
-# The board circle-stdlib is built for (pi2, pi3, pi4, pi5), if any.
+# The board circle-stdlib is built for (pi0, pi2, pi3, pi4, pi5), if any.
+# Circle calls the Pi Zero the Pi 1.
 built_board() {
     local raspi
     raspi=$(sed -n 's/^RASPPI = //p' "$CIRCLE_CONFIG" 2>/dev/null || true)
-    if [ -n "$raspi" ]
+    if [ "$raspi" = "1" ]
+    then
+        echo "pi0"
+    elif [ -n "$raspi" ]
     then
         echo "pi$raspi"
     fi
@@ -54,6 +59,7 @@ built_board() {
 
 kernel_name() {
     case "$1" in
+        pi0) echo kernel.img ;;
         pi2) echo kernel7.img ;;
         pi3) echo kernel8-32.img ;;
         pi4) echo kernel8-rpi4.img ;;

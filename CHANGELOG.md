@@ -1,3 +1,7 @@
+## Unreleased
+
+- Raspberry Pi Zero and Zero W support (`kernel.img`)
+
 ## 1.3.0 – 2026-10-14
 
 - Raspberry Pi 5, Pi 500 and Pi 500+ support

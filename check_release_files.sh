@@ -13,6 +13,7 @@ SRC_DIR=$(cd "$(dirname "$0")" && pwd)
 # The kernels, one per board. A release has them all; a card built for one
 # board (build_sdcard.sh pi3) needs only one.
 KERNELS=(
+    "kernel.img"        # Pi Zero, Zero W
     "kernel7.img"       # Pi 2
     "kernel8-32.img"    # Pi 3, Pi Zero 2 W
     "kernel8-rpi4.img"  # Pi 4 B, Pi 400 (64-bit)

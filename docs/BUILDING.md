@@ -35,11 +35,11 @@ or, in an existing clone, `git submodule update --init --recursive`.
 
 builds everything from clean and stages the boot partition in
 `build/sdcard`, with a kernel for each board: `kernel8-32.img` for the Pi 3
-and Pi Zero 2 W, `kernel7.img` for the Pi 2, and `kernel8-rpi4.img` (with
-`armstub8-rpi4.bin`) for the Pi 4 B and Pi 400, and `kernel_2712.img` for
-the Pi 5, Pi 500 and Pi 500+. `./build_sdcard.sh pi3`,
-`./build_sdcard.sh pi2`, `./build_sdcard.sh pi4` or `./build_sdcard.sh pi5`
-builds just one. Copy the contents of that folder to the root of a FAT32
+and Pi Zero 2 W, `kernel7.img` for the Pi 2, `kernel.img` for the Pi Zero
+and Zero W, `kernel8-rpi4.img` (with `armstub8-rpi4.bin`) for the Pi 4 B
+and Pi 400, and `kernel_2712.img` for the Pi 5, Pi 500 and Pi 500+.
+`./build_sdcard.sh pi3`, `./build_sdcard.sh pi2`, `./build_sdcard.sh pi0`,
+`./build_sdcard.sh pi4` or `./build_sdcard.sh pi5` builds just one. Copy the contents of that folder to the root of a FAT32
 formatted SD card.
 
 While developing, `./build_sdcard.sh --skip-patches` keeps the third party
@@ -55,10 +55,11 @@ rebooted from there, without touching the SD card.
 
 1. `./clean_all.sh` cleans everything, including the third party builds,
    and resets Circle to its pinned revision.
-2. `./make_all.sh [pi2|pi3|pi4|pi5] [--skip-patches]` applies `src/patches/` to
+2. `./make_all.sh [pi0|pi2|pi3|pi4|pi5] [--skip-patches]` applies `src/patches/` to
    Circle, builds circle-stdlib (Circle and newlib) and the Circle addons
    for one board (pi3 if none is given), then the kernel: `kernel8-32.img`
-   for pi3, `kernel7.img` for pi2, `kernel8-rpi4.img` (64-bit) for pi4,
+   for pi3, `kernel7.img` for pi2, `kernel.img` for pi0 (Circle's Raspberry
+   Pi 1), `kernel8-rpi4.img` (64-bit) for pi4,
    which also builds Circle's `armstub8-rpi4.bin`, `kernel_2712.img`
    (64-bit) for pi5. It only needs running again after
    `clean_all.sh` or a change to the patches or circle-stdlib. To change
@@ -69,7 +70,9 @@ rebooted from there, without touching the SD card.
    (`build_sdcard.sh` does this).
 
 The Pi 3 kernel also runs on the Pi Zero 2 W. `config.txt` has a section
-per board that picks its kernel. See [PI4.md](PI4.md) and [PI5.md](PI5.md)
+per board that picks its kernel. The Pi Zero has one core, so its kernel
+runs the emulator on core 0 and looks after USB between frames, where the
+other boards use core 1 for the emulator. See [PI4.md](PI4.md) and [PI5.md](PI5.md)
 for how the Pi 4 and 5 builds differ.
 
 ## Testing on a PC

@@ -1,13 +1,16 @@
 #
-# BMA800XL - bare metal Atari 800XL emulator for the Raspberry Pi 2, 3, 4
-# and 5
+# BMA800XL - bare metal Atari 800XL emulator for the Raspberry Pi Zero, 2,
+# 3, 4 and 5
 #
 # Raspberry Pi firmware settings. Emulator options are in cmdline.txt.
 #
 
-# BMA800XL runs in 32 bit mode on the Pi 2 and 3, and in 64 bit mode on the
-# Pi 4 and 5, with a kernel for each board.
+# BMA800XL runs in 32 bit mode on the Pi Zero, 2 and 3, and in 64 bit mode
+# on the Pi 4 and 5, with a kernel for each board.
 arm_64bit=0
+# [pi0] also matches the Zero 2 W, which [pi02] then sets to the Pi 3's.
+[pi0]
+kernel=kernel.img
 [pi2]
 kernel=kernel7.img
 [pi3]

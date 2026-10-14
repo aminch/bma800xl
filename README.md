@@ -1,6 +1,6 @@
 # BMA800XL
 
-BMA800XL is a bare metal Atari 800XL emulator for the Raspberry Pi 2, 3, 4 and 5. It runs
+BMA800XL is a bare metal Atari 800XL emulator for the Raspberry Pi Zero, 2, 3, 4 and 5. It runs
 the [atari800](https://github.com/atari800/atari800) emulator directly on the
 hardware, with no Linux underneath, using the same approach as
 [BMC64](https://github.com/randyrossi/bmc64) does for the Commodore 64.
@@ -37,6 +37,9 @@ HDMI port, and sound over HDMI or the Pi 4 B's 3.5mm jack. See
 
 The Raspberry Pi 5, Pi 500 and Pi 500+ (`kernel_2712.img`, 64-bit) are
 supported too. See [docs/PI5.md](docs/PI5.md).
+
+The Raspberry Pi Zero and Zero W (`kernel.img`) work like the Pi 2 and 3,
+with everything on their one core.
 
 ## Getting started
 

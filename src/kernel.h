@@ -2,7 +2,9 @@
 // kernel.h
 //
 // The Circle kernel for BMA800XL: brings up the hardware, then runs the
-// atari800 emulator on core 1 while core 0 services USB.
+// atari800 emulator on core 1 while core 0 services USB. The Pi Zero has
+// one core: the emulator runs on it, and USB is serviced by a task between
+// frames (as in BMC64's Pi Zero build).
 //
 // This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
 // Raspberry Pi. See LICENSE for licensing details.
@@ -25,6 +27,7 @@
 #include <circle/multicore.h>
 #include <circle/nulldevice.h>
 #include <circle/sched/scheduler.h>
+#include <circle/sched/task.h>
 #include <circle/serial.h>
 #include <circle/spinlock.h>
 #include <circle/timer.h>
@@ -56,6 +59,7 @@
 
 enum TShutdownMode { ShutdownNone, ShutdownHalt, ShutdownReboot };
 
+#ifdef ARM_ALLOW_MULTI_CORE
 // Runs the emulator on core 1. Cores 2 and 3 are left idle.
 class CEmulatorCore : public CMultiCoreSupport {
 public:
@@ -66,6 +70,16 @@ public:
 private:
   volatile bool m_bLaunch;
 };
+#else
+// One core: looks after USB devices coming and going, run by the scheduler
+// whenever the emulator yields (once a frame).
+// Based on BMC64's USBPlugAndPlayTask (src/kernel.cpp).
+class CUSBPlugAndPlayTask : public CTask {
+public:
+  CUSBPlugAndPlayTask(void) { SetName("usbpnp"); }
+  void Run(void) override;
+};
+#endif
 
 class CKernel {
 public:
@@ -111,6 +125,11 @@ private:
                                    const TGamePadState *pState);
   static void GamePadRemovedHandler(CDevice *pDevice, void *pContext);
 
+public:
+  // Core 0, task level: sets up USB devices that were plugged in.
+  void UpdateUSBPlugAndPlay(void);
+
+private:
   void SetupUSBKeyboards(void);
   void SetupUSBGamePads(void);
   void SetupGPIOJoysticks(void);
@@ -146,7 +165,9 @@ private:
   FATFS mFileSystem;
   CUSBHCIDevice mUSBHCI;
   CConsole mConsole;
+#ifdef ARM_ALLOW_MULTI_CORE
   CEmulatorCore mEmulatorCore;
+#endif
 
 #if RASPPI >= 4
   Pi4Video mVideo;

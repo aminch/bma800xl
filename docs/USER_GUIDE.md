@@ -4,7 +4,7 @@
 
 | File or folder   | What it is                                                 |
 |------------------|------------------------------------------------------------|
-| `kernel8-32.img`, `kernel7.img`, `kernel8-rpi4.img`, `kernel_2712.img` | The emulator for the Pi 3 and Zero 2 W, the Pi 2, the Pi 4 and Pi 400, and the Pi 5, 500 and 500+ |
+| `kernel8-32.img`, `kernel7.img`, `kernel.img`, `kernel8-rpi4.img`, `kernel_2712.img` | The emulator for the Pi 3 and Zero 2 W, the Pi 2, the Pi Zero and Zero W, the Pi 4 and Pi 400, and the Pi 5, 500 and 500+ |
 | `bootcode.bin`, `start.elf`, `fixup.dat`, `start4.elf`, `fixup4.dat`, `armstub8-rpi4.bin`, `*.dtb`, `overlays/` | Raspberry Pi firmware |
 | `config.txt`     | Raspberry Pi settings: video mode                          |
 | `cmdline.txt`    | Emulator options (see below)                               |

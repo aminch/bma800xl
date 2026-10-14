@@ -63,6 +63,8 @@ static inline void Core1Beat(const char *stage) {
   s_Core1Beat = s_Core1Beat + 1;
 }
 
+#ifdef ARM_ALLOW_MULTI_CORE
+
 //
 // CEmulatorCore
 //
@@ -96,6 +98,21 @@ void CEmulatorCore::Run(unsigned nCore) {
   }
 }
 
+#else
+
+//
+// CUSBPlugAndPlayTask
+//
+
+void CUSBPlugAndPlayTask::Run(void) {
+  for (;;) {
+    CKernel::Get()->UpdateUSBPlugAndPlay();
+    CScheduler::Get()->MsSleep(100);
+  }
+}
+
+#endif
+
 //
 // CKernel
 //
@@ -114,7 +131,9 @@ CKernel::CKernel(void)
 #endif
       mEMMC(&mInterrupt, &mTimer, &mActLED),
       mUSBHCI(&mInterrupt, &mTimer, TRUE), mConsole(&mSerial, &mLog),
+#ifdef ARM_ALLOW_MULTI_CORE
       mEmulatorCore(CMemorySystem::Get()),
+#endif
 #if RASPPI <= 3
       mSound(0), mSoundChannels(0), mVolume(VCHIQ_SOUND_VOLUME_DEFAULT),
       mAudioOut(VCHIQSoundDestinationAuto),
@@ -257,9 +276,20 @@ bool CKernel::Initialize(void) {
     SetupGPIOJoysticks();
   }
 
+#ifdef ARM_ALLOW_MULTI_CORE
   bool ok = mEmulatorCore.Initialize();
+#else
+  bool ok = true;
+#endif
   mLog.Flush();
   return ok;
+}
+
+void CKernel::UpdateUSBPlugAndPlay(void) {
+  if (mUSBHCI.UpdatePlugAndPlay()) {
+    SetupUSBKeyboards();
+    SetupUSBGamePads();
+  }
 }
 
 TShutdownMode CKernel::Run(void) {
@@ -268,6 +298,13 @@ TShutdownMode CKernel::Run(void) {
   mLog.Flush();
   mStarting = false;
 
+#ifndef ARM_ALLOW_MULTI_CORE
+  // One core (the Pi Zero): the emulator runs here and yields once a frame,
+  // which lets the USB task and Circle's other tasks run.
+  new CUSBPlugAndPlayTask;
+  bma800xl_main();
+  return ShutdownHalt;
+#else
   mEmulatorCore.Launch();
 
 #if RASPPI >= 4
@@ -294,10 +331,7 @@ TShutdownMode CKernel::Run(void) {
   unsigned last_change = CTimer::GetClockTicks();
   bool stalled = false;
   for (;;) {
-    if (mUSBHCI.UpdatePlugAndPlay()) {
-      SetupUSBKeyboards();
-      SetupUSBGamePads();
-    }
+    UpdateUSBPlugAndPlay();
 
     unsigned beat = s_Core1Beat;
     unsigned now = CTimer::GetClockTicks();
@@ -328,6 +362,7 @@ TShutdownMode CKernel::Run(void) {
   }
 
   return ShutdownHalt;
+#endif
 }
 
 #if RASPPI >= 5
