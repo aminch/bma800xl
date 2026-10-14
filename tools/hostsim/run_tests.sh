@@ -208,8 +208,8 @@ fi
 check_image setting controllers
 
 echo "Logging switched to a file in the menu"
-# Logging (four down from Emulator Menu), then File (one down from UART).
-run logging 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x51 1\n182 key 0x51 0\n190 key 0x51 1\n192 key 0x51 0\n200 key 0x51 1\n202 key 0x51 0\n210 key 0x28 1\n212 key 0x28 0\n230 key 0x51 1\n232 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n270 shot menu.ppm\n280 quit\n'
+# Logging (four down from Emulator Menu), then File (two down from Off).
+run logging 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x51 1\n182 key 0x51 0\n190 key 0x51 1\n192 key 0x51 0\n200 key 0x51 1\n202 key 0x51 0\n210 key 0x28 1\n212 key 0x28 0\n230 key 0x51 1\n232 key 0x51 0\n236 key 0x51 1\n238 key 0x51 0\n246 key 0x28 1\n248 key 0x28 0\n270 shot menu.ppm\n280 quit\n'
 check_log logging "logging: file" "the log goes to the file at once"
 if grep -q "^enable_logging=file" "$OUT/logging/bma800xl.cfg" 2>/dev/null; then
     pass "logging: bma800xl.cfg has enable_logging=file"

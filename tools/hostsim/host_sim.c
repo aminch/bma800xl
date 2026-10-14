@@ -495,7 +495,7 @@ void host_log(const char *message)
 	fprintf(stderr, "[log] %s\n", message);
 }
 
-static int log_destination = HOST_LOG_UART;
+static int log_destination = HOST_LOG_OFF;
 
 int host_log_destination(void)
 {
