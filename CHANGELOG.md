@@ -1,4 +1,4 @@
-## Unreleased
+## 1.4.0 – 2026-10-14
 
 - Raspberry Pi Zero and Zero W support (`kernel.img`)
 
