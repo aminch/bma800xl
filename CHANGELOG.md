@@ -1,3 +1,15 @@
+## 1.3.0 – 2026-10-14
+
+- Raspberry Pi 5, Pi 500 and Pi 500+ support
+  - Own display driver, with the display run at the Atari's exact refresh rate (PAL and NTSC) on either HDMI port
+  - Resolution in the Video menu: Auto, 1920x1080 or 1280x720 (the Pi 5's firmware ignores `hdmi_mode`)
+  - The 3D GPU draws the CRT shader and smooth scaling
+  - Sound on the HDMI port with the display
+  - The power button (Pi 5) and power key (Pi 500) shut down
+  - Ethernet and Wi-Fi with the WebUI
+- Wi-Fi left off, rather than hanging, if its firmware is missing from the SD card
+- The log file is complete after a crash, a hang or switching off
+
 ## 1.2.0 – 2026-10-13
 
 - Raspberry Pi 4 B and Pi 400: the 3D GPU draws the CRT shader and smooth scaling (`crt_gpu=0` in `cmdline.txt` for the ARM)
