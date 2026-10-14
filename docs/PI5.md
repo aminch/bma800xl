@@ -32,7 +32,8 @@ movement can tear.
 ## Sound
 
 Sound goes out over HDMI, on the port the display is plugged into (HDMI0
-if both are). The Pi 5 and Pi 500 have no headphone jack.
+if both are). The Pi 5 and Pi 500 have no headphone jack. The sound
+runs about 24 ms later than on the Pi 4, which keeps it clean on the Pi 5.
 
 ## Shut Down
 
