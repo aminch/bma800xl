@@ -101,7 +101,13 @@ void CEmulatorCore::Run(unsigned nCore) {
 //
 
 CKernel::CKernel(void)
-    : mLog(&mSerial), mTimer(&mInterrupt), mLogger(mKernelOptions.GetLogLevel(), &mTimer),
+    :
+#if RASPPI >= 5
+      // Circle's default on the Pi 5 is the 3-pin debug connector, which
+      // the Pi 500 lacks; device 0 is GPIO14/15, as on the other boards.
+      mSerial(0, FALSE, 0),
+#endif
+      mLog(&mSerial), mTimer(&mInterrupt), mLogger(mKernelOptions.GetLogLevel(), &mTimer),
       mGPIOManager(&mInterrupt),
 #if RASPPI <= 3
       mVCHIQ(CMemorySystem::Get(), &mInterrupt),
