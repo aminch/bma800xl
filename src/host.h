@@ -141,7 +141,7 @@ void host_log(const char *message);
 /* Where the log goes (enable_logging=off|uart|file). */
 #define HOST_LOG_OFF  0
 #define HOST_LOG_UART 1  /* serial port, GPIO14/15 at 115200 */
-#define HOST_LOG_FILE 2  /* /bma800xl.log on the SD card */
+#define HOST_LOG_FILE 2  /* serial port and /bma800xl.log on the SD card */
 int host_log_destination(void);
 /* Changes it at once. Returns 0 if the log file cannot be opened. */
 int host_set_log_destination(int destination);

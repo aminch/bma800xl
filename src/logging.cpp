@@ -46,27 +46,32 @@ bool CLogDevice::SetDestination(int destination) {
 }
 
 int CLogDevice::Write(const void *pBuffer, size_t nCount) {
-  switch (m_Destination) {
-  case HOST_LOG_UART:
-    return m_pSerial->Write(pBuffer, nCount);
-  case HOST_LOG_FILE: {
-    const char *p = static_cast<const char *>(pBuffer);
-    m_Lock.Acquire();
-    for (size_t i = 0; i < nCount; i++) {
-      if (m_QueueLength == QUEUE_SIZE) {
-        m_Dropped += nCount - i;
-        break;
-      }
-      m_Queue[m_QueueWrite] = p[i];
-      m_QueueWrite = (m_QueueWrite + 1) % QUEUE_SIZE;
-      m_QueueLength = m_QueueLength + 1;
+  int destination = m_Destination;
+  if (destination == HOST_LOG_UART || destination == HOST_LOG_FILE) {
+    m_pSerial->Write(pBuffer, nCount);
+  }
+  if (destination == HOST_LOG_FILE) {
+    WriteFile(pBuffer, nCount);
+  }
+  return (int)nCount;
+}
+
+void CLogDevice::WriteFile(const void *pBuffer, size_t nCount) {
+  if (m_Destination != HOST_LOG_FILE) {
+    return;
+  }
+  const char *p = static_cast<const char *>(pBuffer);
+  m_Lock.Acquire();
+  for (size_t i = 0; i < nCount; i++) {
+    if (m_QueueLength == QUEUE_SIZE) {
+      m_Dropped += nCount - i;
+      break;
     }
-    m_Lock.Release();
-    return (int)nCount;
+    m_Queue[m_QueueWrite] = p[i];
+    m_QueueWrite = (m_QueueWrite + 1) % QUEUE_SIZE;
+    m_QueueLength = m_QueueLength + 1;
   }
-  default:
-    return (int)nCount;
-  }
+  m_Lock.Release();
 }
 
 void CLogDevice::Drain(void) {

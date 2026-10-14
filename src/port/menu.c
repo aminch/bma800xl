@@ -805,7 +805,7 @@ static void logging_menu(void)
 	static const char *const names[] = {
 		"Off",
 		"UART (serial port GPIO14/15)",
-		"File (bma800xl.log)",
+		"File (bma800xl.log and serial)",
 		NULL
 	};
 	int current = host_log_destination();

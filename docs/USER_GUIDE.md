@@ -32,7 +32,7 @@ BMA800XL's own settings:
 | Controllers | Which gamepad is which joystick, the keypad and arrow keys as joystick 1, GPIO joysticks, the keyboard layout, and a **Joystick Test** that shows live what the Atari sees on each joystick port |
 | Video | Locking frames to the display, the border, the resolution (Pi 5), the CRT shader and its curvature, smooth scaling |
 | Sound | HDMI or headphones, the sound buffer |
-| Logging | Where the log goes: Off, UART (serial port) or File (`bma800xl.log`); changes at once (see Logging) |
+| Logging | Where the log goes: Off, UART (serial port) or File (`bma800xl.log` and serial port); changes at once (see Logging) |
 | Reboot, Shut Down | Shut Down also from a keyboard's power key: Fn+F10 on a Pi 400, which switches off; Fn+F10 starts it again |
 
 Settings are saved to `bma800xl.cfg` as soon as you change them. Most take
@@ -256,8 +256,8 @@ edited from the web UI.
 | `keypad_joystick`   | `0`, `1`                     | `1`      | Numeric keypad as joystick 1 |
 | `arrow_joystick`    | `0`, `1`                     | `0`      | Arrow keys as joystick 1 |
 | `gpio_joysticks`    | `0`, `1`                     | `0`      | Real joysticks on the GPIO header |
-| `enable_logging`    | `off`, `uart`, `file`        | `uart`   | Where the log goes (see Logging) |
-| `serial_monitor`    | `0`, `1`                     | `0`      | Allow atari800's monitor over the serial port (GPIO14/15, 115200 baud); needs `enable_logging=uart` |
+| `enable_logging`    | `off`, `uart`, `file`        | `off`    | Where the log goes (see Logging) |
+| `serial_monitor`    | `0`, `1`                     | `0`      | Allow atari800's monitor over the serial port (GPIO14/15, 115200 baud); needs `enable_logging=uart` or `file` |
 | `network`           | `off`, `ethernet`, `wifi`    | `off`    | Networking (see Networking and the web UI) |
 | `webui`             | `0`, `1`                     | `1`      | Web UI when networking is on |
 | `webui_pin`         | digits                       | none     | PIN for the web UI |
@@ -285,14 +285,15 @@ network status, and when the Atari crashes, the crash with the registers
 and the disks in use. Choose where it goes with *Logging* in the menu (it
 changes at once), or `enable_logging` in `cmdline.txt`:
 
-- **UART** (the default): the serial port, GPIO14 TX and GPIO15 RX at
-  115200 baud. Needs a USB serial adapter.
-- **File**: `bma800xl.log` in the root of the SD card. It starts with what
-  was logged since boot, is written to the card every few seconds, and
-  starts again at boot once it is over 1 MB. Download it from the web UI's
-  file manager to send with a bug report. Writing it costs a little time
-  on each frame, so switch it off once you have what you need.
-- **Off**: nothing is logged.
+- **Off** (the default, also when `enable_logging` isn't set): no log.
+- **UART**: the serial port, GPIO14 TX and GPIO15 RX at 115200 baud
+  (all boards). Needs a USB serial adapter.
+- **File**: the serial port, and `bma800xl.log` in the root of the SD
+  card. The file starts with what was logged since boot, is written to the
+  card every few seconds, and starts again at boot once it is over 1 MB.
+  Download it from the web UI's file manager to send with a bug report.
+  Writing it costs a little time on each frame, so switch it off once you
+  have what you need.
 
 ## Troubleshooting
 

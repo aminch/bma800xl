@@ -181,12 +181,12 @@ bool CKernel::Initialize(void) {
   // Settings saved by the BMA800XL menu win over cmdline.txt.
   mOptions.LoadSettings("SD:/bma800xl.cfg");
 
-  // Until here the log went to the serial port.
-  const char *logging = mOptions.Get("enable_logging", "uart");
-  if (strcmp(logging, "off") == 0) {
-    SetLogDestination(HOST_LOG_OFF);
-  } else if (strcmp(logging, "file") == 0) {
+  // Until here the log went to the serial port. No setting means no log.
+  const char *logging = mOptions.Get("enable_logging", "off");
+  if (strcmp(logging, "file") == 0) {
     SetLogDestination(HOST_LOG_FILE);
+  } else if (strcmp(logging, "uart") != 0) {
+    SetLogDestination(HOST_LOG_OFF);
   }
   if (!mConsole.Initialize()) {
     return false;
@@ -938,7 +938,7 @@ bool CKernel::SetLogDestination(int destination) {
     char text[512];
     int len;
     while ((len = mLogger.Read(text, sizeof text)) > 0) {
-      mLog.Write(text, len);
+      mLog.WriteFile(text, len);
     }
   }
   return true;

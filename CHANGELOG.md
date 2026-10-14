@@ -8,6 +8,8 @@
   - The power button (Pi 5) and power key (Pi 500) shut down
   - Ethernet and Wi-Fi with the WebUI
 - Wi-Fi left off, rather than hanging, if its firmware is missing from the SD card
+- Logging is off unless `enable_logging` is set; File logs to the serial port too
+- The Pi 5's serial port is on GPIO14/15, as on the other boards
 - The log file is complete after a crash, a hang or switching off
 
 ## 1.2.0 – 2026-10-13

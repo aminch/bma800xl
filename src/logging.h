@@ -2,7 +2,8 @@
 // logging.h
 //
 // Where the log (Circle's logger and stdio, so atari800's Log_print too)
-// goes: the serial port (UART), /bma800xl.log on the SD card, or nowhere.
+// goes: the serial port (UART), the serial port and /bma800xl.log on the
+// SD card (file), or nowhere.
 // Set with enable_logging=off|uart|file, as in BMC64, or in the menu.
 // Based on BMC64's CLoggingDevice (third_party/common/menu_logging_device.cpp).
 //
@@ -38,6 +39,8 @@ public:
 
   // Any core, also from interrupts. For the file the text is queued.
   int Write(const void *pBuffer, size_t nCount) override;
+  // Queues text for the file only.
+  void WriteFile(const void *pBuffer, size_t nCount);
 
   // Writes queued text to the file. Core 1 only (FatFs).
   void Drain(void);
