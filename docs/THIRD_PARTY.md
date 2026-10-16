@@ -2,7 +2,7 @@
 
 BMA800XL incorporates software and other materials from third-party projects. Third-party components remain subject to their respective copyright and license terms.
 
-The original copyright, license, and attribution notices supplied with these components are retained with their source where applicable.
+The original copyright, license, and attribution notices supplied with these components are retained with their source where applicable. The notices and licences for code BMA800XL adapts from other projects are in [`sdcard/licenses/`](../sdcard/licenses/), which becomes the `licenses` folder of the SD card.
 
 ## atari800
 
@@ -30,21 +30,27 @@ See [BMC64](https://github.com/randyrossi/bmc64) for its source and its accompan
 
 ## Raspberry Pi Firmware
 
-BMA800XL includes the Raspberry Pi boot firmware (`bootcode.bin`, `start.elf`, `fixup.dat`, and for the Raspberry Pi 4 `start4.elf`, `fixup4.dat` and its device trees) from the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware).
+BMA800XL includes the Raspberry Pi boot firmware (`bootcode.bin`, `start.elf`, `fixup.dat`, and for the Raspberry Pi 4 `start4.elf` and `fixup4.dat`) and the Raspberry Pi 4 and Pi 5 device trees from the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware).
 
-See the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware/tree/master/boot) for its accompanying copyright and license information.
+Their licences are next to them, in [`sdcard/firmware/`](../sdcard/firmware/) and on the SD card: `LICENCE.broadcom` for the firmware and `COPYING.linux` for the device trees. See the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware/tree/master/boot) for more.
 
 ## crt-pi
 
-BMA800XL uses the crt-pi CRT shader by davej, as included in BMC64, under the [GNU General Public License version 2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
+BMA800XL uses the crt-pi CRT shader by davej, as included in BMC64, under the GNU General Public License version 2 or later: on the ARM, and compiled for the Raspberry Pi 4 and Pi 5's 3D GPU from [`tools/v3dshader/crt.frag`](../tools/v3dshader/crt.frag). See [`sdcard/licenses/crt-pi.txt`](../sdcard/licenses/crt-pi.txt) and [`sdcard/licenses/GPL-2.0.txt`](../sdcard/licenses/GPL-2.0.txt).
 
 ## Mesa
 
-For the 3D GPU of the Raspberry Pi 4 and Pi 5, BMA800XL adapts parts of the [Mesa 3D graphics library](https://mesa3d.org/)'s Broadcom V3D drivers (`src/pi4v3d/`, `tools/v3dshader/`), under the MIT license. The GPU shaders are compiled with Mesa 25.2.8's V3D compiler.
+BMA800XL uses the [Mesa 3D graphics library](https://mesa3d.org/)'s Broadcom V3D drivers in three ways. The adapted files, with their copyright notices, and Mesa's MIT licence are in [`sdcard/licenses/Mesa-MIT.txt`](../sdcard/licenses/Mesa-MIT.txt).
+
+- **Adapted into the Raspberry Pi 4 and Pi 5 kernels** ([`src/pi4v3d/`](../src/pi4v3d/)): control list packet layouts and packing rules, the rendering job, texture and tile layouts, and the GPU's device facts. The V3D 4.2 (Pi 4) material is from Mesa 26.2.4, the V3D 7.1 (Pi 5) material from Mesa 25.2.8.
+- **Adapted into the shader compiler tool** ([`tools/v3dshader/`](../tools/v3dshader/)): the shader preparation that Mesa's drivers do before compiling. The tool is built on a PC against Mesa 25.2.8 and is not part of the SD card.
+- **As the shader compiler:** the compiled shaders in `src/pi4v3d/` (`shader_*.h`, `shader71_*.h`) are output of Mesa 25.2.8's V3D compiler. Compiling with Mesa doesn't make them Mesa code: the crt-pi shaders are under crt-pi's licence (above), the others are BMA800XL's.
 
 ## Linux
 
-For the 3D GPU of the Raspberry Pi 4 and Pi 5, BMA800XL adapts parts of the Linux kernel's V3D driver and BCM2835 power domain driver (`src/pi4v3d/`), under the [GNU General Public License version 2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
+For the 3D GPU of the Raspberry Pi 4 and Pi 5, BMA800XL adapts parts of the Linux kernel's V3D driver and BCM2835 power domain driver ([`src/pi4v3d/`](../src/pi4v3d/)), from the [Raspberry Pi kernel](https://github.com/raspberrypi/linux/tree/rpi-6.18.y) (`rpi-6.18.y`), under the GNU General Public License version 2 or later. See [`sdcard/licenses/Linux-V3D.txt`](../sdcard/licenses/Linux-V3D.txt) and [`sdcard/licenses/GPL-2.0.txt`](../sdcard/licenses/GPL-2.0.txt).
+
+The Raspberry Pi 4 and Pi 5 display implementation ([`src/pi4kms/`](../src/pi4kms/), [`src/pi5kms/`](../src/pi5kms/) and the HDMI sound in [`src/pi4/`](../src/pi4/)) was independently written using hardware information documented in the Linux vc4 driver (`rpi-6.18.y`). No code from that driver was copied or incorporated.
 
 ## Circle ARM stub
 

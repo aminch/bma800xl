@@ -54,6 +54,11 @@ REQUIRED_FILES=(
     # Documents and settings examples
     "LICENSE.txt"
     "README.txt"
+    "licenses/README.txt"
+    "licenses/crt-pi.txt"
+    "licenses/GPL-2.0.txt"
+    "licenses/Linux-V3D.txt"
+    "licenses/Mesa-MIT.txt"
     "wpa_supplicant.conf.example"
 
     # Wi-Fi firmware and redistribution licences (build_sdcard.sh only

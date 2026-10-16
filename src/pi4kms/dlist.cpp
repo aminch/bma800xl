@@ -30,12 +30,13 @@ Scaling ScalingFor(unsigned src, unsigned dst) {
 }
 
 // The PPF word for SRC source pixels shown as DST: the step in 16.16 fixed
-// point, and an initial phase of -1/2 pixel plus half the step's rounding
-// error.
+// point, and an initial phase of -1/2 pixel plus half a screen pixel's
+// worth of source, plus half the step's rounding error.
 uint32_t PpfWord(unsigned src, unsigned dst, bool nearest) {
   uint32_t step = (uint32_t)(((uint64_t)src << 16) / dst);
   int32_t error = (int32_t)(((int64_t)src << 16) - (int64_t)dst * step);
   int32_t phase = -(1 << (hvs::PhaseBits - 1)) +
+                  (int32_t)(step >> (17 - hvs::PhaseBits)) +
                   ((error >> (16 - hvs::PhaseBits)) >> 1);
   if (phase >= (1 << hvs::PhaseBits)) {
     phase = (1 << hvs::PhaseBits) - 1;

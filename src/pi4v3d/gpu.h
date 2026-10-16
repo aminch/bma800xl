@@ -5,13 +5,15 @@
 // sets up its MMU and runs rendering jobs written as control lists (cl.h).
 //
 // Sources:
-//  - Linux, drivers/gpu/drm/v3d/ (v3d_drv.c, v3d_gem.c, v3d_mmu.c,
-//    v3d_sched.c), Copyright (C) 2014-2018 Broadcom, GPL 2.0 or later: the
-//    start-up order, cache and MMU set-up, starting a job, the V3D 7.1
-//    SMS power-up and reset.
-//  - Linux, drivers/pmdomain/bcm/bcm2835-power.c (GPL 2.0 or later): the
-//    BCM2711 V3D reset and bus bridges; the BCM2712 GRAFX power-up and
-//    V3D reset.
+//  - Linux (the Raspberry Pi kernel, rpi-6.18.y), drivers/gpu/drm/v3d/
+//    (v3d_drv.c, v3d_gem.c, v3d_mmu.c, v3d_power.c, v3d_sched.c),
+//    Copyright (C) 2014-2018 Broadcom and (C) 2026 Raspberry Pi, GPL 2.0
+//    or later: the start-up order, cache and MMU set-up, starting a job,
+//    the V3D 7.1 SMS power-up and reset.
+//  - Linux (rpi-6.18.y), drivers/pmdomain/bcm/bcm2835-power.c, Copyright
+//    (C) 2018 Broadcom, GPL 2.0 or later: the BCM2711 V3D reset and bus
+//    bridges; the BCM2712 GRAFX power-up and V3D reset.
+//  See sdcard/licenses/Linux-V3D.txt.
 //  - Mesa, src/broadcom/common/v3d_device_info.c and v3d_device_info.h
 //    (MIT licence): the VPM size and revision, and the revision with the
 //    draw index shader record.

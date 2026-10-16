@@ -92,6 +92,9 @@ fi
 cp "$SRC_DIR/sdcard/config.txt" "$SRC_DIR/sdcard/cmdline.txt" \
    "$SRC_DIR/sdcard/wpa_supplicant.conf.example" "$STAGING_DIR/"
 cp "$SRC_DIR/LICENSE" "$STAGING_DIR/LICENSE.txt"
+# The notices and licences of other projects' code in the kernels
+# (docs/THIRD_PARTY.md).
+cp -r "$SRC_DIR/sdcard/licenses" "$STAGING_DIR/"
 cp "$SRC_DIR/docs/SDCARD_README.txt" "$STAGING_DIR/README.txt"
 
 # Folders for the user's files. The file browser starts at the root. Each

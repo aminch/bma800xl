@@ -4,13 +4,14 @@
 // Addresses and registers of the 3D GPU, V3D 4.2 on the Pi 4 and V3D 7.1
 // on the Pi 5, and of the power controls it needs.
 //
-// Register offsets and fields adapted from Linux,
-// drivers/gpu/drm/v3d/v3d_regs.h, v3d_drv.h and
-// drivers/pmdomain/bcm/bcm2835-power.c, Copyright (C) 2017-2018 Broadcom,
-// GPL 2.0 or later. Addresses from the BCM2711 device tree (bcm2711.dtsi,
-// bcm2711-rpi-ds.dtsi) and the BCM2712 device tree (bcm2712-ds.dtsi: v3d,
-// pm), with Circle's include/circle/memorymap64.h for where the BCM2712's
-// AXI and SoC peripherals are.
+// Register offsets and fields adapted from Linux (the Raspberry Pi kernel,
+// rpi-6.18.y), drivers/gpu/drm/v3d/v3d_regs.h, v3d_drv.h and
+// drivers/pmdomain/bcm/bcm2835-power.c, Copyright (C) 2015-2018 Broadcom,
+// GPL 2.0 or later (sdcard/licenses/Linux-V3D.txt). Addresses from the
+// BCM2711 device tree (bcm2711.dtsi, bcm2711-rpi-ds.dtsi) and the BCM2712
+// device tree (bcm2712-ds.dtsi: v3d, pm), with Circle's
+// include/circle/memorymap64.h for where the BCM2712's AXI and SoC
+// peripherals are.
 //
 // This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
 // Raspberry Pi. See LICENSE for licensing details.

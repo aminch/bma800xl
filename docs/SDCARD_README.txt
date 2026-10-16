@@ -26,5 +26,9 @@ Networking: choose Ethernet or Wi-Fi under Network in the menu (or add
 network=ethernet or network=wifi to cmdline.txt), then open the address
 shown on screen in a browser to manage the files on this card.
 
+Licences: BMA800XL is under the GPL version 3 (LICENSE.txt); the licenses
+folder has the notices for other projects' code it includes, and the
+firmware folder the Wi-Fi firmware's licences.
+
 Emulator options are in cmdline.txt. Full documentation:
 https://github.com/aminch/bma800xl/blob/main/docs/USER_GUIDE.md
