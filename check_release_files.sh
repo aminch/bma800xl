@@ -55,6 +55,7 @@ REQUIRED_FILES=(
     "LICENSE.txt"
     "README.txt"
     "licenses/README.txt"
+    "licenses/Apache-2.0.txt"
     "licenses/crt-pi.txt"
     "licenses/GPL-2.0.txt"
     "licenses/Linux-V3D.txt"

@@ -28,6 +28,8 @@ BMA800XL incorporates source code from the [BMC64 project](https://github.com/ra
 
 See [BMC64](https://github.com/randyrossi/bmc64) for its source and its accompanying copyright and license information.
 
+BMC64-derived files retain their original license and attribution notices. For files licensed under Apache-2.0, see [the included license](../sdcard/licenses/Apache-2.0.txt); modifications are identified in their headers.
+
 ## Raspberry Pi Firmware
 
 BMA800XL includes the Raspberry Pi boot firmware (`bootcode.bin`, `start.elf`, `fixup.dat`, and for the Raspberry Pi 4 `start4.elf` and `fixup4.dat`) and the Raspberry Pi 4 and Pi 5 device trees from the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware).

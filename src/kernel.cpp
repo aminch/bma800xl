@@ -4,7 +4,9 @@
 // This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
 // Raspberry Pi. See LICENSE for licensing details.
 //
-// Parts of the USB, frame buffer and sound handling are based on BMC64.
+// Parts of the USB, frame buffer and sound handling are based on BMC64's
+// kernel.cpp, and those parts remain under the Apache License 2.0
+// (sdcard/licenses/Apache-2.0.txt).
 //
 
 #include "kernel.h"
