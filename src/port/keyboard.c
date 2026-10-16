@@ -3,7 +3,9 @@
  *
  * Translates USB HID keyboards and gamepads into what atari800 expects:
  * AKEY_* key codes from PLATFORM_Keyboard(), the console keys in
- * INPUT_key_consol, and joystick state from PLATFORM_PORT/PLATFORM_TRIG.
+ * INPUT_key_consol, joystick state from PLATFORM_PORT/PLATFORM_TRIG, and
+ * USB mice into INPUT_mouse_* for the device chosen in atari800's
+ * Controller Configuration menu.
  * The behaviour follows atari800's SDL port so its documentation applies.
  *
  * This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
@@ -792,6 +794,30 @@ static int stick_bits(int state)
 	if (state & HOST_JOY_LEFT) stick &= ~0x04;
 	if (state & HOST_JOY_RIGHT) stick &= ~0x08;
 	return stick;
+}
+
+/* ---- Mouse --------------------------------------------------------------- */
+
+/* Once a frame, before Atari800_Frame(): the mouse's movement and buttons
+   for INPUT_Frame(), as SDL_INPUT_Mouse() in atari800's sdl/input.c. */
+void BMA_ReadMouse(void)
+{
+	static double last_read;
+	double now = host_time();
+	unsigned buttons = host_mouse(&INPUT_mouse_delta_x, &INPUT_mouse_delta_y);
+
+	/* Movement made while no frames ran (in a menu) is dropped. */
+	if (now - last_read > 0.1) {
+		INPUT_mouse_delta_x = 0;
+		INPUT_mouse_delta_y = 0;
+	}
+	last_read = now;
+
+	INPUT_mouse_buttons =
+		((buttons & HOST_MOUSE_LEFT) ? 1 : 0) |
+		((buttons & HOST_MOUSE_RIGHT) ? 2 : 0) |
+		((buttons & HOST_MOUSE_MIDDLE) ? 4 : 0);
+
 }
 
 int PLATFORM_PORT(int num)

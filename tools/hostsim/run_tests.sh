@@ -34,6 +34,7 @@ if [ $SKIP_PATCHES = 0 ]; then
 fi
 
 make -s -C "$HERE" -j"$(nproc 2>/dev/null || echo 2)" || exit 1
+make -s -C "$HERE" test-mouse || exit 1
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
@@ -343,6 +344,41 @@ run joy 50 "autostart=joy.xex" '1 pad 0 0\n1 pad 1 0\n200 pad 1 0x8000\n230 shot
 check_log joy "Gamepad 2 is joystick 1" "the pad in use becomes joystick 1"
 check_image joy right
 check_image joy fire
+
+echo "USB mouse as a CX22 Trak-Ball"
+mkdir -p "$OUT/trakball"
+python3 - "$OUT/trakball/trak.xex" <<'EOF'
+import sys
+# Background colour from the trackball's direction bits in STICK0 (bit 0
+# right, bit 2 down) times 16, or red while its button is held.
+code = bytes([
+    0xAD, 0x78, 0x02,        # loop: LDA STICK0
+    0x29, 0x05,              #       AND #$05
+    0x0A, 0x0A, 0x0A, 0x0A,  #       ASL x4
+    0xAE, 0x84, 0x02,        #       LDX STRIG0
+    0xD0, 0x02,              #       BNE store
+    0xA9, 0x34,              #       LDA #$34 (red)
+    0x8D, 0xC8, 0x02,        # store: STA COLOR4
+    0x8D, 0xC6, 0x02,        #       STA COLOR2
+    0x4C, 0x00, 0x20,        #       JMP loop
+])
+xex = bytes([0xFF, 0xFF, 0x00, 0x20]) + (0x2000 + len(code) - 1).to_bytes(2, "little") + code
+xex += bytes([0xE0, 0x02, 0xE1, 0x02, 0x00, 0x20])
+open(sys.argv[1], "wb").write(xex)
+EOF
+# Alt+J (Controller Configuration), down twice to Mouse device, Trak-ball
+# (eight down), Escape back to the program. Then the mouse moves right and
+# down, left only (down stays), and clicks.
+TRAK_KEYS='150 key 0xe2 1\n152 key 0x0d 1\n154 key 0x0d 0\n156 key 0xe2 0\n'
+TRAK_KEYS+='170 key 0x51 1\n172 key 0x51 0\n178 key 0x51 1\n180 key 0x51 0\n190 key 0x28 1\n192 key 0x28 0\n'
+for i in 0 1 2 3 4 5 6 7; do
+    TRAK_KEYS+="$((210 + 6 * i)) key 0x51 1\n$((212 + 6 * i)) key 0x51 0\n"
+done
+TRAK_KEYS+='270 key 0x28 1\n272 key 0x28 0\n290 key 0x29 1\n292 key 0x29 0\n'
+run trakball 50 "autostart=trak.xex" "${TRAK_KEYS}320 mouse 20 20 0\n350 shot rightdown.ppm\n360 mouse -20 0 0\n390 shot left.ppm\n400 mouse 0 0 1\n420 shot click.ppm\n430 quit\n"
+check_image trakball rightdown
+check_image trakball left
+check_image trakball click
 
 echo "The Home press that opens the menu isn't also Escape in it"
 run padhold 50 "" '1 pad 0 0\n150 pad 0 0x100\n250 pad 0 0\n280 shot menu.ppm\n290 quit\n'

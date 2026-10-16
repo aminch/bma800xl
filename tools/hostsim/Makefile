@@ -20,6 +20,13 @@ OBJS := $(addprefix $(OUT)/a8/,$(A8_SRCS:.c=.o)) \
 
 all: $(OUT)/bma800xl_sim
 
+$(OUT)/mouse_test: mouse_test.c $(A8_DIR)/input.c $(ROOT)/src/port/config.h
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -Wall -ffunction-sections -fdata-sections -o $@ $< -Wl,--gc-sections
+
+test-mouse: $(OUT)/mouse_test
+	./$(OUT)/mouse_test
+
 $(OUT)/bma800xl_sim: $(OBJS)
 	$(CC) -o $@ $(OBJS) -lm
 
@@ -38,4 +45,4 @@ $(OUT)/host_sim.o: host_sim.c $(ROOT)/src/host.h
 clean:
 	rm -rf $(OUT)
 
-.PHONY: all clean
+.PHONY: all clean test-mouse

@@ -792,6 +792,7 @@ void bma800xl_main(void)
 			Sound_Continue();
 		}
 
+		BMA_ReadMouse();
 		Atari800_Frame();
 		if (Atari800_display_screen)
 			PLATFORM_DisplayScreen();

@@ -103,6 +103,16 @@ int host_pad_state(int pad);
    Always 0 when GPIO joysticks are disabled. */
 int host_gpio_joystick(int port);
 
+/* Mouse buttons. */
+#define HOST_MOUSE_LEFT   0x01
+#define HOST_MOUSE_RIGHT  0x02
+#define HOST_MOUSE_MIDDLE 0x04
+
+/* USB mice: the movement since the last call (x to the right, y down, in
+   the mice's own counts) and the buttons held down, as HOST_MOUSE_* bits.
+   All mice are added together. */
+unsigned host_mouse(int *dx, int *dy);
+
 /* ---- System -------------------------------------------------------------- */
 
 void host_reboot(void);

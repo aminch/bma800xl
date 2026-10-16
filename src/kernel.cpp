@@ -156,6 +156,11 @@ CKernel::CKernel(void)
     m_PadAxisX[i] = 0;
     m_PadAxisY[i] = 1;
   }
+  for (unsigned i = 0; i < MAX_MICE; i++) {
+    m_pMouse[i] = 0;
+    m_MouseIndex[i] = i;
+    m_MouseButtons[i] = 0;
+  }
   memset(m_pJoyPins, 0, sizeof m_pJoyPins);
 
 #if RASPPI <= 3
@@ -291,12 +296,14 @@ void CKernel::UpdateUSBPlugAndPlay(void) {
   if (mUSBHCI.UpdatePlugAndPlay()) {
     SetupUSBKeyboards();
     SetupUSBGamePads();
+    SetupUSBMice();
   }
 }
 
 TShutdownMode CKernel::Run(void) {
   SetupUSBKeyboards();
   SetupUSBGamePads();
+  SetupUSBMice();
   mLog.Flush();
   mStarting = false;
 
@@ -675,6 +682,124 @@ int CKernel::PadState(int pad) {
     return -1;
   }
   return m_PadState[pad];
+}
+
+//
+// USB mice
+//
+
+// The emulator sees the mice where they were this long ago (longer than
+// the time between reports), and one report's movement covers at most
+// kMouseMaxSpan. In clock ticks (microseconds).
+static const unsigned kMouseDelay = 20000;
+static const unsigned kMouseMaxSpan = 32000;
+
+void CKernel::SetupUSBMice(void) {
+  for (unsigned i = 0; i < MAX_MICE; i++) {
+    if (m_pMouse[i] != 0) {
+      continue;
+    }
+    char name[16];
+    snprintf(name, sizeof name, "mouse%u", i + 1);
+    CMouseDevice *mouse =
+        (CMouseDevice *)mDeviceNameService.GetDevice(name, FALSE);
+    if (mouse != 0) {
+      mouse->RegisterRemovedHandler(MouseRemovedHandler, &m_MouseIndex[i]);
+      mouse->RegisterStatusHandler(MouseStatusHandler, &m_MouseIndex[i]);
+      m_pMouse[i] = mouse;
+      mLogger.Write(FromKernel, LogNotice, "Mouse %u connected", i + 1);
+    }
+  }
+}
+
+void CKernel::MouseRemovedHandler(CDevice *pDevice, void *pContext) {
+  CKernel *k = s_pThis;
+  unsigned i = *(unsigned *)pContext;
+  if (k == 0 || i >= MAX_MICE) {
+    return;
+  }
+  k->m_Lock.Acquire();
+  k->m_pMouse[i] = 0;
+  k->m_MouseButtons[i] = 0;
+  k->m_Lock.Release();
+}
+
+// USB interrupt context, core 0.
+void CKernel::MouseStatusHandler(unsigned nButtons, int nDisplacementX,
+                                 int nDisplacementY, int nWheelMove,
+                                 void *pArg) {
+  CKernel *k = s_pThis;
+  unsigned i = *(unsigned *)pArg;
+  if (k == 0 || i >= MAX_MICE) {
+    return;
+  }
+  unsigned buttons = 0;
+  if (nButtons & MOUSE_BUTTON_LEFT) buttons |= HOST_MOUSE_LEFT;
+  if (nButtons & MOUSE_BUTTON_RIGHT) buttons |= HOST_MOUSE_RIGHT;
+  if (nButtons & MOUSE_BUTTON_MIDDLE) buttons |= HOST_MOUSE_MIDDLE;
+  unsigned now = CTimer::GetClockTicks();
+  k->m_Lock.Acquire();
+  k->m_MouseButtons[i] = buttons;
+  if (nDisplacementX != 0 || nDisplacementY != 0) {
+    // The movement covers the time since the last report, or at most
+    // kMouseMaxSpan when the mouse was resting.
+    unsigned start = k->m_MouseLastReport;
+    if (now - start > kMouseMaxSpan) {
+      start = now - kMouseMaxSpan;
+    }
+    k->m_MouseX += nDisplacementX;
+    k->m_MouseY += nDisplacementY;
+    TMouseReport &r = k->m_MouseHistory[k->m_MouseReports % MOUSE_HISTORY];
+    r.start = start;
+    r.end = now;
+    r.x = k->m_MouseX;
+    r.y = k->m_MouseY;
+    r.dx = nDisplacementX;
+    r.dy = nDisplacementY;
+    k->m_MouseReports++;
+  }
+  k->m_MouseLastReport = now;
+  k->m_Lock.Release();
+}
+
+// Core 1, once a frame: the movement since the last call, taken from the
+// mice's position kMouseDelay ago, so a frame gets the same share of a
+// steady movement whether one report or two arrived during it.
+unsigned CKernel::Mouse(int *dx, int *dy) {
+  unsigned buttons = 0;
+  unsigned when = CTimer::GetClockTicks() - kMouseDelay;
+  m_Lock.Acquire();
+  int x = m_MouseReadX, y = m_MouseReadY;
+  unsigned kept = m_MouseReports < MOUSE_HISTORY ? m_MouseReports : MOUSE_HISTORY;
+  for (unsigned n = 1; n <= kept; n++) {
+    const TMouseReport &r = m_MouseHistory[(m_MouseReports - n) % MOUSE_HISTORY];
+    if ((int)(when - r.start) < 0) {
+      // Started after WHEN: the position is from before it.
+      x = r.x - r.dx;
+      y = r.y - r.dy;
+      continue;
+    }
+    if ((int)(when - r.end) >= 0 || r.end == r.start) {
+      x = r.x;
+      y = r.y;
+    } else {
+      // Part way through: take back the part still to come.
+      int left = (int)(r.end - when);
+      int span = (int)(r.end - r.start);
+      x = r.x - r.dx * left / span;
+      y = r.y - r.dy * left / span;
+    }
+    break;
+  }
+  *dx = x - m_MouseReadX;
+  *dy = y - m_MouseReadY;
+  m_MouseReadX = x;
+  m_MouseReadY = y;
+  for (unsigned i = 0; i < MAX_MICE; i++) {
+    buttons |= m_MouseButtons[i];
+  }
+  m_Lock.Release();
+  return buttons;
 }
 
 //
@@ -1126,6 +1251,8 @@ int host_key_down(int usage) { return CKernel::Get()->KeyDown(usage); }
 unsigned host_key_modifiers(void) { return CKernel::Get()->KeyModifiers(); }
 
 int host_pad_state(int pad) { return CKernel::Get()->PadState(pad); }
+
+unsigned host_mouse(int *dx, int *dy) { return CKernel::Get()->Mouse(dx, dy); }
 
 int host_gpio_joystick(int port) { return CKernel::Get()->GpioJoystick(port); }
 

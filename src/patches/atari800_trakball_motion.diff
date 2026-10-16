@@ -1,0 +1,178 @@
+diff --git a/src/input.c b/src/input.c
+index 29c3bc6a..51d7dcda 100644
+--- a/src/input.c
++++ b/src/input.c
+@@ -4,6 +4,8 @@
+  * Copyright (C) 2001-2002 Piotr Fusik
+  * Copyright (C) 2001-2006 Atari800 development team (see DOC/CREDITS)
+  *
++ * BMA800XL: retain fractional CX22 movement and step only complete pulses.
++ *
+  * This file is part of the Atari800 emulator project which emulates
+  * the Atari 400, 800, 800XL, 130XE, and 5200 8-bit computers.
+  *
+@@ -94,6 +96,12 @@ static int mouse_move_y = 0;
+ static int mouse_pen_show_pointer = 0;
+ static int mouse_last_right = 0;
+ static int mouse_last_down = 0;
++static int mouse_trak_move_x = 0;
++static int mouse_trak_move_y = 0;
++static int mouse_trak_steps_x = 0;
++static int mouse_trak_steps_y = 0;
++static int mouse_trak_phase_x = 0;
++static int mouse_trak_phase_y = 0;
+ 
+ static const UBYTE mouse_amiga_codes[16] = {
+ 	0x00, 0x02, 0x0a, 0x08,
+@@ -422,6 +430,38 @@ static UBYTE mouse_step(void)
+ 	return r;
+ }
+ 
++static int mouse_trak_steps(int *movement)
++{
++	int steps = *movement / (1 << (MOUSE_SHIFT + 1));
++	if (steps > Atari800_tv_mode)
++		steps = Atari800_tv_mode;
++	else if (steps < -Atari800_tv_mode)
++		steps = -Atari800_tv_mode;
++	*movement -= steps * (1 << (MOUSE_SHIFT + 1));
++	return steps;
++}
++
++static int mouse_trak_step(int steps, int *phase)
++{
++	*phase += steps;
++	if (*phase >= Atari800_tv_mode) {
++		*phase -= Atari800_tv_mode;
++		return 1;
++	}
++	if (*phase <= -Atari800_tv_mode) {
++		*phase += Atari800_tv_mode;
++		return -1;
++	}
++	return 0;
++}
++
++static UBYTE mouse_trak_code(void)
++{
++	/* bit 3: vertical clock, bit 2: down; bit 1: horizontal clock, bit 0: right */
++	return ((mouse_y & 1) << 3) | (mouse_last_down << 2)
++	     | ((mouse_x & 1) << 1) | mouse_last_right;
++}
++
+ void INPUT_Frame(void)
+ {
+ 	int i;
+@@ -429,8 +469,17 @@ void INPUT_Frame(void)
+ 	static int last_key_break = 0;
+ 	static UBYTE last_stick[4] = {INPUT_STICK_CENTRE, INPUT_STICK_CENTRE, INPUT_STICK_CENTRE, INPUT_STICK_CENTRE};
+ 	static int last_mouse_buttons = 0;
++	static int last_mouse_mode = INPUT_MOUSE_OFF;
+ 
+ 	scanline_counter = 10000;	/* do nothing in INPUT_Scanline() */
++	mouse_trak_steps_x = mouse_trak_steps_y = 0;
++	mouse_trak_phase_x = mouse_trak_phase_y = 0;
++	if (INPUT_mouse_mode != last_mouse_mode &&
++	    (INPUT_mouse_mode == INPUT_MOUSE_TRAK || last_mouse_mode == INPUT_MOUSE_TRAK)) {
++		mouse_move_x = mouse_move_y = 0;
++		mouse_trak_move_x = mouse_trak_move_y = 0;
++	}
++	last_mouse_mode = INPUT_mouse_mode;
+ 
+ 	/* handle keyboard */
+ 
+@@ -711,9 +760,22 @@ void INPUT_Frame(void)
+ 		if ((INPUT_mouse_buttons & 2) && !(last_mouse_buttons & 2))
+ 			mouse_pen_show_pointer = !mouse_pen_show_pointer;
+ 		break;
++	case INPUT_MOUSE_TRAK:
++		/* Keep fractions in 1/32-pulse units across frames. */
++		mouse_trak_move_x += INPUT_mouse_delta_x * INPUT_mouse_speed;
++		mouse_trak_move_y += INPUT_mouse_delta_y * INPUT_mouse_speed;
++		mouse_trak_steps_x = mouse_trak_steps(&mouse_trak_move_x);
++		mouse_trak_steps_y = mouse_trak_steps(&mouse_trak_move_y);
++		STICK[INPUT_mouse_port] = mouse_trak_code();
++		if (INPUT_mouse_buttons & 1)
++			TRIG_input[INPUT_mouse_port] = 0;
++		if (INPUT_mouse_buttons & 2)
++			POKEY_POT_input[INPUT_mouse_port << 1] = 1;
++		if (INPUT_mouse_buttons & 4)
++			POKEY_POT_input[(INPUT_mouse_port << 1) + 1] = 1;
++		break;
+ 	case INPUT_MOUSE_AMIGA:
+ 	case INPUT_MOUSE_ST:
+-	case INPUT_MOUSE_TRAK:
+ 		mouse_move_x += (INPUT_mouse_delta_x * INPUT_mouse_speed) >> 1;
+ 		mouse_move_y += (INPUT_mouse_delta_y * INPUT_mouse_speed) >> 1;
+ 
+@@ -734,16 +796,8 @@ void INPUT_Frame(void)
+ 					max_scanline_counter = scanline_counter = Atari800_tv_mode / i;
+ 				mouse_step();
+ 			}
+-			if (INPUT_mouse_mode == INPUT_MOUSE_TRAK) {
+-				/* bit 3 toggles - vertical movement, bit 2 = 0 - up */
+-				/* bit 1 toggles - horizontal movement, bit 0 = 0 - left */
+-				STICK[INPUT_mouse_port] = ((mouse_y & 1) << 3) | (mouse_last_down << 2)
+-									| ((mouse_x & 1) << 1) | mouse_last_right;
+-			}
+-			else {
+-				STICK[INPUT_mouse_port] = (INPUT_mouse_mode == INPUT_MOUSE_AMIGA ? mouse_amiga_codes : mouse_st_codes)
+-									[(mouse_y & 3) * 4 + (mouse_x & 3)];
+-			}
++			STICK[INPUT_mouse_port] = (INPUT_mouse_mode == INPUT_MOUSE_AMIGA ? mouse_amiga_codes : mouse_st_codes)
++								[(mouse_y & 3) * 4 + (mouse_x & 3)];
+ 		}
+ 
+ 		if (INPUT_mouse_buttons & 1)
+@@ -965,22 +1019,29 @@ int INPUT_PlaybackInt(void)
+ 
+ void INPUT_Scanline(void)
+ {
+-	if (--scanline_counter == 0) {
+-		mouse_step();
+-		if (INPUT_mouse_mode == INPUT_MOUSE_TRAK) {
+-			/* bit 3 toggles - vertical movement, bit 2 = 0 - up */
+-			/* bit 1 toggles - horizontal movement, bit 0 = 0 - left */
+-			STICK[INPUT_mouse_port] = ((mouse_y & 1) << 3) | (mouse_last_down << 2)
+-								| ((mouse_x & 1) << 1) | mouse_last_right;
++	if (INPUT_mouse_mode == INPUT_MOUSE_TRAK) {
++		int dx = mouse_trak_step(mouse_trak_steps_x, &mouse_trak_phase_x);
++		int dy = mouse_trak_step(mouse_trak_steps_y, &mouse_trak_phase_y);
++		if (dx) {
++			mouse_x += dx;
++			mouse_last_right = dx > 0;
+ 		}
+-		else {
+-			STICK[INPUT_mouse_port] = (INPUT_mouse_mode == INPUT_MOUSE_AMIGA ? mouse_amiga_codes : mouse_st_codes)
+-								[(mouse_y & 3) * 4 + (mouse_x & 3)];
++		if (dy) {
++			mouse_y += dy;
++			mouse_last_down = dy > 0;
+ 		}
+-		PIA_PORT_input[0] = (STICK[1] << 4) | STICK[0];
+-		PIA_PORT_input[1] = (STICK[3] << 4) | STICK[2];
++		STICK[INPUT_mouse_port] = mouse_trak_code();
++	}
++	else if (--scanline_counter == 0) {
++		mouse_step();
++		STICK[INPUT_mouse_port] = (INPUT_mouse_mode == INPUT_MOUSE_AMIGA ? mouse_amiga_codes : mouse_st_codes)
++							[(mouse_y & 3) * 4 + (mouse_x & 3)];
+ 		scanline_counter = max_scanline_counter;
+ 	}
++	else
++		return;
++	PIA_PORT_input[0] = (STICK[1] << 4) | STICK[0];
++	PIA_PORT_input[1] = (STICK[3] << 4) | STICK[2];
+ }
+ 
+ void INPUT_SelectMultiJoy(int no)
+@@ -1013,6 +1074,9 @@ void INPUT_CenterMousePointer(void)
+ 	case INPUT_MOUSE_JOY:
+ 		mouse_move_x = 0;
+ 		mouse_move_y = 0;
++		mouse_trak_move_x = mouse_trak_move_y = 0;
++		mouse_trak_steps_x = mouse_trak_steps_y = 0;
++		mouse_trak_phase_x = mouse_trak_phase_y = 0;
+ 		break;
+ 	}
+ }

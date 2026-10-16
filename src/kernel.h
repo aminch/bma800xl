@@ -20,6 +20,7 @@
 #include <circle/gpiomanager.h>
 #include <circle/gpiopin.h>
 #include <circle/input/console.h>
+#include <circle/input/mouse.h>
 #include <circle/interrupt.h>
 #include <circle/koptions.h>
 #include <circle/logger.h>
@@ -56,6 +57,7 @@
 #endif
 
 #define MAX_KEYBOARDS 4
+#define MAX_MICE 4
 
 enum TShutdownMode { ShutdownNone, ShutdownHalt, ShutdownReboot };
 
@@ -106,6 +108,7 @@ public:
   int KeyDown(int usage);
   unsigned KeyModifiers(void);
   int PadState(int pad);
+  unsigned Mouse(int *dx, int *dy);
   int GpioJoystick(int port);
   double Time(void);
   void Reboot(void);
@@ -124,6 +127,10 @@ private:
   static void GamePadStatusHandler(unsigned nDeviceIndex,
                                    const TGamePadState *pState);
   static void GamePadRemovedHandler(CDevice *pDevice, void *pContext);
+  static void MouseStatusHandler(unsigned nButtons, int nDisplacementX,
+                                 int nDisplacementY, int nWheelMove,
+                                 void *pArg);
+  static void MouseRemovedHandler(CDevice *pDevice, void *pContext);
 
 public:
   // Core 0, task level: sets up USB devices that were plugged in.
@@ -132,6 +139,7 @@ public:
 private:
   void SetupUSBKeyboards(void);
   void SetupUSBGamePads(void);
+  void SetupUSBMice(void);
   void SetupGPIOJoysticks(void);
 #if RASPPI >= 5
   void CheckPowerButton(void);
@@ -204,6 +212,25 @@ private:
   // Axes the direction is read from on pads Circle doesn't know.
   int m_PadAxisX[HOST_PADS];
   int m_PadAxisY[HOST_PADS];
+
+  // Mice (guarded by m_Lock). The buttons are the union of each mouse's.
+  // Movement from all of them adds up to one position; each report's
+  // movement is spread evenly over the time since the report before, and
+  // the emulator is given the position a fixed delay ago (Mouse()).
+  CMouseDevice *m_pMouse[MAX_MICE];
+  unsigned m_MouseIndex[MAX_MICE];
+  unsigned m_MouseButtons[MAX_MICE];
+  enum { MOUSE_HISTORY = 64 };
+  struct TMouseReport {
+    unsigned start, end;  // clock ticks the movement covers
+    int x, y;             // position after it
+    int dx, dy;           // the movement
+  };
+  TMouseReport m_MouseHistory[MOUSE_HISTORY];
+  unsigned m_MouseReports = 0;     // reports kept so far
+  unsigned m_MouseLastReport = 0;  // clock ticks
+  int m_MouseX = 0, m_MouseY = 0;
+  int m_MouseReadX = 0, m_MouseReadY = 0;  // position given to the emulator
 
   bool m_bGPIOJoysticks;
   CGPIOPin *m_pJoyPins[2][5];

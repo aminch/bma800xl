@@ -16,6 +16,7 @@ void BMA_KeyboardInit(void);
 void BMA_InputSettingsChanged(void);
 int BMA_PortPad(int port);
 int BMA_JoystickState(int port);
+void BMA_ReadMouse(void);
 int BMA_CharToAkey(int c, int shiftctrl);
 
 /* platform.c */

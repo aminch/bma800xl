@@ -239,6 +239,10 @@ static int q_usage[QSIZE], q_pressed[QSIZE];
 static int q_head, q_tail;
 static unsigned char key_state[256];
 static int pads[HOST_PADS] = {-1, -1, -1, -1};
+/* The mouse moves this much every time it is read, until the script
+   changes it. */
+static int mouse_dx, mouse_dy;
+static unsigned mouse_buttons;
 
 static void push_key(int usage, int pressed)
 {
@@ -273,6 +277,13 @@ unsigned host_key_modifiers(void)
 
 int host_pad_state(int pad) { return pad >= 0 && pad < HOST_PADS ? pads[pad] : -1; }
 int host_gpio_joystick(int port) { (void) port; return 0; }
+
+unsigned host_mouse(int *dx, int *dy)
+{
+	*dx = mouse_dx;
+	*dy = mouse_dy;
+	return mouse_buttons;
+}
 
 /* US layout: character to (usage, shift). */
 static int char_usage(int c, int *shift)
@@ -371,6 +382,8 @@ static void run_script(void)
 			int pad, bits;
 			sscanf(line + n, "%d %i", &pad, &bits);
 			pads[pad] = bits;
+		} else if (strcmp(cmd, "mouse") == 0) {
+			sscanf(line + n, "%d %d %u", &mouse_dx, &mouse_dy, &mouse_buttons);
 		} else if (strcmp(cmd, "shot") == 0) {
 			screenshot(line + n + 1);
 		} else if (strcmp(cmd, "webui") == 0) {

@@ -110,6 +110,15 @@ in the menu's *Controllers*; the gamepad numbers are the ones in the log
 (`Gamepad 2 connected: ...`). *Joystick Test* there shows what each port
 receives.
 
+**USB mouse as a trackball**: open *Controller configuration* with Alt+J,
+choose *Mouse device: Trak-ball*, and select the mouse port and speed
+(1-9). The program must support native CX22 trackball input on that port;
+a joystick-only program needs *Mouse device: Joystick* instead. The left
+mouse button is fire.
+
+*Missile Command* also needs **Ctrl+T** at its title screen to switch the
+game itself from joystick to trackball control, before pressing Start.
+
 **Numeric keypad**: 8/2/4/6 and 7/9/1/3 for diagonals, 0 or 5 to fire. On by
 default; `keypad_joystick=0` turns it off.
 
