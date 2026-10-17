@@ -3,8 +3,8 @@ crt-pi
 
 The CRT effect in BMA800XL is the crt-pi shader by davej, from the copy
 BMC64 ships (src/crt_pi_idx.c, src/crt_pi_rgb.c). BMA800XL uses it on the
-ARM (src/pi4/scaler.cpp) and, compiled for the Raspberry Pi 4 and Pi 5's
-3D GPU, from tools/v3dshader/crt.frag (src/pi4v3d/shader_crt*.h,
+ARM (src/av/scaler.cpp) and, compiled for the Raspberry Pi 4 and Pi 5's
+3D GPU, from tools/v3dshader/crt.frag (src/v3d/shader_crt*.h,
 shader71_crt*.h). Its notice:
 
     crt-pi - A Raspberry Pi friendly CRT shader.

@@ -1,7 +1,7 @@
 //
 // test_pi5.cpp
 //
-// Tests the Pi 5's display list entries (src/pi5kms/dlist.cpp) and HDMI
+// Tests the Pi 5's display list entries (src/kms/pi5/dlist.cpp) and HDMI
 // PHY settings (phy.cpp) on a PC, against values worked out by hand: a
 // 384x288 picture shown 1440x1080 at (240, 0), and unscaled; the PLL's
 // divider and rate manager offset for the standard TMDS rates.
@@ -12,8 +12,8 @@
 // Raspberry Pi. See LICENSE for licensing details.
 //
 
-#include "../../src/pi5kms/dlist.h"
-#include "../../src/pi5kms/phy.h"
+#include "../../src/kms/pi5/dlist.h"
+#include "../../src/kms/pi5/phy.h"
 
 #include <stdio.h>
 

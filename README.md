@@ -109,11 +109,14 @@ src/port/                  atari800's platform layer (PLATFORM_* functions),
                            its config.h and the list of atari800 sources
 third_party/atari800       atari800 (submodule)
 third_party/circle-stdlib  Circle and newlib (submodule)
-src/pi4/                   Pi 4 display, smooth scaling / CRT shader, HDMI sound
-src/pi4kms/                Pi 4 direct display driver (docs/PI4.md)
+src/av/                   Shared Pi 4/5 video, ARM scaling / CRT shader and sound
+src/v3d/                  Shared Pi 4/5 GPU driver and CRT rendering
+src/kms/common/           Shared Pi 4/5 filter kernels and mode calculations
+src/kms/pi4/              Pi 4 direct display driver (docs/PI4.md)
+src/kms/pi5/              Pi 5 direct display driver (docs/PI5.md)
 tools/hostsim              Runs the emulator port on a PC for testing
-tools/pi4scaler            Tests the Pi 4's smooth scaling and CRT shader on a PC
-tools/pi4kms               Tests the Pi 4 display driver's calculations on a PC
+tools/pi4scaler            Tests shared Pi 4/5 ARM scaling and CRT rendering on a PC
+tools/pi4kms               Tests Pi 4/5 display driver calculations on a PC
 ```
 
 ## Licence

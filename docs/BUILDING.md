@@ -89,17 +89,18 @@ tools/hostsim/run_tests.sh
 Screenshots are written to `tools/hostsim/out/` and compared with
 `tools/hostsim/expected/`; `--update` replaces the reference images.
 
-`tools/pi4scaler` tests the Pi 4's smooth scaling and CRT shader
-(`src/pi4/scaler.*`): every pixel is checked against crt-pi worked out in
+`tools/pi4scaler` tests the shared Pi 4/5 ARM smooth scaling and CRT shader
+(`src/av/scaler.*`): every pixel is checked against crt-pi worked out in
 floating point, and the pictures are written to `tools/pi4scaler/out/`.
 
 ```
 tools/pi4scaler/run_tests.sh
 ```
 
-`tools/pi4kms` tests the calculations of the Pi 4's direct display driver
-(`src/pi4kms/`, see [PI4.md](PI4.md)): filter kernels, display lists,
-EDID, the choice of video mode, the AVI InfoFrame and the PHY's settings.
+`tools/pi4kms` tests the Pi 4/5 direct display drivers (`src/kms/`, see
+[PI4.md](PI4.md) and [PI5.md](PI5.md)): shared filter kernels, EDID, mode
+choice, HDMI packets and audio clocks, and each board's display lists and
+PHY settings.
 
 ```
 tools/pi4kms/run_tests.sh
@@ -132,8 +133,11 @@ with `tools/gen_webui_assets.py` whenever an asset changes.
 | `sdcard/`                    | Files for the SD card                       |
 | `third_party/atari800`       | atari800 (submodule)                        |
 | `third_party/circle-stdlib`  | Circle and newlib (submodule)               |
-| `src/pi4/`                   | Pi 4 display, smooth scaling / CRT shader, HDMI sound |
-| `src/pi4kms/`                | Pi 4 direct display driver                  |
+| `src/av/`                   | Shared Pi 4/5 video, ARM scaling / CRT shader and sound |
+| `src/v3d/`                  | Shared Pi 4/5 GPU driver and CRT rendering   |
+| `src/kms/common/`           | Shared Pi 4/5 filter kernels and mode calculations |
+| `src/kms/pi4/`              | Pi 4 direct display driver and PHY          |
+| `src/kms/pi5/`              | Pi 5 direct display driver and PHY          |
 | `tools/hostsim`              | PC test harness                             |
-| `tools/pi4scaler`            | PC test of the Pi 4's smooth scaling and CRT shader |
-| `tools/pi4kms`               | PC test of the Pi 4 display driver's calculations |
+| `tools/pi4scaler`            | PC test of shared Pi 4/5 ARM scaling and CRT rendering |
+| `tools/pi4kms`               | PC test of Pi 4/5 display driver calculations |

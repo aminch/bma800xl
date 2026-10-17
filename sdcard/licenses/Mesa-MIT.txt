@@ -6,7 +6,7 @@ BMA800XL's Raspberry Pi 4 and Pi 5 GPU code adapts material from the Mesa
 Mesa files are under the MIT licence below. Each file's copyright notice is
 listed with it, copied from Mesa 25.2.8; the files' own notices apply.
 
-1. Adapted into the Raspberry Pi 4 and Pi 5 kernels (src/pi4v3d/)
+1. Adapted into the Raspberry Pi 4 and Pi 5 kernels (src/v3d/)
 
    The V3D 4.2 (Pi 4) material from Mesa 26.2.4, the V3D 7.1 (Pi 5)
    material from Mesa 25.2.8; the packets for both were checked against
@@ -52,7 +52,7 @@ listed with it, copied from Mesa 25.2.8; the files' own notices apply.
        Copyright © 2015 Intel Corporation
        Copyright © 2022 Collabora, LTD
 
-The compiled shaders in src/pi4v3d/ (shader_*.h, shader71_*.h) are output
+The compiled shaders in src/v3d/ (shader_*.h, shader71_*.h) are output
 of Mesa 25.2.8's V3D compiler run by that tool; they are not Mesa code.
 The crt-pi shaders among them are under crt-pi's licence (crt-pi.txt).
 

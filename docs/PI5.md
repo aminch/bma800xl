@@ -1,8 +1,9 @@
 # Raspberry Pi 5, Pi 500 and Pi 500+
 
 BMA800XL runs on the Pi 5, Pi 500 and Pi 500+ as a 64-bit kernel,
-`kernel_2712.img`. It shares the Pi 4's code (`src/pi4/`, see
-[PI4.md](PI4.md)) wherever the hardware is the same; the emulator, menus,
+`kernel_2712.img`. It shares audio/video code (`src/av/`), the V3D GPU
+driver (`src/v3d/`) and display calculations (`src/kms/common/`) with the
+Pi 4 (see [PI4.md](PI4.md)); the emulator, menus,
 USB keyboards and gamepads, networking (Ethernet and Wi-Fi) and the web UI
 work as on the other boards.
 
@@ -14,7 +15,7 @@ name Circle looks for on the Pi 5
 ## Picture
 
 BMA800XL shows the picture through the Pi 5's HVS with its own display
-driver (`src/pi5kms/`), and runs the display at the Atari's frame rate, as
+driver (`src/kms/pi5/`), and runs the display at the Atari's frame rate, as
 on the Pi 4 (see `video_driver` in [PI4.md](PI4.md)). The Pi 5's firmware
 ignores `hdmi_mode` and picks the display's own preferred resolution, so the
 *Resolution* setting (Video menu, or `resolution` in `cmdline.txt`) chooses

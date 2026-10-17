@@ -1,7 +1,7 @@
 //
 // test.cpp
 //
-// Tests the parts of the Pi 4's direct display driver (src/pi4kms/) that
+// Tests the parts of the Pi 4's direct display driver (src/kms/pi4/) that
 // are pure calculation, on a PC, against the values they must produce. The
 // register writes themselves need a Pi 4.
 //
@@ -11,9 +11,9 @@
 // Raspberry Pi. See LICENSE for licensing details.
 //
 
-#include "../../src/pi4kms/dlist.h"
-#include "../../src/pi4kms/filter.h"
-#include "../../src/pi4kms/regs.h"
+#include "../../src/kms/pi4/dlist.h"
+#include "../../src/kms/common/filter.h"
+#include "../../src/kms/pi4/regs.h"
 #include "tests.h"
 
 #include <math.h>

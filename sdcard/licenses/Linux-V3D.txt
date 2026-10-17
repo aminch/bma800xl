@@ -1,7 +1,7 @@
 Linux notices
 =============
 
-BMA800XL's Raspberry Pi 4 and Pi 5 GPU code (src/pi4v3d/gpu.cpp, regs.h)
+BMA800XL's Raspberry Pi 4 and Pi 5 GPU code (src/v3d/gpu.cpp, regs.h)
 adapts parts of these Linux kernel files, from the Raspberry Pi kernel
 (https://github.com/raspberrypi/linux, branch rpi-6.18.y, Linux 6.18.57), all
 SPDX-License-Identifier: GPL-2.0+ (version 2 or later; GPL-2.0.txt):

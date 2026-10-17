@@ -88,7 +88,7 @@ void CEmulatorCore::Run(unsigned nCore) {
     bma800xl_main();
   }
 #if RASPPI >= 4
-  // Cores 2 and 3 help draw smoothed and CRT frames (src/pi4/video.h).
+  // Cores 2 and 3 help draw smoothed and CRT frames (src/av/video.h).
   if (nCore >= 2) {
     Pi4Video::WorkerLoop(nCore);
   }
@@ -242,7 +242,7 @@ bool CKernel::Initialize(void) {
 
 #if RASPPI >= 4
   // Display and sound are set up here, on core 0: Circle's sound drivers
-  // must be started on core 0 (see src/pi4/sound.h).
+  // must be started on core 0 (see src/av/sound.h).
   Pi4Sound::Output sound_output = Pi4Sound::Output::Auto;
   if (strcmp(audio_out, "hdmi") == 0) {
     sound_output = Pi4Sound::Output::Hdmi;
