@@ -1,3 +1,9 @@
+## 1.4.1 – 2026-10-17
+
+- Implement USB mouse as an Atari CX22 Trak-ball or a joystick (Alt+J, *Mouse device*)
+- Smoother Trak-ball movement and more accurate pulse timing
+- `build_sdcard.sh` builds several boards at once, e.g. `./build_sdcard.sh pi4 pi5`
+
 ## 1.4.0 – 2026-10-14
 
 - Raspberry Pi Zero and Zero W support (`kernel.img`)
