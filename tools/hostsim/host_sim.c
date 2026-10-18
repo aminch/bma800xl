@@ -11,6 +11,8 @@
  *   <frame> key <usage> <0|1>     press or release a key (USB HID usage)
  *   <frame> type <text>            type text (US layout, one key per frame)
  *   <frame> pad <n> <bits>         set gamepad n to HOST_PAD_* bits
+ *   <frame> padraw <n> <bits>      independent gameplay button bits
+ *   <frame> padname <n> <name>     generic USB controller product name
  *   <frame> gpio <n> <bits>        set GPIO joystick n to HOST_JOY_* bits
  *   <frame> shot <file.ppm>        save the visible screen
  *   <frame> audio                  print audio statistics
@@ -26,6 +28,7 @@
 #include <string.h>
 
 #include "../../src/host.h"
+#include "../../src/gamepad_profiles.h"
 
 /* From src/port/platform.c, called by the web UI on the Pi. */
 void bma_request_power(int power_off);
@@ -98,7 +101,7 @@ const char *host_option(const char *name, const char *default_value)
 
 int host_option_int(const char *name, int default_value)
 {
-	const char *v = option(name);
+	const char *v = host_option(name, NULL);
 	return v ? atoi(v) : default_value;
 }
 
@@ -240,6 +243,9 @@ static int q_usage[QSIZE], q_pressed[QSIZE];
 static int q_head, q_tail;
 static unsigned char key_state[256];
 static int pads[HOST_PADS] = {-1, -1, -1, -1};
+static uint32_t pad_buttons[HOST_PADS];
+static char pad_names[HOST_PADS][64];
+static unsigned pad_generation[HOST_PADS];
 static int gpio_joysticks[2] = {0, 0};
 /* The mouse moves this much every time it is read, until the script
    changes it. */
@@ -278,6 +284,28 @@ unsigned host_key_modifiers(void)
 }
 
 int host_pad_state(int pad) { return pad >= 0 && pad < HOST_PADS ? pads[pad] : -1; }
+uint32_t host_pad_buttons(int pad)
+{
+	return pad >= 0 && pad < HOST_PADS && pads[pad] >= 0 ? pad_buttons[pad] : 0;
+}
+
+int host_pad_info(int pad, struct host_pad_info *info)
+{
+	if (pad < 0 || pad >= HOST_PADS || pads[pad] < 0)
+		return 0;
+	memset(info, 0, sizeof(*info));
+	if (pad_names[pad][0])
+		snprintf(info->name, sizeof(info->name), "%s", pad_names[pad]);
+	else
+		snprintf(info->name, sizeof(info->name), "Gamepad %d", pad + 1);
+	info->known = !pad_names[pad][0];
+	if (strcmp(pad_names[pad], "8BitDo M30 2.4G") == 0)
+		strcpy(info->usb_id, "venca3-24");
+	info->button_mask = (info->known ? 0xfff : host_pad_generic_buttons(0xffff))
+	                  | pad_buttons[pad];
+	info->generation = pad_generation[pad];
+	return 1;
+}
 int host_gpio_joystick(int port)
 {
 	return port >= 0 && port < 2 && host_option_int("gpio_joysticks", 0)
@@ -387,7 +415,31 @@ static void run_script(void)
 		} else if (strcmp(cmd, "pad") == 0) {
 			int pad, bits;
 			sscanf(line + n, "%d %i", &pad, &bits);
+			if (pads[pad] < 0 && bits >= 0)
+				pad_generation[pad]++;
 			pads[pad] = bits;
+			pad_buttons[pad] = bits >= 0 ? bits & 0xff : 0;
+		} else if (strcmp(cmd, "padraw") == 0) {
+			int pad;
+			unsigned bits;
+			if (sscanf(line + n, "%d %x", &pad, &bits) != 2 || pad < 0 || pad >= HOST_PADS) {
+				fprintf(stderr, "[sim] invalid padraw command: %s\n", line);
+				exit(1);
+			}
+			if (pads[pad] < 0)
+				pad_generation[pad]++;
+			pad_buttons[pad] = bits & ~(UINT32_C(1) << 12);
+			pads[pad] = (pads[pad] > 0 ? pads[pad] & 0xf100 : 0) | (bits & 0xff);
+			if (bits & (1u << 8)) pads[pad] |= HOST_PAD_L;
+			if (bits & (1u << 9)) pads[pad] |= HOST_PAD_R;
+		} else if (strcmp(cmd, "padname") == 0) {
+			int pad, offset;
+			if (sscanf(line + n, "%d %n", &pad, &offset) != 1 || pad < 0 || pad >= HOST_PADS) {
+				fprintf(stderr, "[sim] invalid padname command: %s\n", line);
+				exit(1);
+			}
+			snprintf(pad_names[pad], sizeof(pad_names[pad]), "%s", line + n + offset);
+			pad_generation[pad]++;
 		} else if (strcmp(cmd, "gpio") == 0) {
 			int port, bits;
 			if (sscanf(line + n, "%d %i", &port, &bits) != 2 || port < 0 || port >= 2) {

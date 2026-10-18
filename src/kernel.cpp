@@ -7,9 +7,12 @@
 // Parts of the USB, frame buffer and sound handling are based on BMC64's
 // kernel.cpp, and those parts remain under the Apache License 2.0
 // (sdcard/licenses/Apache-2.0.txt).
+// Gamepad names and individual buttons use Circle's usb/usbgamepad.h and
+// device.h interfaces.
 //
 
 #include "kernel.h"
+#include "gamepad_profiles.h"
 #include "logging.h"
 #include "network.h"
 
@@ -153,6 +156,8 @@ CKernel::CKernel(void)
   for (unsigned i = 0; i < HOST_PADS; i++) {
     m_pGamePad[i] = 0;
     m_PadState[i] = -1;
+    memset(&m_PadInfo[i], 0, sizeof m_PadInfo[i]);
+    m_PadButtons[i] = 0;
     m_PadAxisX[i] = 0;
     m_PadAxisY[i] = 1;
   }
@@ -523,16 +528,6 @@ unsigned CKernel::KeyModifiers(void) { return m_MergedModifiers; }
 // USB gamepads
 //
 
-// Pads Circle doesn't know whose direction is not on axes 0 and 1, by USB
-// vendor and product ID (as BMC64's usb_gamepad_defaults.c).
-static const struct {
-  const char *vendor;
-  int axis_x;
-  int axis_y;
-} kPadProfiles[] = {
-    {"venca3-24", 3, 4}, // 8BitDo M30 2.4G
-};
-
 void CKernel::SetupUSBGamePads(void) {
   for (unsigned i = 0; i < HOST_PADS; i++) {
     if (m_pGamePad[i] != 0) {
@@ -543,23 +538,31 @@ void CKernel::SetupUSBGamePads(void) {
     m_pGamePad[i] =
         (CUSBGamePadDevice *)mDeviceNameService.GetDevice(name, FALSE);
     if (m_pGamePad[i] != 0) {
-      m_pGamePad[i]->RegisterRemovedHandler(GamePadRemovedHandler);
-      m_pGamePad[i]->RegisterStatusHandler(GamePadStatusHandler);
-      m_PadState[i] = 0;
-      m_PadAxisX[i] = 0;
-      m_PadAxisY[i] = 1;
       CString *vendor = m_pGamePad[i]->GetDevice()->GetName(DeviceNameVendor);
-      for (unsigned p = 0; vendor != 0 && p < sizeof kPadProfiles /
-                                                  sizeof kPadProfiles[0]; p++) {
-        if (strcmp(*vendor, kPadProfiles[p].vendor) == 0) {
-          m_PadAxisX[i] = kPadProfiles[p].axis_x;
-          m_PadAxisY[i] = kPadProfiles[p].axis_y;
-        }
-      }
       const char *product = m_pGamePad[i]->GetProperty(CDevice::PropertyProduct);
       if (product == 0) {
-        product = "unknown";
+        product = "USB gamepad";
       }
+      bool known = (m_pGamePad[i]->GetProperties() & GamePadPropertyIsKnown) != 0;
+      const char *usb_id = vendor != 0 ? (const char *)*vendor : "";
+      const bma_gamepad_profile *profile = BMA_GamepadProfile(usb_id, known);
+      m_PadAxisX[i] = profile->axis_x;
+      m_PadAxisY[i] = profile->axis_y;
+      const TGamePadState *initial = m_pGamePad[i]->GetInitialState();
+      unsigned count = initial->nbuttons > 0 ? initial->nbuttons : 0;
+      uint32_t mask = count >= 32 ? UINT32_MAX : (UINT32_C(1) << count) - 1;
+      m_Lock.Acquire();
+      snprintf(m_PadInfo[i].name, sizeof m_PadInfo[i].name, "%s",
+               profile->name != 0 ? profile->name : product);
+      snprintf(m_PadInfo[i].usb_id, sizeof m_PadInfo[i].usb_id, "%s", usb_id);
+      m_PadInfo[i].known = known;
+      m_PadInfo[i].button_mask = known ? 0xfff : host_pad_generic_buttons(mask);
+      m_PadInfo[i].generation++;
+      m_PadButtons[i] = 0;
+      m_PadState[i] = 0;
+      m_Lock.Release();
+      m_pGamePad[i]->RegisterRemovedHandler(GamePadRemovedHandler);
+      m_pGamePad[i]->RegisterStatusHandler(GamePadStatusHandler);
       mLogger.Write(FromKernel, LogNotice,
                     "Gamepad %u connected: %s (%s)%s, axes %d/%d", i + 1,
                     product, vendor != 0 ? (const char *)*vendor : "?",
@@ -579,7 +582,10 @@ void CKernel::GamePadRemovedHandler(CDevice *pDevice, void *pContext) {
   for (unsigned i = 0; i < HOST_PADS; i++) {
     if (k->m_pGamePad[i] == pDevice) {
       k->m_pGamePad[i] = 0;
+      k->m_Lock.Acquire();
       k->m_PadState[i] = -1;
+      k->m_PadButtons[i] = 0;
+      k->m_Lock.Release();
     }
   }
 }
@@ -664,7 +670,7 @@ void CKernel::GamePadStatusHandler(unsigned nDeviceIndex,
   }
 
   // The left stick (axes 0 and 1 on most unknown pads), or the D-pad on
-  // pads that report it as axes (kPadProfiles).
+  // pads that report it as axes (gamepad_profiles.c).
   int x = AxisDirection(pState, known ? (int)GamePadAxisLeftX
                                       : k->m_PadAxisX[nDeviceIndex]);
   int y = AxisDirection(pState, known ? (int)GamePadAxisLeftY
@@ -674,7 +680,25 @@ void CKernel::GamePadStatusHandler(unsigned nDeviceIndex,
   if (y < 0) state |= HOST_PAD_UP;
   if (y > 0) state |= HOST_PAD_DOWN;
 
+  uint32_t buttons;
+  if (known) {
+    buttons = state & 0xff;
+    buttons &= ~(HOST_PAD_L | HOST_PAD_R);
+    if (b & GamePadButtonLB) buttons |= 1u << 4;
+    if (b & GamePadButtonRB) buttons |= 1u << 5;
+    if (b & GamePadButtonLT) buttons |= 1u << 8;
+    if (b & GamePadButtonRT) buttons |= 1u << 9;
+    if (b & GamePadButtonL3) buttons |= 1u << 10;
+    if (b & GamePadButtonR3) buttons |= 1u << 11;
+    if (b & GamePadButtonTouchpad) buttons |= 1u << 13;
+  } else {
+    buttons = host_pad_generic_buttons(b);
+  }
+  k->m_Lock.Acquire();
   k->m_PadState[nDeviceIndex] = state;
+  k->m_PadButtons[nDeviceIndex] = buttons;
+  k->m_PadInfo[nDeviceIndex].button_mask |= buttons;
+  k->m_Lock.Release();
 }
 
 int CKernel::PadState(int pad) {
@@ -682,6 +706,29 @@ int CKernel::PadState(int pad) {
     return -1;
   }
   return m_PadState[pad];
+}
+
+int CKernel::PadInfo(int pad, struct host_pad_info *info) {
+  if (pad < 0 || pad >= HOST_PADS) {
+    return 0;
+  }
+  m_Lock.Acquire();
+  int connected = m_PadState[pad] >= 0;
+  if (connected) {
+    *info = m_PadInfo[pad];
+  }
+  m_Lock.Release();
+  return connected;
+}
+
+uint32_t CKernel::PadButtons(int pad) {
+  if (pad < 0 || pad >= HOST_PADS) {
+    return 0;
+  }
+  m_Lock.Acquire();
+  uint32_t buttons = m_PadButtons[pad];
+  m_Lock.Release();
+  return buttons;
 }
 
 //
@@ -1251,6 +1298,10 @@ int host_key_down(int usage) { return CKernel::Get()->KeyDown(usage); }
 unsigned host_key_modifiers(void) { return CKernel::Get()->KeyModifiers(); }
 
 int host_pad_state(int pad) { return CKernel::Get()->PadState(pad); }
+int host_pad_info(int pad, struct host_pad_info *info) {
+  return CKernel::Get()->PadInfo(pad, info);
+}
+uint32_t host_pad_buttons(int pad) { return CKernel::Get()->PadButtons(pad); }
 
 unsigned host_mouse(int *dx, int *dy) { return CKernel::Get()->Mouse(dx, dy); }
 

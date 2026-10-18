@@ -31,8 +31,8 @@ BUILD := build
 A8_OBJS := $(addprefix $(BUILD)/atari800/,$(A8_SRCS:.c=.o))
 A8_LIB := $(BUILD)/libatari800.a
 
-OBJS = src/main.o src/kernel.o src/logging.o src/options.o \
-       src/port/platform.o src/port/keyboard.o src/port/menu.o src/port/fswrap.o \
+OBJS = src/main.o src/kernel.o src/logging.o src/options.o src/gamepad_profiles.o \
+       src/port/platform.o src/port/keyboard.o src/port/gamepad.o src/port/menu.o src/port/fswrap.o \
        src/port/modem.o src/network.o src/network_time_sync.o src/modem.o \
        src/webui/webui.o src/webui/webui_http.o src/webui/webui_fs.o \
        src/webui/webui_machine.o src/webui/webui_assets.o \

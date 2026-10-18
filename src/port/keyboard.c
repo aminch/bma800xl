@@ -1,12 +1,13 @@
 /*
- * keyboard.c - keyboard, gamepad and joystick input for BMA800XL.
+ * keyboard.c - keyboard translation, keyboard joysticks and USB mouse input.
  *
- * Translates USB HID keyboards and gamepads into what atari800 expects:
+ * Translates USB HID keyboards into what atari800 expects:
  * AKEY_* key codes from PLATFORM_Keyboard(), the console keys in
  * INPUT_key_consol, joystick state from PLATFORM_PORT/PLATFORM_TRIG, and
  * USB mice into INPUT_mouse_* for the device chosen in atari800's
  * Controller Configuration menu.
  * The behaviour follows atari800's SDL port so its documentation applies.
+ * Gamepad input is supplied by gamepad.c through the same key path.
  *
  * This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
  * Raspberry Pi. See LICENSE for licensing details.
@@ -14,7 +15,6 @@
 
 #include "config.h"
 
-#include <stdio.h>
 #include <string.h>
 
 #include "akey.h"
@@ -27,45 +27,8 @@
 #include "ui_basic.h"
 
 #include "../host.h"
+#include "../usb_hid_keys.h"
 #include "bma800xl.h"
-
-/* USB HID usage codes (keyboard page). */
-enum {
-	K_A = 0x04, K_Z = 0x1d,
-	K_1 = 0x1e, K_9 = 0x26, K_0 = 0x27,
-	K_RETURN = 0x28, K_ESCAPE = 0x29, K_BACKSPACE = 0x2a, K_TAB = 0x2b,
-	K_SPACE = 0x2c, K_MINUS = 0x2d, K_EQUAL = 0x2e, K_LEFTBRACKET = 0x2f,
-	K_RIGHTBRACKET = 0x30, K_BACKSLASH = 0x31, K_NONUS_HASH = 0x32,
-	K_SEMICOLON = 0x33, K_QUOTE = 0x34, K_GRAVE = 0x35, K_COMMA = 0x36,
-	K_PERIOD = 0x37, K_SLASH = 0x38, K_CAPSLOCK = 0x39,
-	K_F1 = 0x3a, K_F2, K_F3, K_F4, K_F5, K_F6, K_F7, K_F8, K_F9, K_F10,
-	K_F11, K_F12,
-	K_PRINTSCREEN = 0x46, K_SCROLLLOCK = 0x47, K_PAUSE = 0x48,
-	K_INSERT = 0x49, K_HOME = 0x4a, K_PAGEUP = 0x4b, K_DELETE = 0x4c,
-	K_END = 0x4d, K_PAGEDOWN = 0x4e, K_RIGHT = 0x4f, K_LEFT = 0x50,
-	K_DOWN = 0x51, K_UP = 0x52, K_NUMLOCK = 0x53,
-	K_KP_DIVIDE = 0x54, K_KP_MULTIPLY = 0x55, K_KP_MINUS = 0x56,
-	K_KP_PLUS = 0x57, K_KP_ENTER = 0x58, K_KP_1 = 0x59, K_KP_2, K_KP_3,
-	K_KP_4, K_KP_5, K_KP_6, K_KP_7, K_KP_8, K_KP_9, K_KP_0 = 0x62,
-	K_KP_PERIOD = 0x63, K_NONUS_BACKSLASH = 0x64, K_APPLICATION = 0x65,
-	K_POWER = 0x66,
-	K_LCTRL = 0xe0, K_LSHIFT = 0xe1, K_LALT = 0xe2, K_LGUI = 0xe3,
-	K_RCTRL = 0xe4, K_RSHIFT = 0xe5, K_RALT = 0xe6, K_RGUI = 0xe7
-};
-
-/* Usage code of letter key C ('a'..'z'). */
-#define K_LETTER(c) (K_A + (c) - 'a')
-
-/* Key bindings, the same defaults as atari800's SDL port. */
-#define KBD_UI      K_F1
-#define KBD_OPTION  K_F2
-#define KBD_SELECT  K_F3
-#define KBD_START   K_F4
-#define KBD_RESET   K_F5
-#define KBD_HELP    K_F6
-#define KBD_BREAK   K_F7
-#define KBD_OSK     K_F11
-#define KBD_TURBO   K_F12
 
 /* Keyboard layouts, as in BMC64 (src/keyboard/layout_*.c): the character
    each key types, as a Unicode code point (Latin-1), unshifted, shifted,
@@ -161,92 +124,18 @@ static int lastuni = 0;       /* character of the last key press */
 static int key_pressed = 0;   /* is lastkey still held? */
 static int key_control = 0;
 
-/* Gamepads acting as keys (see pad_virtual_keys). */
+/* Gamepads acting as keys (see BMA_GamepadKeys). */
 static unsigned char virtual_down[256];
 
-/* The key a held Home (or Select+Start) stands for; 0 when not held. */
-static int menu_combo_key = 0;
-
-/* Pad buttons that just turned into an Atari console key press. */
-static int pad_consol = INPUT_CONSOL_NONE;
-
-/* Which USB gamepad drives each Atari joystick port, or -1. Some USB devices
-   (the 8BitDo Retro Keyboard's receiver, for one) also appear as a gamepad
-   that never sends anything, so pads are not tied to ports by their USB
-   number: by default a pad takes the first free port the first time it is
-   used. joy1_pad=N (and joy2_pad...) fixes gamepad N to a port, and
-   joy1_pad=-1 leaves the port without a gamepad; 0 is automatic. */
-static int port_pad[HOST_PADS] = {-1, -1, -1, -1};
-static int port_mode[HOST_PADS] = {0, 0, 0, 0};
-static int pad_prev[HOST_PADS] = {-1, -1, -1, -1};
-
-static int pad_port(int pad)
+void BMA_KeyboardClear(void)
 {
-	int port;
-	for (port = 0; port < HOST_PADS; port++)
-		if (port_pad[port] == pad)
-			return port;
-	return -1;
+	lastkey = key_pressed = 0;
 }
 
-/* Reads the joyN_pad settings. Automatic ports keep the pad they have,
-   unless that pad is now fixed to another port. */
-static void init_pad_ports(void)
+void BMA_KeyboardConsumeEscape(void)
 {
-	static const char *const names[HOST_PADS] = {"joy1_pad", "joy2_pad", "joy3_pad", "joy4_pad"};
-	int port, other;
-	for (port = 0; port < HOST_PADS; port++) {
-		int mode = host_option_int(names[port], 0);
-		if (mode < -1 || mode > HOST_PADS)
-			mode = 0;
-		port_mode[port] = mode;
-		if (mode != 0)
-			port_pad[port] = mode > 0 ? mode - 1 : -1;
-	}
-	for (port = 0; port < HOST_PADS; port++) {
-		if (port_mode[port] != 0 || port_pad[port] < 0)
-			continue;
-		for (other = 0; other < HOST_PADS; other++)
-			if (port_mode[other] > 0 && port_mode[other] - 1 == port_pad[port])
-				port_pad[port] = -1;
-	}
-}
-
-static void update_pad_ports(void)
-{
-	int pad, port;
-	for (pad = 0; pad < HOST_PADS; pad++) {
-		int s = host_pad_state(pad);
-		int prev = pad_prev[pad];
-		pad_prev[pad] = s;
-
-		port = pad_port(pad);
-		if (s < 0) {
-			/* Unplugged: free an automatic port. */
-			if (port >= 0 && port_mode[port] == 0)
-				port_pad[port] = -1;
-			continue;
-		}
-		/* Claim a free automatic port when the pad goes from idle to
-		   pressed. */
-		if (prev != 0 || s == 0 || port >= 0)
-			continue;
-		for (port = 0; port < HOST_PADS; port++) {
-			if (port_mode[port] == 0 && port_pad[port] < 0) {
-				char msg[48];
-				port_pad[port] = pad;
-				snprintf(msg, sizeof(msg), "Gamepad %d is joystick %d", pad + 1, port + 1);
-				host_log(msg);
-				break;
-			}
-		}
-	}
-}
-
-/* Gamepad USB slot driving Atari joystick PORT, or -1. */
-int BMA_PortPad(int port)
-{
-	return port >= 0 && port < HOST_PADS ? port_pad[port] : -1;
+	virtual_down[K_ESCAPE] = 1;
+	BMA_KeyboardClear();
 }
 
 /* Reads the keyboard and joystick settings; the menu calls it again after
@@ -262,12 +151,13 @@ void BMA_InputSettingsChanged(void)
 	}
 	BMA_keypad_joystick = host_option_int("keypad_joystick", TRUE);
 	BMA_arrow_joystick = host_option_int("arrow_joystick", FALSE);
-	init_pad_ports();
+	BMA_GamepadSettingsChanged();
 }
 
 void BMA_KeyboardInit(void)
 {
 	memset(virtual_down, 0, sizeof(virtual_down));
+	BMA_GamepadInit();
 	BMA_InputSettingsChanged();
 }
 
@@ -342,72 +232,15 @@ static int is_modifier_or_console(int usage)
 	    || usage == KBD_SELECT || usage == KBD_START;
 }
 
-/* Gamepads produce key presses for the parts of the Atari that are not on a
-   joystick, and drive the menus while the UI is showing. */
-static void pad_virtual_keys(unsigned char *down)
-{
-	int pad;
-	int all = 0;
-	for (pad = 0; pad < HOST_PADS; pad++) {
-		int s = host_pad_state(pad);
-		if (s > 0)
-			all |= s;
-	}
-
-	pad_consol = INPUT_CONSOL_NONE;
-	memset(down, 0, 256);
-
-	/* Home, or Select and Start together, open the menu (or leave it). The
-	   press keeps the meaning it had when it started: otherwise the Home
-	   that opened the menu would turn into Escape inside it while held. */
-	if ((all & HOST_PAD_HOME)
-	    || (all & (HOST_PAD_SELECT | HOST_PAD_START)) == (HOST_PAD_SELECT | HOST_PAD_START)) {
-		if (menu_combo_key == 0)
-			menu_combo_key = in_menu() ? K_ESCAPE : KBD_UI;
-		down[menu_combo_key] = 1;
-		return;
-	}
-	menu_combo_key = 0;
-
-	/* The joystick test shows the pad: only B and Start leave it. */
-	if (BMA_joystick_test) {
-		if (all & (HOST_PAD_B | HOST_PAD_START)) down[K_ESCAPE] = 1;
-		return;
-	}
-
-	if (in_menu()) {
-		int gpio = host_gpio_joystick(0) | host_gpio_joystick(1);
-		if (gpio & HOST_JOY_UP) down[K_UP] = 1;
-		if (gpio & HOST_JOY_DOWN) down[K_DOWN] = 1;
-		if (gpio & HOST_JOY_LEFT) down[K_LEFT] = 1;
-		if (gpio & HOST_JOY_RIGHT) down[K_RIGHT] = 1;
-		if (gpio & HOST_JOY_FIRE) down[K_RETURN] = 1;
-		if (all & HOST_PAD_UP) down[K_UP] = 1;
-		if (all & HOST_PAD_DOWN) down[K_DOWN] = 1;
-		if (all & HOST_PAD_LEFT) down[K_LEFT] = 1;
-		if (all & HOST_PAD_RIGHT) down[K_RIGHT] = 1;
-		if (all & HOST_PAD_A) down[K_RETURN] = 1;
-		if (all & (HOST_PAD_B | HOST_PAD_START)) down[K_ESCAPE] = 1;
-		return;
-	}
-
-	if (all & HOST_PAD_B) down[K_SPACE] = 1;
-	if (all & HOST_PAD_Y) down[K_RETURN] = 1;
-	if (all & HOST_PAD_X) pad_consol &= ~INPUT_CONSOL_OPTION;
-	if (all & HOST_PAD_SELECT) pad_consol &= ~INPUT_CONSOL_SELECT;
-	if (all & HOST_PAD_START) pad_consol &= ~INPUT_CONSOL_START;
-}
-
 /* Next key event, real or from a gamepad. Returns 0 when there is none. */
 static int next_key_event(int *usage, int *pressed)
 {
 	unsigned char down[256];
 	int i;
 
+	BMA_GamepadKeys(down);
 	if (host_key_event(usage, pressed))
 		return 1;
-
-	pad_virtual_keys(down);
 	for (i = 0; i < 256; i++) {
 		if (down[i] != virtual_down[i]) {
 			virtual_down[i] = down[i];
@@ -429,6 +262,17 @@ int PLATFORM_Keyboard(void)
 {
 	static int last_signature = -1;
 	int code = read_keyboard();
+	int action;
+
+	/* Menu requests from the keyboard take priority over gamepad actions. */
+	if (code == AKEY_NONE)
+		UI_alt_function = -1;
+	action = BMA_GamepadAction(code >= 0 || code == AKEY_NONE || code == AKEY_BREAK);
+	if (action != AKEY_NONE)
+		code = action;
+
+	if (code == AKEY_NONE && BMA_GamepadMenuChanged())
+		return UI_BASIC_KEY_REFRESH;
 
 	/* In the joystick test, a change on any joystick sends Tab, which makes
 	   atari800's menu return so the test can show the new state. */
@@ -444,13 +288,53 @@ int PLATFORM_Keyboard(void)
 	return code;
 }
 
+int BMA_CapturePadKey(void)
+{
+	int usage, pressed, result = -1, pad;
+	int previous[HOST_PADS];
+	for (pad = 0; pad < HOST_PADS; pad++)
+		previous[pad] = host_pad_state(pad);
+	UI_driver->fMessage("Press a keyboard key (Esc cancels)", 0);
+	for (;;) {
+		if (BMA_MenuRequests()) {
+			result = -1;
+			break;
+		}
+		for (pad = 0; pad < HOST_PADS; pad++) {
+			int state = host_pad_state(pad);
+			int before = previous[pad] > 0 ? previous[pad] : 0;
+			if (state > 0 && (state & ~before & (HOST_PAD_B | HOST_PAD_START | HOST_PAD_HOME))) {
+				result = -1;
+				virtual_down[K_ESCAPE] = 1;
+				goto done;
+			}
+			previous[pad] = state;
+		}
+		if (host_key_event(&usage, &pressed) && pressed) {
+			if (usage == K_POWER)
+				bma_request_power(1);
+			else if (usage == K_ESCAPE && result < 0)
+				break;
+			else if (result < 0 && BMA_PadBindingValid(BMA_PAD_KEY_BASE + usage))
+				result = BMA_PAD_KEY_BASE + usage;
+		}
+		if (result >= BMA_PAD_KEY_BASE && !host_key_down(result - BMA_PAD_KEY_BASE))
+			break;
+		host_sleep_us(1000);
+	}
+done:
+	lastkey = 0;
+	key_pressed = 0;
+	return result;
+}
+
 static int read_keyboard(void)
 {
 	int shiftctrl = 0;
 	int usage, pressed;
 	int event_found = FALSE;
 
-	update_pad_ports();
+	BMA_GamepadUpdate();
 
 	/* Something from the web UI is waiting: back out of the menus. */
 	if (in_menu() && BMA_MenuRequests())
@@ -490,12 +374,12 @@ static int read_keyboard(void)
 	BINLOAD_pause_loading = FALSE;
 
 	/* OPTION / SELECT / START */
-	INPUT_key_consol = pad_consol;
+	INPUT_key_consol = BMA_GamepadConsole();
 	if (key_is_down(KBD_OPTION))
 		INPUT_key_consol &= ~INPUT_CONSOL_OPTION;
 	if (key_is_down(KBD_SELECT))
 		INPUT_key_consol &= ~INPUT_CONSOL_SELECT;
-	if (key_is_down(KBD_START) || (pad_consol & INPUT_CONSOL_START) == 0) {
+	if (key_is_down(KBD_START) || (BMA_GamepadConsole() & INPUT_CONSOL_START) == 0) {
 		INPUT_key_consol &= ~INPUT_CONSOL_START;
 		/* The 5200's START is a key on its keypad. */
 		if (Atari800_machine_type == Atari800_MACHINE_5200 && !in_menu())
@@ -737,40 +621,31 @@ int BMA_CharToAkey(int c, int shiftctrl)
 /* HOST_JOY_* bits for Atari joystick port PORT (0..3). */
 static int joystick_state(int port)
 {
-	int state = 0;
-	int pad = port_pad[port] >= 0 ? host_pad_state(port_pad[port]) : -1;
-
-	if (pad > 0) {
-		if (pad & HOST_PAD_UP) state |= HOST_JOY_UP;
-		if (pad & HOST_PAD_DOWN) state |= HOST_JOY_DOWN;
-		if (pad & HOST_PAD_LEFT) state |= HOST_JOY_LEFT;
-		if (pad & HOST_PAD_RIGHT) state |= HOST_JOY_RIGHT;
-		if (pad & HOST_PAD_A) state |= HOST_JOY_FIRE;
-	}
+	int state = BMA_GamepadJoystick(port);
 
 	if (port < 2)
 		state |= host_gpio_joystick(port);
 
 	if (port == 0 && BMA_keypad_joystick) {
-		if (host_key_down(K_KP_8) || host_key_down(K_KP_7) || host_key_down(K_KP_9))
+		if (key_is_down(K_KP_8) || key_is_down(K_KP_7) || key_is_down(K_KP_9))
 			state |= HOST_JOY_UP;
-		if (host_key_down(K_KP_2) || host_key_down(K_KP_1) || host_key_down(K_KP_3))
+		if (key_is_down(K_KP_2) || key_is_down(K_KP_1) || key_is_down(K_KP_3))
 			state |= HOST_JOY_DOWN;
-		if (host_key_down(K_KP_4) || host_key_down(K_KP_7) || host_key_down(K_KP_1))
+		if (key_is_down(K_KP_4) || key_is_down(K_KP_7) || key_is_down(K_KP_1))
 			state |= HOST_JOY_LEFT;
-		if (host_key_down(K_KP_6) || host_key_down(K_KP_9) || host_key_down(K_KP_3))
+		if (key_is_down(K_KP_6) || key_is_down(K_KP_9) || key_is_down(K_KP_3))
 			state |= HOST_JOY_RIGHT;
-		if (host_key_down(K_KP_0) || host_key_down(K_KP_5))
+		if (key_is_down(K_KP_0) || key_is_down(K_KP_5))
 			state |= HOST_JOY_FIRE;
 	}
 
 	if (port == 0 && BMA_arrow_joystick) {
-		if (host_key_down(K_UP)) state |= HOST_JOY_UP;
-		if (host_key_down(K_DOWN)) state |= HOST_JOY_DOWN;
-		if (host_key_down(K_LEFT)) state |= HOST_JOY_LEFT;
-		if (host_key_down(K_RIGHT)) state |= HOST_JOY_RIGHT;
+		if (key_is_down(K_UP)) state |= HOST_JOY_UP;
+		if (key_is_down(K_DOWN)) state |= HOST_JOY_DOWN;
+		if (key_is_down(K_LEFT)) state |= HOST_JOY_LEFT;
+		if (key_is_down(K_RIGHT)) state |= HOST_JOY_RIGHT;
 		/* Right Alt is AltGr on some layouts. */
-		if (host_key_down(K_RCTRL) || (host_key_down(K_RALT) && !layout->has_altgr))
+		if (key_is_down(K_RCTRL) || (key_is_down(K_RALT) && !layout->has_altgr))
 			state |= HOST_JOY_FIRE;
 	}
 

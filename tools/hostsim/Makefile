@@ -16,7 +16,8 @@ CFLAGS = -O2 -g -I $(ROOT)/src/port -I $(A8_DIR) -DA8_VERSION=\"$(A8_VERSION)\" 
 
 OUT := build
 OBJS := $(addprefix $(OUT)/a8/,$(A8_SRCS:.c=.o)) \
-        $(OUT)/port/platform.o $(OUT)/port/keyboard.o $(OUT)/port/menu.o $(OUT)/port/modem.o $(OUT)/host_sim.o
+        $(OUT)/port/platform.o $(OUT)/port/keyboard.o $(OUT)/port/gamepad.o \
+        $(OUT)/port/menu.o $(OUT)/port/modem.o $(OUT)/gamepad_profiles.o $(OUT)/host_sim.o
 
 all: $(OUT)/bma800xl_sim
 
@@ -27,6 +28,15 @@ $(OUT)/mouse_test: mouse_test.c $(A8_DIR)/input.c $(ROOT)/src/port/config.h
 test-mouse: $(OUT)/mouse_test
 	./$(OUT)/mouse_test
 
+GAMEPAD_HEADERS := $(ROOT)/src/port/gamepad.h $(ROOT)/src/gamepad_profiles.h $(ROOT)/src/usb_hid_keys.h
+
+$(OUT)/gamepad_test: gamepad_test.c $(ROOT)/src/port/keyboard.c $(ROOT)/src/port/gamepad.c $(ROOT)/src/gamepad_profiles.c $(ROOT)/src/port/bma800xl.h $(ROOT)/src/host.h $(GAMEPAD_HEADERS)
+	@mkdir -p $(OUT)
+	$(CC) $(filter-out -w,$(CFLAGS)) -Wall -Wextra -Wno-unused-parameter -ffunction-sections -fdata-sections -o $@ $< $(ROOT)/src/gamepad_profiles.c -Wl,--gc-sections
+
+test-gamepad: $(OUT)/gamepad_test
+	./$(OUT)/gamepad_test
+
 $(OUT)/bma800xl_sim: $(OBJS)
 	$(CC) -o $@ $(OBJS) -lm
 
@@ -34,8 +44,12 @@ $(OUT)/a8/%.o: $(A8_DIR)/%.c $(ROOT)/src/port/config.h
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(OUT)/port/%.o: $(ROOT)/src/port/%.c $(ROOT)/src/port/config.h $(ROOT)/src/host.h
+$(OUT)/port/%.o: $(ROOT)/src/port/%.c $(ROOT)/src/port/config.h $(ROOT)/src/port/bma800xl.h $(ROOT)/src/host.h $(GAMEPAD_HEADERS)
 	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Wall -c -o $@ $<
+
+$(OUT)/gamepad_profiles.o: $(ROOT)/src/gamepad_profiles.c $(GAMEPAD_HEADERS)
+	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -Wall -c -o $@ $<
 
 $(OUT)/host_sim.o: host_sim.c $(ROOT)/src/host.h
@@ -45,4 +59,4 @@ $(OUT)/host_sim.o: host_sim.c $(ROOT)/src/host.h
 clean:
 	rm -rf $(OUT)
 
-.PHONY: all clean test-mouse
+.PHONY: all clean test-mouse test-gamepad

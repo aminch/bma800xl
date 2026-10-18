@@ -8,16 +8,20 @@
 #ifndef BMA800XL_PORT_H_
 #define BMA800XL_PORT_H_
 
+#include "gamepad.h"
+
 /* keyboard.c */
 extern int BMA_keypad_joystick;
 extern int BMA_arrow_joystick;
 extern int BMA_joystick_test;
 void BMA_KeyboardInit(void);
 void BMA_InputSettingsChanged(void);
-int BMA_PortPad(int port);
 int BMA_JoystickState(int port);
 void BMA_ReadMouse(void);
 int BMA_CharToAkey(int c, int shiftctrl);
+void BMA_KeyboardClear(void);
+void BMA_KeyboardConsumeEscape(void);
+int BMA_CapturePadKey(void);
 
 /* platform.c */
 void bma800xl_main(void);

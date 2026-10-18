@@ -99,6 +99,28 @@ unsigned host_key_modifiers(void);
    pad is connected there. */
 int host_pad_state(int pad);
 
+/* Independent gameplay buttons. Bits 0-7 retain A/B/X/Y/L/R/Select/Start;
+   bits 8-11 are L2/R2/L3/R3. Home stays reserved in host_pad_state().
+   Generic devices retain their remaining USB button numbers. */
+#define HOST_PAD_BUTTONS 32
+struct host_pad_info {
+	char name[64];
+	char usb_id[24];
+	uint32_t button_mask;
+	unsigned generation;
+	int known;
+};
+int host_pad_info(int pad, struct host_pad_info *info);
+uint32_t host_pad_buttons(int pad);
+
+/* Our generic USB layout, without combining shoulders and triggers. */
+static inline uint32_t host_pad_generic_buttons(uint32_t buttons)
+{
+	return (buttons & ~UINT32_C(0x13c0))
+	     | ((buttons & UINT32_C(0x00c0)) << 2)
+	     | ((buttons & UINT32_C(0x0300)) >> 2);
+}
+
 /* State of the joystick wired to GPIO port PORT (0 or 1), as HOST_JOY_* bits.
    Always 0 when GPIO joysticks are disabled. */
 int host_gpio_joystick(int port);

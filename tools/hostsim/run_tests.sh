@@ -35,6 +35,7 @@ fi
 
 make -s -C "$HERE" -j"$(nproc 2>/dev/null || echo 2)" || exit 1
 make -s -C "$HERE" test-mouse || exit 1
+make -s -C "$HERE" test-gamepad || exit 1
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
@@ -217,6 +218,128 @@ else
     fail "setting" "keypad_joystick=0 not saved to bma800xl.cfg"
 fi
 check_image setting controllers
+
+echo "Per-port gamepad button editor and keyboard capture"
+run padmapping 50 "" '1 pad 0 0\n1 padname 0 Generic USB Controller\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n260 key 0x28 1\n262 key 0x28 0\n280 pad 0 1\n282 pad 0 0\n300 key 0x51 1\n302 key 0x51 0\n320 key 0x28 1\n322 key 0x28 0\n340 key 0x51 1\n342 key 0x51 0\n360 key 0x51 1\n362 key 0x51 0\n380 key 0x28 1\n382 key 0x28 0\n400 key 0x28 1\n402 key 0x28 0\n420 pad 0 2\n422 pad 0 0\n440 key 0x28 1\n442 key 0x28 0\n460 key 0x28 1\n462 key 0x28 0\n480 key 0x0d 1\n482 key 0x0d 0\n510 shot mapping.ppm\n520 quit\n'
+if grep -qx 'joy1_buttons=2,1013,2,1040,0,0,3,4' "$OUT/padmapping/bma800xl.cfg" 2>/dev/null; then
+    pass "padmapping: Option and captured J saved for port 1"
+else
+    fail "padmapping" "button editor did not save the expected mapping"
+fi
+
+echo "Restore default gamepad buttons"
+mapping_menu_script='150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n'
+mapping_script=$mapping_menu_script
+for frame in 260 276 292 308 324 340 356 372 388 404 420 436 452; do
+    mapping_script+="$(tap "$frame" 0x51)"
+done
+mapping_script+='480 key 0x28 1\n482 key 0x28 0\n510 quit\n'
+run paddefaults 50 "joy1_buttons=2,1013,2,1040,0,0,3,4" "$mapping_script"
+if grep -qx 'joy1_buttons=default' "$OUT/paddefaults/bma800xl.cfg" 2>/dev/null \
+    && grep -qx 'joy1_buttons2=default' "$OUT/paddefaults/bma800xl.cfg"; then
+    pass "paddefaults: device defaults restored and saved"
+else
+    fail "paddefaults" "default buttons were not saved"
+fi
+
+echo "Named connected controller selection"
+run paddevices 50 "" '1 pad 0 0\n1 padname 0 8BitDo M30 2.4G\n1 pad 1 0\n1 padname 1 Xbox Controller\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x28 1\n222 key 0x28 0\n250 shot devices.ppm\n260 key 0x51 1\n262 key 0x51 0\n280 key 0x28 1\n282 key 0x28 0\n300 shot selected.ppm\n310 quit\n'
+if grep -qx 'joy1_pad=1' "$OUT/paddevices/bma800xl.cfg" 2>/dev/null; then
+    pass "paddevices: connected controller selected by name"
+else
+    fail "paddevices" "named device selection was not saved"
+fi
+
+echo "M30 standard button order and physical-letter defaults"
+run padm30order 50 "joy1_pad=1" '1 pad 0 0\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n280 shot standard.ppm\n300 padname 0 8BitDo M30 2.4G\n310 shot m30.ppm\n320 quit\n'
+if python3 - "$OUT/padm30order" <<'EOF'
+import sys
+from pathlib import Path
+from PIL import Image, ImageChops
+root = Path(sys.argv[1])
+standard = Image.open(root / "standard.ppm").convert("RGB")
+m30 = Image.open(root / "m30.ppm").convert("RGB")
+buttons = (0, 48, standard.width, 112)
+assert ImageChops.difference(standard.crop(buttons), m30.crop(buttons)).getbbox() is None, "M30 first eight buttons differ from standard order/defaults"
+assert ImageChops.difference(standard, m30).getbbox(), "M30 profile was not displayed"
+EOF
+then
+    pass "padm30order: A/B/X/Y/L/R/Select/Start match the standard menu and defaults"
+else
+    fail "padm30order" "M30 menu order or defaults differ"
+fi
+
+echo "M30 physical A confirms, Y does not, B goes back"
+run padm30menu 50 "joy1_pad=1" '1 pad 0 0\n1 padname 0 8BitDo M30 2.4G\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n210 shot before.ppm\n230 pad 0 1\n232 pad 0 0\n250 shot y.ppm\n270 pad 0 4\n272 pad 0 0\n290 shot a.ppm\n310 pad 0 2\n312 pad 0 0\n330 shot b.ppm\n340 quit\n'
+if python3 - "$OUT/padm30menu" <<'EOF'
+import sys
+from pathlib import Path
+from PIL import Image, ImageChops
+root = Path(sys.argv[1])
+before, y, a, b = [
+    Image.open(root / name).convert("RGB")
+    for name in ("before.ppm", "y.ppm", "a.ppm", "b.ppm")
+]
+assert ImageChops.difference(before, y).getbbox() is None, "physical Y activated a menu item"
+assert ImageChops.difference(before, a).getbbox(), "physical A did not activate a menu item"
+assert ImageChops.difference(before, b).getbbox() is None, "physical B did not return to the parent menu"
+EOF
+then
+    pass "padm30menu: physical A confirms, Y ignored, B goes back"
+else
+    fail "padm30menu" "M30 menu controls do not match the physical buttons"
+fi
+
+echo "Live controller menu hotplug"
+for screen in controllers port device buttons
+do
+    case "$screen" in
+        controllers) navigation='200 key 0x51 1\n202 key 0x51 0\n' ;;
+        port) navigation='200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n' ;;
+        device) navigation='200 key 0x28 1\n202 key 0x28 0\n220 key 0x28 1\n222 key 0x28 0\n240 key 0x51 1\n242 key 0x51 0\n' ;;
+        buttons) navigation='200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n' ;;
+    esac
+    run "padhotplug-$screen" 50 "joy1_pad=1" "150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n${navigation}280 shot before.ppm\n300 pad 0 0\n300 padname 0 8BitDo M30 2.4G\n305 shot connected.ppm\n320 pad 0 -1\n325 shot after.ppm\n340 quit\n"
+    if python3 - "$OUT/padhotplug-$screen" <<'EOF'
+import sys
+from pathlib import Path
+from PIL import Image, ImageChops
+root = Path(sys.argv[1])
+before, connected, after = [
+    Image.open(root / name).convert("RGB")
+    for name in ("before.ppm", "connected.ppm", "after.ppm")
+]
+assert ImageChops.difference(before, connected).getbbox(), "connection not shown within five frames"
+assert ImageChops.difference(before, after).getbbox() is None, "disconnect or highlight not restored within five frames"
+EOF
+    then
+        pass "padhotplug-$screen: live connection/disconnection and highlight"
+    else
+        fail "padhotplug-$screen" "menu did not refresh correctly"
+    fi
+done
+
+echo "Preserve device selection when another controller disconnects"
+run padhotplug-selection 50 "" '1 pad 0 0\n1 padname 0 First Controller\n1 pad 1 0\n1 padname 1 Second Controller\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x28 1\n222 key 0x28 0\n240 key 0x51 1\n242 key 0x51 0\n260 key 0x51 1\n262 key 0x51 0\n280 pad 0 -1\n300 key 0x28 1\n302 key 0x28 0\n320 quit\n'
+if grep -qx 'joy1_pad=2' "$OUT/padhotplug-selection/bma800xl.cfg" 2>/dev/null; then
+    pass "padhotplug-selection: highlighted device retained after list changes"
+else
+    fail "padhotplug-selection" "highlighted device changed after unplugging another pad"
+fi
+
+echo "Cancel button capture and unplug a controller"
+run padcapturecancel 50 "" "1 pad 0 0\n${mapping_menu_script}250 shot before.ppm\n260 key 0x28 1\n262 key 0x28 0\n280 pad 0 0x100\n282 pad 0 0\n300 shot after.ppm\n310 quit\n"
+if cmp -s "$OUT/padcapturecancel/before.ppm" "$OUT/padcapturecancel/after.ppm"; then
+    pass "padcapturecancel: Home cancels capture without leaving the editor"
+else
+    fail "padcapturecancel" "capture cancellation changed or left the editor"
+fi
+run padcaptureunplug 50 "joy1_pad=1" "1 pad 0 0\n${mapping_menu_script}250 shot before.ppm\n260 key 0x28 1\n262 key 0x28 0\n280 pad 0 -1\n290 shot disconnected.ppm\n300 key 0x29 1\n302 key 0x29 0\n320 shot after.ppm\n330 quit\n"
+if cmp -s "$OUT/padcaptureunplug/before.ppm" "$OUT/padcaptureunplug/after.ppm"; then
+    pass "padcaptureunplug: unplugging returns safely to the editor"
+else
+    fail "padcaptureunplug" "unplugging did not return to the editor"
+fi
 
 echo "Logging switched to a file in the menu"
 # Logging (four down from Emulator Menu), then File (two down from Off).

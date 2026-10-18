@@ -1,16 +1,17 @@
 # BMA800XL User Guide
 
-- [The SD card](#the-sd-card)
-- [The menu](#the-menu)
-- [Keyboard](#keyboard)
-- [Joysticks](#joysticks)
-- [PAL and NTSC](#pal-and-ntsc)
-- [Networking and the web UI](#networking-and-the-web-ui)
-  - [Calling BBSes (R: device)](#calling-bbses-r-device)
-- [Options](#options)
-- [ROMs](#roms)
-- [Logging](#logging)
-- [Troubleshooting](#troubleshooting)
+- [BMA800XL User Guide](#bma800xl-user-guide)
+  - [The SD card](#the-sd-card)
+  - [The menu](#the-menu)
+  - [Keyboard](#keyboard)
+  - [Joysticks](#joysticks)
+  - [PAL and NTSC](#pal-and-ntsc)
+  - [Networking and the web UI](#networking-and-the-web-ui)
+    - [Calling BBSes (R: device)](#calling-bbses-r-device)
+  - [Options](#options)
+  - [ROMs](#roms)
+  - [Logging](#logging)
+  - [Troubleshooting](#troubleshooting)
 
 ## The SD card
 
@@ -118,9 +119,11 @@ pressed, in that order. Some USB devices also show up as a gamepad that
 never sends anything (the 8BitDo Retro Keyboard's receiver does), and this
 way they don't take a port. The log says which gamepad became which
 joystick. To fix the assignment instead, choose a gamepad for each joystick
-in the menu's *Controllers*; the gamepad numbers are the ones in the log
-(`Gamepad 2 connected: ...`). *Joystick Test* there shows what each port
-receives.
+under *Controllers → Joystick 1–4 → Device*. Connected devices are listed
+by name, with their USB slot number to distinguish identical devices.
+Automatic also shows the assigned device's name. Fixed assignments still
+refer to USB slots, not saved device identities. *Joystick Test* shows what
+each port receives.
 
 **USB mouse as a trackball**: open *Controller configuration* with Alt+J,
 choose *Mouse device: Trak-ball*, and select the mouse port and speed
@@ -139,7 +142,8 @@ right Ctrl or right Alt fires (only right Ctrl with a Norwegian layout,
 where right Alt is AltGr). Useful on keyboards without a numeric keypad.
 The arrows then no longer move the Atari's cursor.
 
-**Gamepads**: in a game, the D-pad or left stick is the joystick, and
+**Gamepads**: in a game, the D-pad or left stick is the joystick. The default
+buttons are:
 
 | Button          | Atari                     |
 |-----------------|---------------------------|
@@ -147,12 +151,38 @@ The arrows then no longer move the Atari's cursor.
 | B               | Space                     |
 | Y               | Return                    |
 | X               | Option                    |
+| L, R            | Unassigned                |
 | Select          | Select                    |
 | Start           | Start                     |
 | Home, or Select+Start | Menu                |
 
 In the menu, the D-pad moves, **A** chooses, and **B** or **Start** goes
 back.
+
+To remap buttons, open **F1 → Controllers → Joystick 1–4 → Button
+Mapping**, select *Select to Start Button Detection...*, then press and release
+the actual button. Alternatively select its entry in the list. Choose
+*Action*, *Atari Key*, *Keyboard Key* or *None*. Actions include fire,
+reset, turbo, the on-screen keyboard, media menus and save/load state.
+Esc or Home cancels gamepad-button capture. B and Start can be assigned.
+*Keyboard Key* waits for a USB keyboard key. Esc, gamepad B or Start
+cancels. *Escape Key* assigns Escape instead. Keyboard bindings use the
+selected layout and keyboard-joystick settings. *Restore Defaults* clears
+that port's overrides and uses the connected controller's default profile.
+
+Mappings are saved immediately in `bma800xl.cfg`, not in individual game
+profiles. They follow the Atari port when a different gamepad is assigned.
+Without overrides, buttons use the device's profile or the common defaults
+for an unrecognised controller.
+Controller lists and button labels update automatically when gamepads are
+connected or disconnected.
+Menu navigation, Home and Select+Start stay fixed regardless of mappings.
+Shoulders, triggers and stick clicks are independent where Circle exposes
+them. Older saved L/R mappings initially apply to both the shoulder and
+trigger, retaining their previous behaviour until changed.
+
+Generic controllers without a button-label profile show USB button numbers;
+use press-to-configure to identify the physical button.
 
 Most USB gamepads work, including Xbox and PlayStation pads and 8BitDo
 controllers. Pads Circle doesn't know report their buttons in their own

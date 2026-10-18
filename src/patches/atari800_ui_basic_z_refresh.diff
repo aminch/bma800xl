@@ -1,0 +1,39 @@
+diff --git a/src/ui_basic.c b/src/ui_basic.c
+--- a/src/ui_basic.c
++++ b/src/ui_basic.c
+@@ -260,7 +260,10 @@ static int GetKeyPress(void)
+ 
+ 	for (;;) {  
+ 		static int rep = KB_DELAY;
+-		if (PLATFORM_Keyboard() == AKEY_NONE) {
++		keycode = PLATFORM_Keyboard();
++		if (keycode == UI_BASIC_KEY_REFRESH)
++			return keycode;
++		if (keycode == AKEY_NONE) {
+ 			rep = KB_DELAY;
+ 			break;
+ 		}
+@@ -566,6 +569,9 @@ static int Select(int default_item, int nitems, const char *item[],
+ 			}
+ #endif
+ 			switch (ascii) {
++			case UI_BASIC_KEY_REFRESH:
++				*seltype = UI_BASIC_USER_REFRESH;
++				return index;
+ 			case 0x1c:				/* Up */
+ 				if (drag) {
+ 					*seltype = UI_USER_DRAG_UP;
+diff --git a/src/ui_basic.h b/src/ui_basic.h
+--- a/src/ui_basic.h
++++ b/src/ui_basic.h
+@@ -22,6 +22,10 @@ extern int UI_BASIC_OnScreenKeyboard(const char *title, int layout);
+ #define UI_BASIC_KEY_CHAR_BASE 0x10000
+ #define UI_BASIC_KEY_CHAR(c) (UI_BASIC_KEY_CHAR_BASE + (c))
+ 
++/* Rebuild a menu without activating its highlighted item. */
++#define UI_BASIC_KEY_REFRESH (UI_BASIC_KEY_CHAR_BASE + 0x110000)
++#define UI_BASIC_USER_REFRESH 6
++
+ /* used only in the Dreamcast port */
+ extern const unsigned char UI_BASIC_key_to_ascii[256];
+ 
