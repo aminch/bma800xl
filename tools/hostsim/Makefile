@@ -17,7 +17,8 @@ CFLAGS = -O2 -g -I $(ROOT)/src/port -I $(A8_DIR) -DA8_VERSION=\"$(A8_VERSION)\" 
 OUT := build
 OBJS := $(addprefix $(OUT)/a8/,$(A8_SRCS:.c=.o)) \
         $(OUT)/port/platform.o $(OUT)/port/keyboard.o $(OUT)/port/gamepad.o \
-        $(OUT)/port/menu.o $(OUT)/port/modem.o $(OUT)/gamepad_profiles.o $(OUT)/host_sim.o
+        $(OUT)/port/menu.o $(OUT)/port/menu_controllers.o $(OUT)/port/modem.o \
+        $(OUT)/gamepad_profiles.o $(OUT)/host_sim.o
 
 all: $(OUT)/bma800xl_sim
 
@@ -47,6 +48,8 @@ $(OUT)/a8/%.o: $(A8_DIR)/%.c $(ROOT)/src/port/config.h
 $(OUT)/port/%.o: $(ROOT)/src/port/%.c $(ROOT)/src/port/config.h $(ROOT)/src/port/bma800xl.h $(ROOT)/src/host.h $(GAMEPAD_HEADERS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Wall -c -o $@ $<
+
+$(OUT)/port/menu.o $(OUT)/port/menu_controllers.o: $(ROOT)/src/port/menu.h
 
 $(OUT)/gamepad_profiles.o: $(ROOT)/src/gamepad_profiles.c $(GAMEPAD_HEADERS)
 	@mkdir -p $(OUT)

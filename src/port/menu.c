@@ -5,7 +5,7 @@
  * information, shown with atari800's menu code so it looks and works like
  * atari800's menu, which is one item away. F1, the gamepad's Home button
  * or Select+Start open it. Settings are saved in bma800xl.cfg.
- * Button mapping choices follow atari800's SDL2 controller menu (src/ui.c).
+ * Controller screens are in menu_controllers.c.
  *
  * This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
  * Raspberry Pi. See LICENSE for licensing details.
@@ -22,14 +22,13 @@
 #include "input.h"
 #include "memory.h"
 #include "platform.h"
-#include "screen.h"
 #include "sound.h"
 #include "ui.h"
-#include "ui_basic.h"
 #include "util.h"
 
 #include "../host.h"
 #include "bma800xl.h"
+#include "menu.h"
 
 #ifndef BMA800XL_VERSION
 #define BMA800XL_VERSION "dev"
@@ -56,20 +55,20 @@ static void power(int off)
 
 /* ---- Settings ------------------------------------------------------------ */
 
-static void save_setting(const char *name, const char *value)
+void BMA_MenuSaveSetting(const char *name, const char *value)
 {
 	if (!host_option_set(name, value) || !host_options_save())
 		UI_driver->fMessage("Cannot save bma800xl.cfg", 1);
 }
 
-static void save_setting_int(const char *name, int value)
+void BMA_MenuSaveSettingInt(const char *name, int value)
 {
 	char text[16];
 	snprintf(text, sizeof(text), "%d", value);
-	save_setting(name, text);
+	BMA_MenuSaveSetting(name, text);
 }
 
-static int setting_on(const char *name, int default_value)
+int BMA_MenuSettingOn(const char *name, int default_value)
 {
 	const char *value = host_option(name, NULL);
 	if (value == NULL || *value == '\0')
@@ -78,14 +77,14 @@ static int setting_on(const char *name, int default_value)
 	    || strcmp(value, "true") == 0 || strcmp(value, "on") == 0;
 }
 
-static UWORD check_flags(int on)
+UWORD BMA_MenuCheckFlags(int on)
 {
 	return UI_ITEM_CHECK | (on ? UI_ITEM_CHECKED : 0);
 }
 
 /* Shows CHOICES (NULL-terminated) as a popup; returns the index chosen, or
    -1 if cancelled. */
-static int choose(const char *title, const char *const choices[], int current)
+int BMA_MenuChoose(const char *title, const char *const choices[], int current)
 {
 	static UI_tMenuItem items[24];
 	int n;
@@ -101,7 +100,7 @@ static int choose(const char *title, const char *const choices[], int current)
 }
 
 /* Index of VALUE in VALUES (NULL-terminated), or 0. */
-static int value_index(const char *const values[], const char *value)
+int BMA_MenuValueIndex(const char *const values[], const char *value)
 {
 	int i;
 	for (i = 0; value != NULL && values[i] != NULL; i++)
@@ -351,7 +350,7 @@ static void offer_wifi_reboot(void)
 		UI_MENU_END
 	};
 	if (UI_driver->fSelect("Wi-Fi is Off", 0, W_YES, items, NULL) == W_YES) {
-		save_setting("network", "wifi");
+		BMA_MenuSaveSetting("network", "wifi");
 		power(0);
 	}
 }
@@ -412,7 +411,7 @@ static int scan_wifi(void)
 		UI_driver->fMessage("Cannot write " WPA_CONFIG, 1);
 		return 0;
 	}
-	save_setting("network", "wifi");
+	BMA_MenuSaveSetting("network", "wifi");
 	reboot_needed = TRUE;
 	return aps[chosen].secure && wifi_psk[0] == '\0' ? 2 : 1;
 }
@@ -442,7 +441,7 @@ static void network_menu(void)
 	int option = N_DEVICE;
 
 	for (;;) {
-		int device_index = value_index(devices, host_option("network", "off"));
+		int device_index = BMA_MenuValueIndex(devices, host_option("network", "off"));
 		int minutes = host_option_int("timezone", 0);
 		const char *webui_pin = host_option("webui_pin", "");
 
@@ -457,14 +456,14 @@ static void network_menu(void)
 			strcpy(tz, "UTC");
 		else
 			snprintf(tz, sizeof(tz), "UTC%+d", minutes / 60);
-		items[7].flags = check_flags(setting_on("webui", TRUE));
+		items[7].flags = BMA_MenuCheckFlags(BMA_MenuSettingOn("webui", TRUE));
 
 		option = UI_driver->fSelect("Network", 0, option, items, NULL);
 		switch (option) {
 		case N_DEVICE: {
-			int i = choose("Network", device_names, device_index);
+			int i = BMA_MenuChoose("Network", device_names, device_index);
 			if (i >= 0 && i != device_index) {
-				save_setting("network", devices[i]);
+				BMA_MenuSaveSetting("network", devices[i]);
 				reboot_needed = TRUE;
 			}
 			break;
@@ -485,14 +484,14 @@ static void network_menu(void)
 			edit_wifi("Two letter country code", wifi_country, sizeof(wifi_country));
 			break;
 		case N_WEBUI:
-			save_setting("webui", setting_on("webui", TRUE) ? "0" : "1");
+			BMA_MenuSaveSetting("webui", BMA_MenuSettingOn("webui", TRUE) ? "0" : "1");
 			reboot_needed = TRUE;
 			break;
 		case N_PIN: {
 			char text[9];
 			Util_strlcpy(text, webui_pin, sizeof(text));
 			if (UI_driver->fEditString("Web UI PIN (blank: none)", text, sizeof(text))) {
-				save_setting("webui_pin", text);
+				BMA_MenuSaveSetting("webui_pin", text);
 				reboot_needed = TRUE;
 			}
 			break;
@@ -511,9 +510,9 @@ static void network_menu(void)
 					current = h + 12;
 			}
 			zones[27] = NULL;
-			h = choose("Time Zone", zones, current);
+			h = BMA_MenuChoose("Time Zone", zones, current);
 			if (h >= 0 && h != current) {
-				save_setting_int("timezone", (h - 12) * 60);
+				BMA_MenuSaveSettingInt("timezone", (h - 12) * 60);
 				reboot_needed = TRUE;
 			}
 			break;
@@ -521,349 +520,6 @@ static void network_menu(void)
 		case N_REBOOT:
 			power(0);
 			return;
-		default:
-			return;
-		}
-	}
-}
-
-/* ---- Controllers -------------------------------------------------------------- */
-
-static void joystick_test(void)
-{
-	enum { T_BACK = 1 };
-	static char line[4][40];
-	static UI_tMenuItem items[] = {
-		UI_MENU_LABEL("Move a joystick or press fire."),
-		UI_MENU_LABEL(""),
-		UI_MENU_LABEL(line[0]),
-		UI_MENU_LABEL(line[1]),
-		UI_MENU_LABEL(line[2]),
-		UI_MENU_LABEL(line[3]),
-		UI_MENU_LABEL(""),
-		UI_MENU_LABEL("Leave with Esc, or B on a gamepad."),
-		UI_MENU_ACTION(T_BACK, "Back"),
-		UI_MENU_END
-	};
-
-	BMA_joystick_test = TRUE;
-	for (;;) {
-		int port, option;
-		for (port = 0; port < 4; port++) {
-			int s = BMA_JoystickState(port);
-			int pad = BMA_PortPad(port);
-			char source[24];
-			if (pad >= 0)
-				snprintf(source, sizeof(source), "Gamepad %d", pad + 1);
-			else
-				strcpy(source, "");
-			snprintf(line[port], sizeof(line[port]), "%d %-10s %s %s %s %s %s",
-			         port + 1, source,
-			         s & HOST_JOY_UP ? "Up" : "--",
-			         s & HOST_JOY_DOWN ? "Dn" : "--",
-			         s & HOST_JOY_LEFT ? "Lt" : "--",
-			         s & HOST_JOY_RIGHT ? "Rt" : "--",
-			         s & HOST_JOY_FIRE ? "Fire" : "----");
-		}
-		/* The input code sends Tab (-2 here) when a joystick changes. */
-		option = UI_driver->fSelect("Joystick Test", 0, T_BACK, items, NULL);
-		if (option != -2)
-			break;
-	}
-	BMA_joystick_test = FALSE;
-}
-
-static void binding_name(int binding, char *text, unsigned size)
-{
-	if (binding < BMA_PAD_ACTIONS)
-		Util_strlcpy(text, BMA_PadActionName(binding), size);
-	else if (binding == BMA_PAD_KEY_BASE + 0x2c)
-		Util_strlcpy(text, "Space", size);
-	else if (binding == BMA_PAD_KEY_BASE + 0x28)
-		Util_strlcpy(text, "Return", size);
-	else if (binding == BMA_PAD_KEY_BASE + 0x29)
-		Util_strlcpy(text, "Escape", size);
-	else if (binding >= BMA_PAD_KEY_BASE + 4 && binding <= BMA_PAD_KEY_BASE + 29)
-		snprintf(text, size, "Key %c", 'A' + binding - BMA_PAD_KEY_BASE - 4);
-	else
-		snprintf(text, size, "Keyboard HID $%02X", binding - BMA_PAD_KEY_BASE);
-}
-
-static int button_action(int pad, int button, int current)
-{
-	static const char *const categories[] = {"Action", "Atari Key", "Keyboard Key", "None", NULL};
-	static const char *const keyboard[] = {"Press Keyboard Key...", "Escape Key", NULL};
-	static const int actions[] = {
-		BMA_PAD_FIRE, BMA_PAD_MENU, BMA_PAD_KEYBOARD, BMA_PAD_WARMSTART,
-		BMA_PAD_COLDSTART, BMA_PAD_TURBO, BMA_PAD_RUN, BMA_PAD_DISK,
-		BMA_PAD_CARTRIDGE, BMA_PAD_TAPE, BMA_PAD_SAVE, BMA_PAD_LOAD,
-		BMA_PAD_QUICKSAVE, BMA_PAD_QUICKLOAD
-	};
-	static const int atari_keys[] = {
-		BMA_PAD_START, BMA_PAD_SELECT, BMA_PAD_OPTION, BMA_PAD_HELP, BMA_PAD_BREAK
-	};
-	const char *choices[sizeof(actions) / sizeof(actions[0]) + 1];
-	char label[24], binding[24], message[64];
-	const int *values;
-	int category, count, i, selected = 0;
-	BMA_PadButtonLabel(pad, button, label, sizeof(label));
-	binding_name(current, binding, sizeof(binding));
-	snprintf(message, sizeof(message), "%s: %s", label, binding);
-	UI_driver->fMessage(message, 0);
-	category = current == BMA_PAD_NONE ? 3 : current >= BMA_PAD_KEY_BASE ? 2
-	         : current >= BMA_PAD_OPTION && current <= BMA_PAD_BREAK ? 1 : 0;
-	category = choose("Button Assignment", categories, category);
-	if (category < 0)
-		return -1;
-	if (category == 3)
-		return BMA_PAD_NONE;
-	if (category == 2) {
-		i = choose("Keyboard Key", keyboard, current == BMA_PAD_KEY_BASE + 0x29);
-		return i < 0 ? -1 : i == 1 ? BMA_PAD_KEY_BASE + 0x29 : BMA_CapturePadKey();
-	}
-	values = category == 0 ? actions : atari_keys;
-	count = category == 0 ? sizeof(actions) / sizeof(actions[0])
-	                      : sizeof(atari_keys) / sizeof(atari_keys[0]);
-	for (i = 0; i < count; i++) {
-		choices[i] = BMA_PadActionName(values[i]);
-		if (values[i] == current)
-			selected = i;
-	}
-	choices[count] = NULL;
-	i = choose(category == 0 ? "Action" : "Atari Key", choices, selected);
-	return i < 0 ? -1 : values[i];
-}
-
-static int controller_select(const char *title, int flags, int *option,
-                             const UI_tMenuItem *items)
-{
-	int selection_type = 0;
-	*option = UI_driver->fSelect(title, flags, *option, items, &selection_type);
-	BMA_GamepadMenuWatch(FALSE);
-	return *option >= 0 && selection_type == UI_BASIC_USER_REFRESH;
-}
-
-static void button_mapping(int port)
-{
-	UI_tMenuItem items[BMA_PAD_BUTTONS + 3];
-	char names[BMA_PAD_BUTTONS][24], labels[BMA_PAD_BUTTONS][24], title[40];
-	int option = BMA_PAD_BUTTONS, button, position;
-	snprintf(title, sizeof(title), "Joystick %d Buttons", port + 1);
-
-	for (;;) {
-		struct host_pad_info info;
-		int bindings[BMA_PAD_BUTTONS], binding, saved;
-		int pad = BMA_PortPad(port), n = 1;
-		BMA_GamepadMenuWatch(TRUE);
-		int connected = host_pad_info(pad, &info);
-		uint32_t mask = connected ? info.button_mask : 0xfff;
-		memset(items, 0, sizeof(items));
-		items[0].flags = UI_ITEM_ACTION;
-		items[0].retval = BMA_PAD_BUTTONS;
-		items[0].item = "Select to Start Button Detection...";
-		for (button = 0; button < BMA_PAD_BUTTONS; button++) {
-			bindings[button] = BMA_PadBinding(port, button);
-			binding_name(bindings[button], names[button], sizeof(names[button]));
-		}
-		for (position = 0; position < BMA_PAD_BUTTONS; position++) {
-			button = BMA_PadButtonIndex(pad, position);
-			if (!(mask & (UINT32_C(1) << button)) || button == 12)
-				continue;
-			BMA_PadButtonLabel(pad, button, labels[button], sizeof(labels[button]));
-			items[n].flags = UI_ITEM_SUBMENU;
-			items[n].retval = button;
-			items[n].item = labels[button];
-			items[n++].suffix = names[button];
-		}
-		items[n].flags = UI_ITEM_ACTION;
-		items[n].retval = BMA_PAD_BUTTONS + 1;
-		items[n++].item = "Restore Defaults";
-		items[n].flags = UI_ITEM_END;
-		if (controller_select(title, 0, &option, items))
-			continue;
-		if (option < 0)
-			return;
-		if (option == BMA_PAD_BUTTONS + 1)
-			saved = BMA_ResetPadBindings(port);
-		else {
-			button = option == BMA_PAD_BUTTONS ? BMA_CapturePadButton(port) : option;
-			if (button < 0)
-				continue;
-			for (n = 0; n < BMA_PAD_BUTTONS; n++)
-				bindings[n] = BMA_PadBinding(port, n);
-			binding = button_action(BMA_PortPad(port), button, bindings[button]);
-			if (binding < 0)
-				continue;
-			bindings[button] = binding;
-			saved = BMA_SavePadBindings(port, bindings);
-		}
-		if (!saved)
-			UI_driver->fMessage("Cannot save gamepad buttons", 1);
-	}
-}
-
-static void port_device_text(int port, char *text, unsigned size)
-{
-	char name[24];
-	struct host_pad_info info;
-	int pad = BMA_PortPad(port), mode;
-	snprintf(name, sizeof(name), "joy%d_pad", port + 1);
-	mode = host_option_int(name, 0);
-	if (mode < 0)
-		Util_strlcpy(text, "None", size);
-	else if (host_pad_info(pad, &info))
-		snprintf(text, size, mode == 0 ? "Auto (%s)" : "%s", info.name);
-	else if (mode == 0)
-		Util_strlcpy(text, "Automatic", size);
-	else
-		snprintf(text, size, "Gamepad %d (disconnected)", mode);
-}
-
-static void select_port_device(int port)
-{
-	char name[24], text[HOST_PADS][80];
-	UI_tMenuItem items[HOST_PADS + 3];
-	UBYTE *background = Util_malloc(Screen_WIDTH * Screen_HEIGHT);
-	int slot, mode, selected;
-	struct host_pad_info info[HOST_PADS], check;
-	int connected[HOST_PADS];
-	snprintf(name, sizeof(name), "joy%d_pad", port + 1);
-	mode = host_option_int(name, 0);
-	selected = mode < 0 ? HOST_PADS + 1 : mode;
-	memcpy(background, Screen_atari, Screen_WIDTH * Screen_HEIGHT);
-	for (;;) {
-		int count = 1;
-		BMA_GamepadMenuWatch(TRUE);
-		memcpy(Screen_atari, background, Screen_WIDTH * Screen_HEIGHT);
-		memset(items, 0, sizeof(items));
-		items[0].flags = UI_ITEM_ACTION;
-		items[0].item = "Automatic";
-		for (slot = 0; slot < HOST_PADS; slot++) {
-			connected[slot] = host_pad_info(slot, &info[slot]);
-			if (!connected[slot] && mode != slot + 1)
-				continue;
-			snprintf(text[slot], sizeof(text[slot]), "%d: %.63s", slot + 1,
-			         connected[slot] ? info[slot].name : "(disconnected)");
-			items[count].flags = UI_ITEM_ACTION;
-			items[count].retval = slot + 1;
-			items[count++].item = text[slot];
-		}
-		items[count].flags = UI_ITEM_ACTION;
-		items[count].retval = HOST_PADS + 1;
-		items[count++].item = "None";
-		items[count].flags = UI_ITEM_END;
-		if (!controller_select("Device", UI_SELECT_POPUP, &selected, items))
-			break;
-	}
-	free(background);
-	if (selected < 0)
-		return;
-	if (selected == HOST_PADS + 1)
-		selected = -1;
-	if (selected == mode)
-		return;
-	slot = selected - 1;
-	if (slot >= 0 && (!host_pad_info(slot, &check)
-	    || !connected[slot] || check.generation != info[slot].generation)) {
-		UI_driver->fMessage("Gamepad changed; choose again", 1);
-		return;
-	}
-	save_setting_int(name, selected);
-	BMA_InputSettingsChanged();
-}
-
-static void joystick_menu(int port)
-{
-	char text[80], title[32];
-	UI_tMenuItem items[] = {
-		UI_MENU_ACTION_PREFIX(0, "Device: ", text),
-		UI_MENU_SUBMENU(1, "Button Mapping"),
-		UI_MENU_END
-	};
-	int option = 0;
-	snprintf(title, sizeof(title), "Joystick %d", port + 1);
-	for (;;) {
-		BMA_GamepadMenuWatch(TRUE);
-		port_device_text(port, text, sizeof(text));
-		if (controller_select(title, 0, &option, items))
-			continue;
-		if (option == 0) {
-			select_port_device(port);
-		}
-		else if (option == 1)
-			button_mapping(port);
-		else
-			return;
-	}
-}
-
-static void controllers_menu(void)
-{
-	enum { C_PORT1, C_PORT2, C_PORT3, C_PORT4, C_KEYPAD, C_ARROWS, C_GPIO, C_LAYOUT, C_TEST };
-	static const char *const layouts[] = {"us", "uk", "no", NULL};
-	static const char *const layout_names[] = {"US", "UK", "Norwegian", NULL};
-	static char port_text[4][32], layout[16];
-	static UI_tMenuItem items[] = {
-		UI_MENU_ACTION_PREFIX(C_PORT1, "Joystick 1: ", port_text[0]),
-		UI_MENU_ACTION_PREFIX(C_PORT2, "Joystick 2: ", port_text[1]),
-		UI_MENU_ACTION_PREFIX(C_PORT3, "Joystick 3: ", port_text[2]),
-		UI_MENU_ACTION_PREFIX(C_PORT4, "Joystick 4: ", port_text[3]),
-		UI_MENU_CHECK(C_KEYPAD, "Keypad is Joystick 1"),
-		UI_MENU_CHECK(C_ARROWS, "Arrow Keys are Joystick 1"),
-		UI_MENU_CHECK(C_GPIO, "GPIO Joysticks (reboot)"),
-		UI_MENU_ACTION_PREFIX(C_LAYOUT, "Keyboard Layout: ", layout),
-		UI_MENU_LABEL(""),
-		UI_MENU_SUBMENU(C_TEST, "Joystick Test"),
-		UI_MENU_END
-	};
-	int option = C_PORT1;
-
-	for (;;) {
-		int port;
-		BMA_GamepadMenuWatch(TRUE);
-		for (port = 0; port < 4; port++) {
-			port_device_text(port, port_text[port], sizeof(port_text[port]));
-		}
-		items[C_KEYPAD].flags = check_flags(setting_on("keypad_joystick", TRUE));
-		items[C_ARROWS].flags = check_flags(setting_on("arrow_joystick", FALSE));
-		items[C_GPIO].flags = check_flags(setting_on("gpio_joysticks", FALSE));
-		Util_strlcpy(layout, layout_names[value_index(layouts, host_option("keyboard", "us"))],
-		             sizeof(layout));
-
-		if (controller_select("Controllers", 0, &option, items))
-			continue;
-		switch (option) {
-		case C_PORT1:
-		case C_PORT2:
-		case C_PORT3:
-		case C_PORT4: {
-			joystick_menu(option);
-			break;
-		}
-		case C_KEYPAD:
-			save_setting("keypad_joystick", setting_on("keypad_joystick", TRUE) ? "0" : "1");
-			BMA_InputSettingsChanged();
-			break;
-		case C_ARROWS:
-			save_setting("arrow_joystick", setting_on("arrow_joystick", FALSE) ? "0" : "1");
-			BMA_InputSettingsChanged();
-			break;
-		case C_GPIO:
-			save_setting("gpio_joysticks", setting_on("gpio_joysticks", FALSE) ? "0" : "1");
-			reboot_needed = TRUE;
-			break;
-		case C_LAYOUT: {
-			int i = choose("Keyboard Layout", layout_names,
-			               value_index(layouts, host_option("keyboard", "us")));
-			if (i >= 0) {
-				save_setting("keyboard", layouts[i]);
-				BMA_InputSettingsChanged();
-			}
-			break;
-		}
-		case C_TEST:
-			joystick_test();
-			break;
 		default:
 			return;
 		}
@@ -898,55 +554,55 @@ static void video_menu(void)
 
 	for (;;) {
 		int w, h;
-		int lock_index = value_index(locks, host_option("vsync", "auto"));
-		int border_index = value_index(borders, host_option("border", "normal"));
-		int resolution_index = value_index(resolutions, host_option("resolution", "auto"));
+		int lock_index = BMA_MenuValueIndex(locks, host_option("vsync", "auto"));
+		int border_index = BMA_MenuValueIndex(borders, host_option("border", "normal"));
+		int resolution_index = BMA_MenuValueIndex(resolutions, host_option("resolution", "auto"));
 		host_display_size(&w, &h);
 		snprintf(display, sizeof(display), "Display: %dx%d, %.2f Hz", w, h, BMA_RefreshRate());
 		Util_strlcpy(lock, lock_names[lock_index], sizeof(lock));
 		Util_strlcpy(border, border_names[border_index], sizeof(border));
 		Util_strlcpy(resolution, resolution_names[resolution_index], sizeof(resolution));
 		items[4].flags = host_display_resolution_choice() ? UI_ITEM_ACTION : UI_ITEM_HIDDEN;
-		items[5].flags = check_flags(setting_on("crt_shader", FALSE));
-		items[6].flags = check_flags(setting_on("crt_curvature", FALSE));
-		items[7].flags = check_flags(setting_on("smooth", FALSE));
+		items[5].flags = BMA_MenuCheckFlags(BMA_MenuSettingOn("crt_shader", FALSE));
+		items[6].flags = BMA_MenuCheckFlags(BMA_MenuSettingOn("crt_curvature", FALSE));
+		items[7].flags = BMA_MenuCheckFlags(BMA_MenuSettingOn("smooth", FALSE));
 
 		option = UI_driver->fSelect("Video", 0, option, items, NULL);
 		switch (option) {
 		case V_LOCK: {
-			int i = choose("Frames Locked to Display", lock_names, lock_index);
+			int i = BMA_MenuChoose("Frames Locked to Display", lock_names, lock_index);
 			if (i >= 0) {
-				save_setting("vsync", locks[i]);
+				BMA_MenuSaveSetting("vsync", locks[i]);
 				BMA_VideoSettingsChanged();
 			}
 			break;
 		}
 		case V_BORDER: {
-			int i = choose("Border", border_names, border_index);
+			int i = BMA_MenuChoose("Border", border_names, border_index);
 			if (i >= 0) {
-				save_setting("border", borders[i]);
+				BMA_MenuSaveSetting("border", borders[i]);
 				BMA_VideoSettingsChanged();
 			}
 			break;
 		}
 		case V_RESOLUTION: {
-			int i = choose("Resolution", resolution_names, resolution_index);
+			int i = BMA_MenuChoose("Resolution", resolution_names, resolution_index);
 			if (i >= 0 && i != resolution_index) {
-				save_setting("resolution", resolutions[i]);
+				BMA_MenuSaveSetting("resolution", resolutions[i]);
 				BMA_DisplayModeChanged();
 			}
 			break;
 		}
 		case V_SHADER:
-			save_setting("crt_shader", setting_on("crt_shader", FALSE) ? "0" : "1");
+			BMA_MenuSaveSetting("crt_shader", BMA_MenuSettingOn("crt_shader", FALSE) ? "0" : "1");
 			reboot_needed = TRUE;
 			break;
 		case V_CURVATURE:
-			save_setting("crt_curvature", setting_on("crt_curvature", FALSE) ? "0" : "1");
+			BMA_MenuSaveSetting("crt_curvature", BMA_MenuSettingOn("crt_curvature", FALSE) ? "0" : "1");
 			reboot_needed = TRUE;
 			break;
 		case V_SMOOTH:
-			save_setting("smooth", setting_on("smooth", FALSE) ? "0" : "1");
+			BMA_MenuSaveSetting("smooth", BMA_MenuSettingOn("smooth", FALSE) ? "0" : "1");
 			reboot_needed = TRUE;
 			break;
 		default:
@@ -975,8 +631,8 @@ static void sound_menu(void)
 
 	for (;;) {
 		const char *out = host_option("audio_out", "auto");
-		int output_index = strcmp(out, "analog") == 0 ? 2 : value_index(outputs, out);
-		int buffer_index = value_index(buffers, host_option("audio_buffer_ms", "40"));
+		int output_index = strcmp(out, "analog") == 0 ? 2 : BMA_MenuValueIndex(outputs, out);
+		int buffer_index = BMA_MenuValueIndex(buffers, host_option("audio_buffer_ms", "40"));
 		if (host_option("audio_buffer_ms", NULL) == NULL)
 			buffer_index = 1;
 		Util_strlcpy(output, output_names[output_index], sizeof(output));
@@ -985,17 +641,17 @@ static void sound_menu(void)
 		option = UI_driver->fSelect("Sound", 0, option, items, NULL);
 		switch (option) {
 		case S_OUTPUT: {
-			int i = choose("Sound Output", output_names, output_index);
+			int i = BMA_MenuChoose("Sound Output", output_names, output_index);
 			if (i >= 0 && i != output_index) {
-				save_setting("audio_out", outputs[i]);
+				BMA_MenuSaveSetting("audio_out", outputs[i]);
 				reboot_needed = TRUE;
 			}
 			break;
 		}
 		case S_BUFFER: {
-			int i = choose("Sound Buffer", buffer_names, buffer_index);
+			int i = BMA_MenuChoose("Sound Buffer", buffer_names, buffer_index);
 			if (i >= 0 && i != buffer_index) {
-				save_setting("audio_buffer_ms", buffers[i]);
+				BMA_MenuSaveSetting("audio_buffer_ms", buffers[i]);
 				reboot_needed = TRUE;
 			}
 			break;
@@ -1019,14 +675,14 @@ static void logging_menu(void)
 		NULL
 	};
 	int current = host_log_destination();
-	int i = choose("Logging", names, current);
+	int i = BMA_MenuChoose("Logging", names, current);
 	if (i < 0 || i == current)
 		return;
 	if (!host_set_log_destination(i)) {
 		UI_driver->fMessage("Cannot open bma800xl.log", 1);
 		return;
 	}
-	save_setting("enable_logging", values[i]);
+	BMA_MenuSaveSetting("enable_logging", values[i]);
 }
 
 /* ---- Main menu ------------------------------------------------------------------ */
@@ -1077,7 +733,8 @@ static int main_menu(void)
 			network_menu();
 			break;
 		case M_CONTROLLERS:
-			controllers_menu();
+			if (BMA_MenuControllers())
+				reboot_needed = TRUE;
 			break;
 		case M_VIDEO:
 			video_menu();
