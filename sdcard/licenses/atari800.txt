@@ -1,0 +1,23 @@
+atari800
+========
+
+BMA800XL's emulation is atari800 7.2.1 (https://github.com/atari800/atari800,
+tag ATARI800_7_2_1), built into the kernels with BMA800XL's platform layer
+(src/port/). Its notice, as in its source files:
+
+    Copyright (c) 1995-1998 David Firth
+    Copyright (c) 1998-2014 Atari800 development team (see DOC/CREDITS)
+
+    Atari800 is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    Atari800 is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+The GNU General Public License version 2 is in GPL-2.0.txt. atari800's
+DOC/CREDITS is in its source:
+https://github.com/atari800/atari800/blob/ATARI800_7_2_1/DOC/CREDITS

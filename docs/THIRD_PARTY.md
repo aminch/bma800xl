@@ -8,19 +8,23 @@ The original copyright, license, and attribution notices supplied with these com
 
 BMA800XL incorporates the [atari800 project](https://github.com/atari800/atari800), version 7.2.1.
 
-See [`third_party/atari800/`](https://github.com/atari800/atari800/tree/ATARI800_7_2_1) for the version used by BMA800XL and its accompanying copyright and license information.
+See [`third_party/atari800/`](https://github.com/atari800/atari800/tree/ATARI800_7_2_1) for the version used by BMA800XL and its accompanying copyright and license information. Its notice is in [`sdcard/licenses/atari800.txt`](../sdcard/licenses/atari800.txt), under the GNU General Public License version 2 or later ([`sdcard/licenses/GPL-2.0.txt`](../sdcard/licenses/GPL-2.0.txt)).
 
 ## Altirra OS and Altirra BASIC
 
 BMA800XL incorporates the Altirra OS and Altirra BASIC ROM replacements by Avery Lee, as included with atari800.
 
-See [`src/roms/`](https://github.com/atari800/atari800/tree/ATARI800_7_2_1/src/roms) in atari800 for the files and their accompanying copyright and license information.
+See [`src/roms/`](https://github.com/atari800/atari800/tree/ATARI800_7_2_1/src/roms) in atari800 for the files and their accompanying copyright and license information. Their notices are in [`sdcard/licenses/Altirra.txt`](../sdcard/licenses/Altirra.txt).
 
 ## circle-stdlib
 
 BMA800XL uses the [circle-stdlib project](https://github.com/smuehlst/circle-stdlib), v21, which includes [Circle](https://github.com/rsta2/circle) by Rene Stange and the newlib C library.
 
-See [`third_party/circle-stdlib/`](https://github.com/smuehlst/circle-stdlib/tree/v21) for the version used by BMA800XL and its accompanying copyright and license information.
+See [`third_party/circle-stdlib/`](https://github.com/smuehlst/circle-stdlib/tree/v21) for the version used by BMA800XL and its accompanying copyright and license information. newlib's notices are in [`sdcard/licenses/newlib.txt`](../sdcard/licenses/newlib.txt) and [`sdcard/licenses/libgloss.txt`](../sdcard/licenses/libgloss.txt).
+
+## GCC Runtime
+
+BMA800XL links runtime code from the [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) 15.2.rel1 (GCC), under the GNU General Public License version 3 with the GCC Runtime Library Exception 3.1. The toolchain's GCC licence section is in [`sdcard/licenses/GCC-Runtime.txt`](../sdcard/licenses/GCC-Runtime.txt).
 
 ## BMC64
 

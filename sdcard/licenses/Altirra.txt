@@ -1,0 +1,29 @@
+Altirra OS and Altirra BASIC
+============================
+
+BMA800XL's built-in OS and BASIC ROMs are Avery Lee's Altirra replacements,
+as included with atari800 7.2.1 (src/roms/). Their notices:
+
+  altirraos_xl.c, altirraos_800.c (XL/XE and 400/800 OS):
+
+    Altirra - Atari 800/800XL emulator
+    Kernel ROM replacement, version 3.11
+    Copyright (C) 2008-2018 Avery Lee
+
+  altirra_5200_os.c (5200 OS):
+
+    Altirra - Atari 800/800XL emulator
+    5200 OS ROM replacement
+    Copyright (C) 2008-2018 Avery Lee
+
+  altirra_basic.c (BASIC):
+
+    Altirra BASIC, version 1.58
+    Copyright (C) 2008-2022 Avery Lee
+
+  Each with:
+
+    Copying and distribution of this file, with or without modification,
+    are permitted in any medium without royalty provided the copyright
+    notice and this notice are preserved.  This file is offered as-is,
+    without any warranty.

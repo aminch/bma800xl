@@ -211,6 +211,10 @@ static void licence(void)
 		"includes atari800 (GPL 2 or later),",
 		"Circle (GPL 3), BMC64 code (Apache 2.0",
 		"/ GPL 3) and Altirra's free ROMs.",
+		"",
+		"Other licences and notices are in the",
+		"licenses folder on the SD card. The",
+		"Wi-Fi firmware's are in firmware.",
 		NULL
 	};
 	info_screen("Licence", lines);
