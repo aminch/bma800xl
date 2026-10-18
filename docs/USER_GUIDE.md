@@ -343,7 +343,7 @@ edited from the web UI.
 | `webui`             | `0`, `1`                     | `1`      | Web UI when networking is on |
 | `webui_pin`         | digits                       | none     | PIN for the web UI |
 | `timezone`          | minutes east of UTC          | `0`      | Time zone for the network clock |
-| `usbpowerdelay`     | milliseconds                 | `1000`   | Circle: wait for USB devices to power up |
+| `usbpowerdelay`     | milliseconds                 | Circle's | Circle: wait for USB devices to power up (by default 300 ms, 510 ms behind a hub) |
 
 
 ## ROMs
@@ -389,6 +389,12 @@ display doesn't accept 720p at 50 Hz; try `hdmi_mode=4` (60 Hz).
 **Keyboard or gamepad not working**: unplug it and plug it in again; devices
 can come and go while the emulator runs. Some keyboards need a longer
 `usbpowerdelay`.
+
+**8BitDo M30 2.4G shows up as a Switch Pro controller**: its receiver can
+be left in Switch mode, and the buttons are then wrong. With the pad
+connected, hold Home (the heart) and D-pad Down for 5 seconds until the
+LEDs flash; it switches back to its own mode (*Controllers* then lists it
+as 8BitDo M30 2.4G) and keeps it.
 
 **A game crashes or doesn't load**: try the real Atari ROMs (see ROMs), turn
 BASIC off (hold F2 while it boots), or choose a different machine in *System
