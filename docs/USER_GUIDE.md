@@ -33,9 +33,9 @@ any time, except in the second after something was written.
 
 ## The menu
 
-Press **F1** (or **Home** on a gamepad, or **Select+Start** together) for the
-BMA800XL menu. It shows the machine and display, the network status, and
-BMA800XL's own settings:
+Press **F1** (or **L** by default on a gamepad, **Home**, or **Select+Start**
+together) for the BMA800XL menu. It shows the machine and display, the network
+status, and BMA800XL's own settings:
 
 | Item | What it does |
 |------|--------------|
@@ -151,7 +151,8 @@ buttons are:
 | B               | Space                     |
 | Y               | Return                    |
 | X               | Option                    |
-| L, R            | Unassigned                |
+| L               | Menu                      |
+| R               | Unassigned                |
 | Select          | Select                    |
 | Start           | Start                     |
 | Home, or Select+Start | Menu                |
@@ -177,6 +178,8 @@ for an unrecognised controller.
 Controller lists and button labels update automatically when gamepads are
 connected or disconnected.
 Menu navigation, Home and Select+Start stay fixed regardless of mappings.
+L defaults to *Open Menu* and can be reassigned. B or Start goes back or
+closes the menu.
 Shoulders, triggers and stick clicks are independent where Circle exposes
 them. Older saved L/R mappings initially apply to both the shoulder and
 trigger, retaining their previous behaviour until changed.

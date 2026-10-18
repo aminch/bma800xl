@@ -339,7 +339,7 @@ static void profiles(void)
 	const int m30_defaults[BMA_PAD_BUTTONS] = {
 		BMA_PAD_KEY_BASE + K_RETURN, BMA_PAD_KEY_BASE + K_SPACE,
 		BMA_PAD_FIRE, BMA_PAD_OPTION, BMA_PAD_NONE, BMA_PAD_NONE,
-		BMA_PAD_SELECT, BMA_PAD_START
+		BMA_PAD_SELECT, BMA_PAD_START, BMA_PAD_MENU, BMA_PAD_NONE
 	};
 	int bindings[BMA_PAD_BUTTONS], button, position;
 	uint32_t seen = 0;
@@ -505,6 +505,52 @@ static void m30_menus(void)
 	UI_BASIC_in_kbui = 0;
 }
 
+static void menu_open_defaults(void)
+{
+	int device, bindings[BMA_PAD_BUTTONS], button, i;
+	for (device = 0; device < 3; device++) {
+		reset();
+		known_pads[0] = device == 0;
+		if (device == 2)
+			strcpy(usb_ids[0], "venca3-24");
+		PLATFORM_Keyboard();
+		button = device == 2 ? 8 : 4;
+		assert(BMA_PadBinding(0, button) == BMA_PAD_MENU);
+		extra_buttons[0] = UINT32_C(1) << button;
+		assert(PLATFORM_Keyboard() == AKEY_UI);
+		UI_is_active = 1;
+		for (i = 0; i < 10; i++)
+			assert(PLATFORM_Keyboard() == AKEY_NONE);
+		release();
+		extra_buttons[0] = UINT32_C(1) << button;
+		assert(PLATFORM_Keyboard() == AKEY_NONE);
+		release();
+		UI_is_active = 0;
+		BMA_DefaultPadBindings(0, bindings);
+		bindings[button] = BMA_PAD_NONE;
+		assert(BMA_SavePadBindings(0, bindings));
+		extra_buttons[0] = UINT32_C(1) << button;
+		assert(PLATFORM_Keyboard() == AKEY_NONE);
+		UI_is_active = 1;
+		assert(PLATFORM_Keyboard() == AKEY_NONE);
+		release();
+		bindings[3] = BMA_PAD_MENU;
+		assert(BMA_SavePadBindings(0, bindings));
+		extra_buttons[0] = UINT32_C(1) << 3;
+		assert(PLATFORM_Keyboard() == AKEY_NONE);
+		release();
+		UI_is_active = 0;
+		extra_buttons[0] = UINT32_C(1) << 3;
+		assert(PLATFORM_Keyboard() == AKEY_UI);
+		release();
+		assert(BMA_ResetPadBindings(0));
+		assert(BMA_PadBinding(0, button) == BMA_PAD_MENU);
+		extra_buttons[0] = UINT32_C(1) << button;
+		assert(PLATFORM_Keyboard() == AKEY_UI);
+		release();
+	}
+}
+
 static void persistence(void)
 {
 	const char *invalid[] = {"", "1,2", "1,2,3,4,5,6,7,8,9",
@@ -517,9 +563,9 @@ static void persistence(void)
 	bindings[4] = BMA_PAD_TURBO;
 	save_ok = 0;
 	assert(!BMA_SavePadBindings(0, bindings));
-	assert(BMA_PadBinding(0, 4) == BMA_PAD_NONE);
+	assert(BMA_PadBinding(0, 4) == BMA_PAD_MENU);
 	BMA_InputSettingsChanged();
-	assert(BMA_PadBinding(0, 4) == BMA_PAD_NONE);
+	assert(BMA_PadBinding(0, 4) == BMA_PAD_MENU);
 	save_ok = 1;
 	set_ok = 0;
 	assert(!BMA_SavePadBindings(0, bindings));
@@ -528,7 +574,7 @@ static void persistence(void)
 	assert(!BMA_SavePadBindings(0, bindings));
 	fail_group = -1;
 	BMA_InputSettingsChanged();
-	assert(BMA_PadBinding(0, 4) == BMA_PAD_NONE);
+	assert(BMA_PadBinding(0, 4) == BMA_PAD_MENU);
 	bindings[4] = 999;
 	before = logs;
 	assert(!BMA_SavePadBindings(0, bindings));
@@ -539,7 +585,7 @@ static void persistence(void)
 		BMA_InputSettingsChanged();
 		assert(logs == before + 1);
 		assert(BMA_PadBinding(0, 0) == BMA_PAD_FIRE);
-		assert(BMA_PadBinding(0, 4) == BMA_PAD_NONE);
+		assert(BMA_PadBinding(0, 4) == BMA_PAD_MENU);
 	}
 }
 
@@ -554,6 +600,7 @@ int main(void)
 	profiles();
 	menus();
 	m30_menus();
+	menu_open_defaults();
 	persistence();
 	puts("PASS per-device profiles, per-port overrides, independent buttons, legacy mappings, "
 	     "held keys, action edges, menu controls, unplugging and settings validation");
