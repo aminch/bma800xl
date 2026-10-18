@@ -16,7 +16,7 @@ CFLAGS = -O2 -g -I $(ROOT)/src/port -I $(A8_DIR) -DA8_VERSION=\"$(A8_VERSION)\" 
 
 OUT := build
 OBJS := $(addprefix $(OUT)/a8/,$(A8_SRCS:.c=.o)) \
-        $(OUT)/port/platform.o $(OUT)/port/keyboard.o $(OUT)/port/menu.o $(OUT)/host_sim.o
+        $(OUT)/port/platform.o $(OUT)/port/keyboard.o $(OUT)/port/menu.o $(OUT)/port/modem.o $(OUT)/host_sim.o
 
 all: $(OUT)/bma800xl_sim
 

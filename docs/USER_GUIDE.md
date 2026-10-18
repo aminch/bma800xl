@@ -1,5 +1,17 @@
 # BMA800XL User Guide
 
+- [The SD card](#the-sd-card)
+- [The menu](#the-menu)
+- [Keyboard](#keyboard)
+- [Joysticks](#joysticks)
+- [PAL and NTSC](#pal-and-ntsc)
+- [Networking and the web UI](#networking-and-the-web-ui)
+  - [Calling BBSes (R: device)](#calling-bbses-r-device)
+- [Options](#options)
+- [ROMs](#roms)
+- [Logging](#logging)
+- [Troubleshooting](#troubleshooting)
+
 ## The SD card
 
 | File or folder   | What it is                                                 |
@@ -233,6 +245,11 @@ The web UI is open to anyone on your network. To protect it with a PIN, set
 The network also sets the Pi's clock, so files saved on the card get the
 right date and time. Set `timezone` to your offset from UTC in minutes, for
 example `timezone=600` for UTC+10.
+
+### Calling BBSes (R: device)
+
+With the network on, the Atari can call telnet BBSes through an emulated
+850 interface and modem: see [Calling BBSes](NETWORKING.md).
 
 ## Options
 

@@ -19,6 +19,7 @@
 
 #include "network.h"
 
+#include "modem.h"
 #include "network_time_sync.h"
 #include "options.h"
 #include "webui/webui.h"
@@ -121,6 +122,7 @@ static bool HasWifiFirmware(void) {
 
 static void StartServices(const Options *options) {
   StartNetworkTimeSync(s_net);
+  StartModem(s_net);
   if (options->GetBool("webui", true)) {
     WebUiStart(s_net, options->Get("webui_pin", ""));
   }

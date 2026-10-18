@@ -5,6 +5,10 @@ the [atari800](https://github.com/atari800/atari800) emulator directly on the
 hardware, with no Linux underneath, using the same approach as
 [BMC64](https://github.com/randyrossi/bmc64) does for the Commodore 64.
 
+BMA800XL wouldn’t be possible without the hard work behind the open source projects 
+it builds on. Thanks to their authors and contributors for making that work available. 
+See [third-party](docs/THIRD_PARTY.md) acknowledgements for details.
+
 - Boots straight into Atari BASIC
 - Frames locked to the display's refresh for perfectly smooth scrolling (50 Hz
   for PAL, 60 Hz for NTSC), with the sound kept in step
@@ -55,7 +59,8 @@ with everything on their one core.
 The display is set to 720p at 50 Hz to suit a PAL Atari, which is the default.
 For an NTSC Atari, see the [User Guide](docs/USER_GUIDE.md#pal-and-ntsc).
 [docs/INSTALLATION.md](docs/INSTALLATION.md) has more on preparing the card,
-ROMs and upgrading.
+ROMs and upgrading. All the documents are listed in
+[docs/README.md](docs/README.md).
 
 ## Keys
 
@@ -79,6 +84,16 @@ where the D-pad moves, **A** chooses and **B** goes back.
 
 See the [User Guide](docs/USER_GUIDE.md) for all the details, including the
 options in `cmdline.txt` and the GPIO joystick wiring.
+
+## Networking
+
+Over Ethernet or Wi-Fi (*Network* in the menu), BMA800XL offers:
+
+- **The web UI**: manage the SD card from a browser on your network. See
+  [Networking and the web UI](docs/USER_GUIDE.md#networking-and-the-web-ui).
+- **Calling BBSes**: an emulated 850 and modem (the R: device) lets terminal
+  programs such as Ice-T and BobTerm call telnet BBSes. See
+  [Calling BBSes](docs/NETWORKING.md).
 
 ## Building
 
@@ -121,6 +136,8 @@ tools/pi4kms               Tests Pi 4/5 display driver calculations on a PC
 
 ## Licence
 
-BMA800XL is free software under the GNU General Public License version 3; see
-[LICENSE](LICENSE). It includes software from other projects under their own
-licences; see [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).
+BMA800XL is free software under the GNU General Public License version 3. See
+[LICENSE](LICENSE). 
+
+It includes software from other projects under their own
+licences. See [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).

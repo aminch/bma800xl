@@ -1,3 +1,7 @@
+## 1.4.2
+
+- R: device (850 interface and modem) to call telnet BBSes over Ethernet or Wi-Fi. See `docs/NETWORKING.md`)
+
 ## 1.4.1 – 2026-10-17
 
 - Implement USB mouse as an Atari CX22 Trak-ball or a joystick (Alt+J, *Mouse device*)

@@ -49,6 +49,8 @@
 #define PBI_BB 1
 #define PBI_MIO 1
 #define USE_UI_BASIC_ONSCREEN_KEYBOARD 1
+/* R: device: src/port/modem.c in place of atari800's rdevice.c */
+#define R_IO_DEVICE 1
 
 /* C library (newlib) */
 #define STDC_HEADERS 1

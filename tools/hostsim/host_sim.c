@@ -464,6 +464,31 @@ void host_network_status(char *text, unsigned size)
 		snprintf(text, size, "Off");
 }
 
+/* No network: every call fails. */
+int host_modem_dial(const char *host, unsigned port)
+{
+	(void) host;
+	(void) port;
+	return 0;
+}
+
+void host_modem_hang_up(void) {}
+int host_modem_state(void) { return HOST_MODEM_IDLE; }
+
+unsigned host_modem_send(const uint8_t *data, unsigned length)
+{
+	(void) data;
+	(void) length;
+	return 0;
+}
+
+unsigned host_modem_receive(uint8_t *data, unsigned size)
+{
+	(void) data;
+	(void) size;
+	return 0;
+}
+
 /* BMA_WIFI=1 pretends Wi-Fi is running, with a few networks around. */
 int host_wifi_scan(struct host_wifi_ap *aps, int max)
 {

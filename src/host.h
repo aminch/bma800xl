@@ -132,6 +132,25 @@ struct host_wifi_ap {
    (up to MAX), or -1 if Wi-Fi isn't running (it starts only when it is the
    selected network). */
 int host_wifi_scan(struct host_wifi_ap *aps, int max);
+/* ---- Modem (the R: device's TCP connection) ------------------------------ */
+
+#define HOST_MODEM_IDLE       0  /* no call: never dialled, failed or hung up */
+#define HOST_MODEM_DIALLING   1
+#define HOST_MODEM_CONNECTED  2
+
+/* Starts a TCP call to HOST (a name or an address) on PORT, hanging up any
+   call first. Returns at once, with the state HOST_MODEM_DIALLING, or 0 if
+   the network isn't running. */
+int host_modem_dial(const char *host, unsigned port);
+void host_modem_hang_up(void);
+/* HOST_MODEM_*. A call that fails or that the other end closes goes back
+   to HOST_MODEM_IDLE. */
+int host_modem_state(void);
+/* Queues up to LENGTH bytes to send; returns how many it took. */
+unsigned host_modem_send(const uint8_t *data, unsigned length);
+/* Takes up to SIZE received bytes; returns how many. */
+unsigned host_modem_receive(uint8_t *data, unsigned size);
+
 /* "Raspberry Pi 3 Model B+" */
 const char *host_model_name(void);
 /* The display's size in pixels. */
