@@ -1,7 +1,13 @@
 ## 1.4.2
 
-- R: device (850 interface and modem) to call telnet BBSes over Ethernet or Wi-Fi. See `docs/NETWORKING.md`)
+- R: device (850 interface and modem) to call telnet BBSes over Ethernet or Wi-Fi. See `docs/NETWORKING.md`
 - Enable menu navigation from GPIO connected joysticks
+- Per-port gamepad button remapping, with press-to-detect and saved action and keyboard bindings
+- Named gamepad devices and controller profiles
+- Device lists update when controllers are connected or disconnected
+- Per-port joystick direction source, axis pair, dead zone and diagonal zone settings
+- L opens the menu by default on gamepads and can be reassigned
+- Document how to put the 8BitDo M30 2.4G receiver in 6-button mode if it is detected as a Switch Pro controller
 
 ## 1.4.1 – 2026-10-17
 
