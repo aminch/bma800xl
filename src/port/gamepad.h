@@ -11,6 +11,21 @@
 
 #include "../gamepad_profiles.h"
 
+enum {
+	BMA_PAD_SOURCE_BOTH, BMA_PAD_SOURCE_AUTO,
+	BMA_PAD_SOURCE_AXES, BMA_PAD_SOURCE_DPAD
+};
+enum {
+	BMA_PAD_DIAGONALS_ORIGINAL, BMA_PAD_DIAGONALS_NONE,
+	BMA_PAD_DIAGONALS_NARROW, BMA_PAD_DIAGONALS_WIDE
+};
+struct bma_pad_input_settings {
+	int source, axis, deadzone, diagonals;
+};
+
+void BMA_GetPadInputSettings(int port, struct bma_pad_input_settings *settings);
+int BMA_SavePadInputSettings(int port, const struct bma_pad_input_settings *settings);
+
 void BMA_GamepadInit(void);
 void BMA_GamepadSettingsChanged(void);
 void BMA_GamepadUpdate(void);

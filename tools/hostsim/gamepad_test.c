@@ -5,6 +5,7 @@
  */
 
 #include <assert.h>
+#include <limits.h>
 #include "../../src/port/gamepad.c"
 #include "../../src/port/keyboard.c"
 
@@ -16,6 +17,8 @@ int UI_is_active, UI_alt_function = -1;
 static int pads[HOST_PADS], keys[256], save_ok = 1, set_ok = 1, logs;
 static char saved[HOST_PADS][72];
 static char saved_extra[HOST_PADS][3][72];
+static char saved_input[HOST_PADS][72];
+static struct host_pad_input pad_inputs[HOST_PADS];
 static uint32_t extra_buttons[HOST_PADS];
 static char usb_ids[HOST_PADS][24];
 static int known_pads[HOST_PADS];
@@ -28,6 +31,10 @@ const char *host_option(const char *name, const char *fallback)
 {
 	int port, group;
 	for (port = 0; port < HOST_PADS; port++) {
+		char name_input[24];
+		snprintf(name_input, sizeof(name_input), "joy%d_input", port + 1);
+		if (strcmp(name, name_input) == 0 && saved_input[port][0])
+			return saved_input[port];
 		for (group = 0; group < 4; group++) {
 			char key[24];
 			const char *value = group == 0 ? saved[port] : saved_extra[port][group - 1];
@@ -50,6 +57,15 @@ int host_option_set(const char *name, const char *value)
 	char *target;
 	if (!set_ok)
 		return 0;
+	for (port = 0; port < HOST_PADS; port++) {
+		char name_input[24];
+		snprintf(name_input, sizeof(name_input), "joy%d_input", port + 1);
+		if (strcmp(name, name_input) == 0) {
+			assert(strlen(value) < sizeof(saved_input[port]));
+			strcpy(saved_input[port], value);
+			return 1;
+		}
+	}
 	assert(sscanf(name, "joy%d_buttons%d", &port, &group) >= 1);
 	assert(port >= 1 && port <= HOST_PADS);
 	assert(group >= 1 && group <= 4);
@@ -68,6 +84,14 @@ uint32_t host_pad_buttons(int slot)
 {
 	return host_pad_state(slot) >= 0 ? (pads[slot] & 0xff) | extra_buttons[slot] : 0;
 }
+int host_pad_input(int slot, struct host_pad_input *input)
+{
+	if (host_pad_state(slot) < 0)
+		return 0;
+	*input = pad_inputs[slot];
+	input->dpad |= (pads[slot] >> 12) & 0xf;
+	return 1;
+}
 int host_pad_info(int slot, struct host_pad_info *info)
 {
 	if (host_pad_state(slot) < 0)
@@ -78,6 +102,8 @@ int host_pad_info(int slot, struct host_pad_info *info)
 	info->known = known_pads[slot];
 	info->button_mask = button_masks[slot];
 	info->generation = generations[slot];
+	info->axis_mask = pad_inputs[slot].axis_mask;
+	info->has_dpad = pad_inputs[slot].has_dpad;
 	return 1;
 }
 int host_gpio_joystick(int port) { return 0; }
@@ -99,6 +125,8 @@ static void reset(void)
 	int port;
 	memset(saved, 0, sizeof(saved));
 	memset(saved_extra, 0, sizeof(saved_extra));
+	memset(saved_input, 0, sizeof(saved_input));
+	memset(pad_inputs, 0, sizeof(pad_inputs));
 	memset(extra_buttons, 0, sizeof(extra_buttons));
 	memset(usb_ids, 0, sizeof(usb_ids));
 	memset(keys, 0, sizeof(keys));
@@ -113,6 +141,7 @@ static void reset(void)
 		known_pads[port] = 1;
 		generations[port] = 1;
 		button_masks[port] = 0xfff;
+		pad_inputs[port].has_dpad = 1;
 		pads[port] = 0;
 		port_pad[port] = -1;
 		port_mode[port] = 0;
@@ -551,6 +580,163 @@ static void menu_open_defaults(void)
 	}
 }
 
+static void set_axis(int pad, int axis, int value, int minimum, int maximum)
+{
+	pad_inputs[pad].axis_mask |= 1u << axis;
+	pad_inputs[pad].axes[axis].value = value;
+	pad_inputs[pad].axes[axis].minimum = minimum;
+	pad_inputs[pad].axes[axis].maximum = maximum;
+}
+
+static void direction_settings(void)
+{
+	struct bma_pad_input_settings settings, other;
+	const char *invalid[] = {
+		"", "0,-1,50", "0,-1,50,0,1", "4,-1,50,0", "-1,-1,50,0",
+		"0,-2,50,0", "0,15,50,0", "0,-1,96,0", "0,-1,-1,0",
+		"0,-1,50,4", "0,-1,50,x", "999999999999999999999999,0,50,0"
+	};
+	char previous[72];
+	int i, before, sign_x, sign_y;
+	reset();
+	BMA_GetPadInputSettings(0, &settings);
+	assert(settings.source == BMA_PAD_SOURCE_AUTO && settings.axis == -1);
+	assert(settings.deadzone == 50 && settings.diagonals == BMA_PAD_DIAGONALS_ORIGINAL);
+	set_axis(0, 0, 32767, -32768, 32767);
+	set_axis(0, 1, 0, -32768, 32767);
+	pad_inputs[0].dpad = HOST_JOY_UP;
+	assert(BMA_JoystickState(0) == (HOST_JOY_RIGHT | HOST_JOY_UP));
+	settings.source = BMA_PAD_SOURCE_AXES;
+	assert(BMA_SavePadInputSettings(0, &settings));
+	assert(BMA_JoystickState(0) == HOST_JOY_RIGHT);
+	settings.source = BMA_PAD_SOURCE_DPAD;
+	assert(BMA_SavePadInputSettings(0, &settings));
+	assert(BMA_JoystickState(0) == HOST_JOY_UP);
+	settings.source = BMA_PAD_SOURCE_AUTO;
+	assert(BMA_SavePadInputSettings(0, &settings));
+	assert(BMA_JoystickState(0) == (HOST_JOY_RIGHT | HOST_JOY_UP));
+	pad_inputs[0].dpad = 0;
+	assert(BMA_JoystickState(0) == HOST_JOY_RIGHT);
+	pad_inputs[0].has_dpad = 0;
+	assert(BMA_JoystickState(0) == HOST_JOY_RIGHT);
+
+	settings.source = BMA_PAD_SOURCE_AXES;
+	settings.axis = 2;
+	assert(BMA_SavePadInputSettings(0, &settings));
+	assert(BMA_JoystickState(0) == 0);
+	set_axis(0, 2, -32768, -32768, 32767);
+	set_axis(0, 3, 32767, -32768, 32767);
+	assert(BMA_JoystickState(0) == (HOST_JOY_LEFT | HOST_JOY_DOWN));
+	BMA_InputSettingsChanged();
+	BMA_GetPadInputSettings(0, &other);
+	assert(other.axis == 2 && other.source == BMA_PAD_SOURCE_AXES);
+	BMA_GetPadInputSettings(1, &other);
+	assert(other.axis == -1 && other.source == BMA_PAD_SOURCE_AUTO);
+	port_pad[0] = -1;
+	pad_prev[0] = 0;
+	BMA_GamepadUpdate();
+	assert(port_pad[0] == 0);
+
+	settings.axis = 0;
+	settings.deadzone = 20;
+	assert(BMA_SavePadInputSettings(0, &settings));
+	set_axis(0, 0, 10000, -32768, 32767);
+	assert(BMA_JoystickState(0) == HOST_JOY_RIGHT);
+	settings.deadzone = 50;
+	assert(BMA_SavePadInputSettings(0, &settings));
+	assert(BMA_JoystickState(0) == 0);
+	settings.deadzone = 0;
+	for (sign_x = -1; sign_x <= 1; sign_x += 2)
+		for (sign_y = -1; sign_y <= 1; sign_y += 2) {
+			int horizontal = sign_x < 0 ? HOST_JOY_LEFT : HOST_JOY_RIGHT;
+			int vertical = sign_y < 0 ? HOST_JOY_UP : HOST_JOY_DOWN;
+			set_axis(0, 0, sign_x * 25000, -32768, 32767);
+			set_axis(0, 1, sign_y * 12500, -32768, 32767);
+			settings.diagonals = BMA_PAD_DIAGONALS_NARROW;
+			assert(BMA_SavePadInputSettings(0, &settings));
+			assert(BMA_JoystickState(0) == horizontal);
+			settings.diagonals = BMA_PAD_DIAGONALS_WIDE;
+			assert(BMA_SavePadInputSettings(0, &settings));
+			assert(BMA_JoystickState(0) == (horizontal | vertical));
+			settings.diagonals = BMA_PAD_DIAGONALS_NONE;
+			assert(BMA_SavePadInputSettings(0, &settings));
+			assert(BMA_JoystickState(0) == horizontal);
+			settings.diagonals = BMA_PAD_DIAGONALS_NARROW;
+			set_axis(0, 1, sign_y * 25000, -32768, 32767);
+			assert(BMA_SavePadInputSettings(0, &settings));
+			assert(BMA_JoystickState(0) == (horizontal | vertical));
+		}
+	settings.source = BMA_PAD_SOURCE_DPAD;
+	settings.diagonals = BMA_PAD_DIAGONALS_NONE;
+	assert(BMA_SavePadInputSettings(0, &settings));
+	pad_inputs[0].dpad = HOST_JOY_LEFT | HOST_JOY_DOWN;
+	assert(BMA_JoystickState(0) == (HOST_JOY_LEFT | HOST_JOY_DOWN));
+	pads[0] = -1;
+	assert(BMA_JoystickState(0) == 0);
+	pads[0] = 0;
+
+	strcpy(previous, saved_input[0]);
+	settings.deadzone = 75;
+	save_ok = 0;
+	assert(!BMA_SavePadInputSettings(0, &settings));
+	assert(strcmp(previous, saved_input[0]) == 0);
+	BMA_GetPadInputSettings(0, &other);
+	assert(other.deadzone == 0);
+	save_ok = 1;
+	set_ok = 0;
+	assert(!BMA_SavePadInputSettings(0, &settings));
+	assert(strcmp(previous, saved_input[0]) == 0);
+	set_ok = 1;
+	settings.axis = HOST_PAD_AXES - 1;
+	before = logs;
+	assert(!BMA_SavePadInputSettings(0, &settings));
+	assert(logs == before + 1);
+	for (i = 1; i < (int)(sizeof(invalid) / sizeof(invalid[0])); i++) {
+		strcpy(saved_input[0], invalid[i]);
+		before = logs;
+		BMA_GamepadSettingsChanged();
+		assert(logs == before + 1);
+		BMA_GetPadInputSettings(0, &other);
+		assert(other.source == BMA_PAD_SOURCE_AUTO && other.axis == -1);
+		assert(other.deadzone == 50 && other.diagonals == BMA_PAD_DIAGONALS_ORIGINAL);
+	}
+	reset();
+	known_pads[0] = 0;
+	strcpy(usb_ids[0], "venca3-24");
+	set_axis(0, 3, 255, 0, 255);
+	set_axis(0, 4, 127, 0, 255);
+	assert(BMA_JoystickState(0) == HOST_JOY_RIGHT);
+}
+
+static void axis_thresholds(void)
+{
+	int value, deadzone, active, normalized, range;
+	struct host_pad_axis axis;
+	for (range = 0; range < 2; range++)
+		for (deadzone = 0; deadzone <= 95; deadzone += 5)
+			for (value = 0; value <= 255; value++) {
+				int centre, threshold;
+				axis.minimum = range ? -128 : 0;
+				axis.maximum = range ? 127 : 255;
+				axis.value = value + axis.minimum;
+				centre = (axis.minimum + axis.maximum) / 2;
+				threshold = (axis.maximum - axis.minimum) * deadzone / 200;
+				normalized = axis_position(&axis, deadzone, &active);
+				assert(active == (axis.value < centre - threshold || axis.value > centre + threshold));
+				assert(normalized == 0 || (normalized < 0) == (axis.value < centre));
+			}
+	axis.minimum = INT_MIN;
+	axis.maximum = INT_MAX;
+	axis.value = INT_MIN;
+	assert(axis_position(&axis, 50, &active) < 0 && active);
+	axis.value = INT_MAX;
+	assert(axis_position(&axis, 50, &active) > 0 && active);
+	axis.value = 1;
+	assert(axis_position(&axis, 0, &active) > 0 && active);
+	axis.maximum = axis.minimum;
+	assert(axis_position(&axis, 50, &active) == 0 && !active);
+}
+
 static void persistence(void)
 {
 	const char *invalid[] = {"", "1,2", "1,2,3,4,5,6,7,8,9",
@@ -601,6 +787,8 @@ int main(void)
 	menus();
 	m30_menus();
 	menu_open_defaults();
+	direction_settings();
+	axis_thresholds();
 	persistence();
 	puts("PASS per-device profiles, per-port overrides, independent buttons, legacy mappings, "
 	     "held keys, action edges, menu controls, unplugging and settings validation");

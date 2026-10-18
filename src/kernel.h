@@ -110,6 +110,7 @@ public:
   int PadState(int pad);
   int PadInfo(int pad, struct host_pad_info *info);
   uint32_t PadButtons(int pad);
+  int PadInput(int pad, struct host_pad_input *input);
   unsigned Mouse(int *dx, int *dy);
   int GpioJoystick(int port);
   double Time(void);
@@ -213,6 +214,7 @@ private:
   volatile int m_PadState[HOST_PADS];
   struct host_pad_info m_PadInfo[HOST_PADS];
   uint32_t m_PadButtons[HOST_PADS];
+  struct host_pad_input m_PadInput[HOST_PADS];
   // Axes the direction is read from on pads Circle doesn't know.
   int m_PadAxisX[HOST_PADS];
   int m_PadAxisY[HOST_PADS];

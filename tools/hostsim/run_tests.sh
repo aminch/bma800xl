@@ -220,7 +220,7 @@ fi
 check_image setting controllers
 
 echo "Per-port gamepad button editor and keyboard capture"
-run padmapping 50 "" '1 pad 0 0\n1 padname 0 Generic USB Controller\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n260 key 0x28 1\n262 key 0x28 0\n280 pad 0 1\n282 pad 0 0\n300 key 0x51 1\n302 key 0x51 0\n320 key 0x28 1\n322 key 0x28 0\n340 key 0x51 1\n342 key 0x51 0\n360 key 0x51 1\n362 key 0x51 0\n380 key 0x28 1\n382 key 0x28 0\n400 key 0x28 1\n402 key 0x28 0\n420 pad 0 2\n422 pad 0 0\n440 key 0x28 1\n442 key 0x28 0\n460 key 0x28 1\n462 key 0x28 0\n480 key 0x0d 1\n482 key 0x0d 0\n510 shot mapping.ppm\n520 quit\n'
+run padmapping 50 "" '1 pad 0 0\n1 padname 0 Generic USB Controller\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x4f 1\n222 key 0x4f 0\n240 key 0x28 1\n242 key 0x28 0\n260 key 0x28 1\n262 key 0x28 0\n280 pad 0 1\n282 pad 0 0\n300 key 0x51 1\n302 key 0x51 0\n320 key 0x28 1\n322 key 0x28 0\n340 key 0x51 1\n342 key 0x51 0\n360 key 0x51 1\n362 key 0x51 0\n380 key 0x28 1\n382 key 0x28 0\n400 key 0x28 1\n402 key 0x28 0\n420 pad 0 2\n422 pad 0 0\n440 key 0x28 1\n442 key 0x28 0\n460 key 0x28 1\n462 key 0x28 0\n480 key 0x0d 1\n482 key 0x0d 0\n510 shot mapping.ppm\n520 quit\n'
 if grep -qx 'joy1_buttons=2,1013,2,1040,7,0,3,4' "$OUT/padmapping/bma800xl.cfg" 2>/dev/null; then
     pass "padmapping: Option and captured J saved for port 1"
 else
@@ -228,7 +228,7 @@ else
 fi
 
 echo "Restore default gamepad buttons"
-mapping_menu_script='150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n'
+mapping_menu_script='150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x4f 1\n222 key 0x4f 0\n240 key 0x28 1\n242 key 0x28 0\n'
 mapping_script=$mapping_menu_script
 for frame in 260 276 292 308 324 340 356 372 388 404 420 436 452; do
     mapping_script+="$(tap "$frame" 0x51)"
@@ -250,8 +250,44 @@ else
     fail "paddevices" "named device selection was not saved"
 fi
 
+echo "Per-port direction, axis, dead-zone and diagonal menus"
+run padinputsettings 50 "" '1 pad 0 0\n1 padaxis 0 2 0 -100 100\n1 padaxis 0 3 0 -100 100\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n260 key 0x28 1\n262 key 0x28 0\n280 key 0x51 1\n282 key 0x51 0\n320 key 0x28 1\n322 key 0x28 0\n340 key 0x51 1\n342 key 0x51 0\n360 key 0x28 1\n362 key 0x28 0\n380 key 0x51 1\n382 key 0x51 0\n400 key 0x51 1\n402 key 0x51 0\n420 key 0x51 1\n422 key 0x51 0\n440 key 0x28 1\n442 key 0x28 0\n460 key 0x51 1\n462 key 0x51 0\n480 key 0x28 1\n482 key 0x28 0\n500 key 0x52 1\n502 key 0x52 0\n520 key 0x52 1\n522 key 0x52 0\n540 key 0x28 1\n542 key 0x28 0\n560 key 0x51 1\n562 key 0x51 0\n580 key 0x28 1\n582 key 0x28 0\n600 key 0x51 1\n602 key 0x51 0\n620 key 0x51 1\n622 key 0x51 0\n640 key 0x28 1\n642 key 0x28 0\n660 shot configured.ppm\n680 quit\n'
+if grep -qx 'joy1_input=2,2,40,2' "$OUT/padinputsettings/bma800xl.cfg" 2>/dev/null \
+    && ! grep -q '^joy2_input=' "$OUT/padinputsettings/bma800xl.cfg"; then
+    pass "padinputsettings: all four options saved for port 1 only"
+else
+    fail "padinputsettings" "joystick options were not saved as expected"
+fi
+
+# The simulator supplies saved settings through BMA_CMDLINE on a fresh run.
+saved_input=$(grep '^joy1_input=' "$OUT/padinputsettings/bma800xl.cfg")
+run padinputsettings 50 "$saved_input" '1 pad 0 0\n1 padaxis 0 2 0 -100 100\n1 padaxis 0 3 0 -100 100\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x51 1\n202 key 0x51 0\n208 key 0x51 1\n210 key 0x51 0\n216 key 0x51 1\n218 key 0x51 0\n224 key 0x51 1\n226 key 0x51 0\n232 key 0x51 1\n234 key 0x51 0\n240 key 0x51 1\n242 key 0x51 0\n248 key 0x51 1\n250 key 0x51 0\n256 key 0x51 1\n258 key 0x51 0\n264 key 0x28 1\n266 key 0x28 0\n300 padaxis 0 2 80 -100 100\n320 shot right.ppm\n330 pad 0 1\n350 shot fire.ppm\n360 pad 0 0\n360 padhat 0 1\n380 shot ignoredhat.ppm\n400 quit\n'
+if python3 - "$OUT/padinputsettings" "$HERE/expected" <<'EOF'
+import sys
+from pathlib import Path
+from PIL import Image, ImageChops
+root, expected = map(Path, sys.argv[1:])
+for actual, reference in (("right", "right"), ("fire", "fire"), ("ignoredhat", "right")):
+    a = Image.open(root / (actual + ".ppm")).convert("RGB")
+    b = Image.open(expected / ("joytest-" + reference + ".png")).convert("RGB")
+    assert ImageChops.difference(a, b).getbbox() is None, actual + " differs from expected joystick state"
+EOF
+then
+    pass "padinputsettings: reloaded axis pair drives joystick/fire and ignores D-pad"
+else
+    fail "padinputsettings" "saved axis configuration did not drive the Atari joystick correctly"
+fi
+
+echo "Axis menu has Automatic and four zero-based pairs"
+run padaxischoices 50 "" '1 pad 0 0\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x51 1\n242 key 0x51 0\n260 key 0x28 1\n262 key 0x28 0\n280 key 0x51 1\n282 key 0x51 0\n300 key 0x51 1\n302 key 0x51 0\n320 key 0x51 1\n322 key 0x51 0\n330 key 0x51 1\n332 key 0x51 0\n335 key 0x51 1\n337 key 0x51 0\n340 key 0x28 1\n342 key 0x28 0\n360 quit\n'
+if grep -qx 'joy1_input=1,3,50,0' "$OUT/padaxischoices/bma800xl.cfg" 2>/dev/null; then
+    pass "padaxischoices: four numeric choices stop at 3 & 4, with automatic source by default"
+else
+    fail "padaxischoices" "unexpected axis choices or default direction source"
+fi
+
 echo "M30 standard button order and physical-letter defaults"
-run padm30order 50 "joy1_pad=1" '1 pad 0 0\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n280 shot standard.ppm\n300 padname 0 8BitDo M30 2.4G\n310 shot m30.ppm\n320 quit\n'
+run padm30order 50 "joy1_pad=1" '1 pad 0 0\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x4f 1\n222 key 0x4f 0\n240 key 0x28 1\n242 key 0x28 0\n280 shot standard.ppm\n300 padname 0 8BitDo M30 2.4G\n310 shot m30.ppm\n320 quit\n'
 if python3 - "$OUT/padm30order" <<'EOF'
 import sys
 from pathlib import Path
@@ -297,7 +333,7 @@ do
         controllers) navigation='200 key 0x51 1\n202 key 0x51 0\n' ;;
         port) navigation='200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n' ;;
         device) navigation='200 key 0x28 1\n202 key 0x28 0\n220 key 0x28 1\n222 key 0x28 0\n240 key 0x51 1\n242 key 0x51 0\n' ;;
-        buttons) navigation='200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n' ;;
+        buttons) navigation='200 key 0x28 1\n202 key 0x28 0\n220 key 0x4f 1\n222 key 0x4f 0\n240 key 0x28 1\n242 key 0x28 0\n' ;;
     esac
     run "padhotplug-$screen" 50 "joy1_pad=1" "150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n${navigation}280 shot before.ppm\n300 pad 0 0\n300 padname 0 8BitDo M30 2.4G\n305 shot connected.ppm\n320 pad 0 -1\n325 shot after.ppm\n340 quit\n"
     if python3 - "$OUT/padhotplug-$screen" <<'EOF'

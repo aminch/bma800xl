@@ -13,6 +13,8 @@
  *   <frame> pad <n> <bits>         set gamepad n to HOST_PAD_* bits
  *   <frame> padraw <n> <bits>      independent gameplay button bits
  *   <frame> padname <n> <name>     generic USB controller product name
+ *   <frame> padaxis <n> <axis> <value> <min> <max>   set one raw axis
+ *   <frame> padhat <n> <bits>     HOST_JOY_* directions, -1 for no D-pad
  *   <frame> gpio <n> <bits>        set GPIO joystick n to HOST_JOY_* bits
  *   <frame> shot <file.ppm>        save the visible screen
  *   <frame> audio                  print audio statistics
@@ -246,6 +248,7 @@ static int pads[HOST_PADS] = {-1, -1, -1, -1};
 static uint32_t pad_buttons[HOST_PADS];
 static char pad_names[HOST_PADS][64];
 static unsigned pad_generation[HOST_PADS];
+static struct host_pad_input pad_inputs[HOST_PADS];
 static int gpio_joysticks[2] = {0, 0};
 /* The mouse moves this much every time it is read, until the script
    changes it. */
@@ -289,6 +292,15 @@ uint32_t host_pad_buttons(int pad)
 	return pad >= 0 && pad < HOST_PADS && pads[pad] >= 0 ? pad_buttons[pad] : 0;
 }
 
+int host_pad_input(int pad, struct host_pad_input *input)
+{
+	if (host_pad_state(pad) < 0)
+		return 0;
+	*input = pad_inputs[pad];
+	input->dpad |= (pads[pad] >> 12) & 0x0f;
+	return 1;
+}
+
 int host_pad_info(int pad, struct host_pad_info *info)
 {
 	if (pad < 0 || pad >= HOST_PADS || pads[pad] < 0)
@@ -304,6 +316,8 @@ int host_pad_info(int pad, struct host_pad_info *info)
 	info->button_mask = (info->known ? 0xfff : host_pad_generic_buttons(0xffff))
 	                  | pad_buttons[pad];
 	info->generation = pad_generation[pad];
+	info->axis_mask = pad_inputs[pad].axis_mask;
+	info->has_dpad = pad_inputs[pad].has_dpad;
 	return 1;
 }
 int host_gpio_joystick(int port)
@@ -415,8 +429,10 @@ static void run_script(void)
 		} else if (strcmp(cmd, "pad") == 0) {
 			int pad, bits;
 			sscanf(line + n, "%d %i", &pad, &bits);
-			if (pads[pad] < 0 && bits >= 0)
+			if (pads[pad] < 0 && bits >= 0) {
+				memset(&pad_inputs[pad], 0, sizeof(pad_inputs[pad]));
 				pad_generation[pad]++;
+			}
 			pads[pad] = bits;
 			pad_buttons[pad] = bits >= 0 ? bits & 0xff : 0;
 		} else if (strcmp(cmd, "padraw") == 0) {
@@ -426,12 +442,44 @@ static void run_script(void)
 				fprintf(stderr, "[sim] invalid padraw command: %s\n", line);
 				exit(1);
 			}
-			if (pads[pad] < 0)
+			if (pads[pad] < 0) {
+				memset(&pad_inputs[pad], 0, sizeof(pad_inputs[pad]));
 				pad_generation[pad]++;
+			}
 			pad_buttons[pad] = bits & ~(UINT32_C(1) << 12);
 			pads[pad] = (pads[pad] > 0 ? pads[pad] & 0xf100 : 0) | (bits & 0xff);
 			if (bits & (1u << 8)) pads[pad] |= HOST_PAD_L;
 			if (bits & (1u << 9)) pads[pad] |= HOST_PAD_R;
+		} else if (strcmp(cmd, "padaxis") == 0) {
+			int pad, axis, value, min, max;
+			if (sscanf(line + n, "%d %d %d %d %d", &pad, &axis, &value, &min, &max) != 5
+			    || pad < 0 || pad >= HOST_PADS || axis < 0 || axis >= HOST_PAD_AXES || min >= max) {
+				fprintf(stderr, "[sim] invalid padaxis command: %s\n", line);
+				exit(1);
+			}
+			if (pads[pad] < 0) {
+				memset(&pad_inputs[pad], 0, sizeof(pad_inputs[pad]));
+				pads[pad] = 0;
+				pad_generation[pad]++;
+			}
+			pad_inputs[pad].axes[axis].value = value;
+			pad_inputs[pad].axes[axis].minimum = min;
+			pad_inputs[pad].axes[axis].maximum = max;
+			pad_inputs[pad].axis_mask |= 1u << axis;
+		} else if (strcmp(cmd, "padhat") == 0) {
+			int pad, bits;
+			if (sscanf(line + n, "%d %i", &pad, &bits) != 2
+			    || pad < 0 || pad >= HOST_PADS || bits < -1 || bits > 15) {
+				fprintf(stderr, "[sim] invalid padhat command: %s\n", line);
+				exit(1);
+			}
+			if (pads[pad] < 0) {
+				memset(&pad_inputs[pad], 0, sizeof(pad_inputs[pad]));
+				pads[pad] = 0;
+				pad_generation[pad]++;
+			}
+			pad_inputs[pad].has_dpad = bits >= 0;
+			pad_inputs[pad].dpad = bits >= 0 ? bits : 0;
 		} else if (strcmp(cmd, "padname") == 0) {
 			int pad, offset;
 			if (sscanf(line + n, "%d %n", &pad, &offset) != 1 || pad < 0 || pad >= HOST_PADS) {

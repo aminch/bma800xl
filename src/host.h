@@ -103,15 +103,29 @@ int host_pad_state(int pad);
    bits 8-11 are L2/R2/L3/R3. Home stays reserved in host_pad_state().
    Generic devices retain their remaining USB button numbers. */
 #define HOST_PAD_BUTTONS 32
+#define HOST_PAD_AXES 16
+struct host_pad_axis {
+	int value, minimum, maximum;
+};
+struct host_pad_input {
+	struct host_pad_axis axes[HOST_PAD_AXES];
+	unsigned axis_mask;
+	int dpad; /* HOST_JOY_* direction bits, without analogue axes. */
+	int has_dpad;
+};
 struct host_pad_info {
 	char name[64];
 	char usb_id[24];
 	uint32_t button_mask;
 	unsigned generation;
 	int known;
+	unsigned axis_mask;
+	int has_dpad;
 };
 int host_pad_info(int pad, struct host_pad_info *info);
 uint32_t host_pad_buttons(int pad);
+/* Copies a connected pad's separate axis and D-pad/hat state. */
+int host_pad_input(int pad, struct host_pad_input *input);
 
 /* Our generic USB layout, without combining shoulders and triggers. */
 static inline uint32_t host_pad_generic_buttons(uint32_t buttons)

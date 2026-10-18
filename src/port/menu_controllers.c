@@ -270,17 +270,55 @@ static void select_port_device(int port)
 
 static void joystick_menu(int port)
 {
-	char text[80], title[32];
+	static const char *const sources[] = {
+		"Automatic", "Axes Only", "D-pad / Hat Only", NULL
+	};
+	static const int source_values[] = {
+		BMA_PAD_SOURCE_AUTO, BMA_PAD_SOURCE_AXES, BMA_PAD_SOURCE_DPAD
+	};
+	static const int axis_values[] = {-1, 0, 1, 2, 3};
+	static const char *const diagonals[] = {"Original", "None", "Narrow", "Wide", NULL};
+	char text[80], title[32], axes[64], deadzone[16];
 	UI_tMenuItem items[] = {
 		UI_MENU_ACTION_PREFIX(0, "Device: ", text),
+		UI_MENU_ACTION_PREFIX(2, "Direction Source: ", ""),
+		UI_MENU_ACTION_PREFIX(3, "Axes: ", axes),
+		UI_MENU_ACTION_PREFIX(4, "Dead Zone: ", deadzone),
+		UI_MENU_ACTION_PREFIX(5, "Diagonal Zone: ", ""),
 		UI_MENU_SUBMENU(1, "Button Mapping"),
 		UI_MENU_END
 	};
 	int option = 0;
 	snprintf(title, sizeof(title), "Joystick %d", port + 1);
 	for (;;) {
+		struct bma_pad_input_settings settings;
+		const struct bma_gamepad_profile *profile;
+		struct host_pad_info info;
+		char name[4][48];
+		const char *choices[6];
+		int i, selected = -1, connected, axis_x, axis_y, available, source = 0;
 		BMA_GamepadMenuWatch(TRUE);
 		port_device_text(port, text, sizeof(text));
+		BMA_GetPadInputSettings(port, &settings);
+		connected = host_pad_info(BMA_PortPad(port), &info);
+		profile = connected ? BMA_GamepadProfile(info.usb_id, info.known)
+		                    : BMA_GamepadProfile(NULL, FALSE);
+		axis_x = settings.axis < 0 ? profile->axis_x : settings.axis;
+		axis_y = settings.axis < 0 ? profile->axis_y : settings.axis + 1;
+		available = !connected || ((info.axis_mask & (1u << axis_x))
+		                          && (info.axis_mask & (1u << axis_y)));
+		if (settings.axis < 0)
+			snprintf(axes, sizeof(axes), "Auto (%d & %d)%s", axis_x, axis_y,
+			         available ? "" : " (unavailable)");
+		else
+			snprintf(axes, sizeof(axes), "%d & %d%s", axis_x, axis_y,
+			         available ? "" : " (unavailable)");
+		snprintf(deadzone, sizeof(deadzone), "%d%%", settings.deadzone);
+		for (i = 1; i < 3; i++)
+			if (settings.source == source_values[i])
+				source = i;
+		items[1].item = (char *) sources[source];
+		items[4].item = (char *) diagonals[settings.diagonals];
 		if (controller_select(title, 0, &option, items))
 			continue;
 		if (option == 0) {
@@ -288,8 +326,49 @@ static void joystick_menu(int port)
 		}
 		else if (option == 1)
 			button_mapping(port);
+		else if (option == 2) {
+			selected = BMA_MenuChoose("Direction Source", sources, source);
+			if (selected >= 0)
+				settings.source = source_values[selected];
+		}
+		else if (option == 3) {
+			choices[0] = "Automatic (device profile)";
+			int current = 0;
+			for (i = 0; i < 4; i++) {
+				int axis = axis_values[i + 1];
+				unsigned pair = 3u << axis;
+				snprintf(name[i], sizeof(name[i]), "%d & %d%s", axis, axis + 1,
+				         !connected || (info.axis_mask & pair) == pair ? "" : " (unavailable)");
+				choices[i + 1] = name[i];
+				if (settings.axis == axis)
+					current = i + 1;
+			}
+			choices[5] = NULL;
+			selected = BMA_MenuChoose("Axis Pair", choices, current);
+			if (selected >= 0)
+				settings.axis = axis_values[selected];
+		}
+		else if (option == 4) {
+			char percentages[20][8];
+			const char *values[21];
+			for (i = 0; i < 20; i++) {
+				snprintf(percentages[i], sizeof(percentages[i]), "%d%%", i * 5);
+				values[i] = percentages[i];
+			}
+			values[20] = NULL;
+			selected = BMA_MenuChoose("Dead Zone", values, settings.deadzone / 5);
+			if (selected >= 0)
+				settings.deadzone = selected * 5;
+		}
+		else if (option == 5) {
+			selected = BMA_MenuChoose("Diagonal Zone", diagonals, settings.diagonals);
+			if (selected >= 0)
+				settings.diagonals = selected;
+		}
 		else
 			return;
+		if (selected >= 0 && !BMA_SavePadInputSettings(port, &settings))
+			UI_driver->fMessage("Cannot save joystick input settings", 1);
 	}
 }
 

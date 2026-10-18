@@ -160,6 +160,26 @@ buttons are:
 In the menu, the D-pad moves, **A** chooses, and **B** or **Start** goes
 back.
 
+**F1 → Controllers → Joystick 1–4** also has these per-port settings:
+
+| Setting | Choices |
+|---------|---------|
+| Direction Source | Automatic (default, axes + D-pad), Axes Only, D-pad / Hat Only |
+| Axes | Automatic (device profile), 0 & 1, 1 & 2, 2 & 3, or 3 & 4 |
+| Dead Zone | 0–95%, in 5% steps; default 50% of the travel from centre |
+| Diagonal Zone | Original (default), None, Narrow or Wide |
+
+Automatic direction input combines axes and D-pad/hat, preserving the original
+input. Axis numbers start at 0; the M30's automatic pair is 3 & 4.
+Unavailable axis pairs
+are marked; they produce no axis input until a suitable controller is connected.
+Some controllers, including the M30, report their D-pad as axes: use Automatic
+or Axes Only for those devices.
+Dead zone and diagonal shaping affect axes only, not D-pad/hat buttons.
+Narrow and Wide use 30- and 45-degree diagonal sectors; None selects one
+cardinal direction (horizontal at an exact tie). Menu navigation and
+keyboard/GPIO joysticks are unaffected. 
+
 To remap buttons, open **F1 → Controllers → Joystick 1–4 → Button
 Mapping**, select *Select to Start Button Detection...*, then press and release
 the actual button. Alternatively select its entry in the list. Choose
@@ -313,6 +333,7 @@ edited from the web UI.
 | `audio_buffer_ms`   | 10 or more                   | `40`     | Sound buffer; raise it if the sound breaks up |
 | `keyboard`          | `us`, `uk`, `no`             | `us`     | PC keyboard layout |
 | `joy1_pad` ... `joy4_pad` | `0` automatic, `1`-`4` a gamepad, `-1` none | `0` | Gamepad for each Atari joystick port |
+| `joy1_input` ... `joy4_input` | `source,axis,deadzone,diagonals` | `1,-1,50,0` | Source: 1 auto (0 also combines both), 2 axes, 3 D-pad. Axis: zero-based first axis, -1 device default. Dead zone: 0–95%. Diagonals: 0 original, 1 none, 2 narrow, 3 wide. |
 | `keypad_joystick`   | `0`, `1`                     | `1`      | Numeric keypad as joystick 1 |
 | `arrow_joystick`    | `0`, `1`                     | `0`      | Arrow keys as joystick 1 |
 | `gpio_joysticks`    | `0`, `1`                     | `0`      | Real joysticks on the GPIO header |
