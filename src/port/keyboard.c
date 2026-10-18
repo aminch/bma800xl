@@ -376,6 +376,12 @@ static void pad_virtual_keys(unsigned char *down)
 	}
 
 	if (in_menu()) {
+		int gpio = host_gpio_joystick(0) | host_gpio_joystick(1);
+		if (gpio & HOST_JOY_UP) down[K_UP] = 1;
+		if (gpio & HOST_JOY_DOWN) down[K_DOWN] = 1;
+		if (gpio & HOST_JOY_LEFT) down[K_LEFT] = 1;
+		if (gpio & HOST_JOY_RIGHT) down[K_RIGHT] = 1;
+		if (gpio & HOST_JOY_FIRE) down[K_RETURN] = 1;
 		if (all & HOST_PAD_UP) down[K_UP] = 1;
 		if (all & HOST_PAD_DOWN) down[K_DOWN] = 1;
 		if (all & HOST_PAD_LEFT) down[K_LEFT] = 1;

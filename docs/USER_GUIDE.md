@@ -162,6 +162,7 @@ and 10 is Start, which suits most simple USB pads.
 **Real Atari joysticks on the GPIO header**: set `gpio_joysticks=1` in
 `cmdline.txt`. The wiring is the same as BMC64's GPIO Config 1, so existing
 BMC64 joystick adapters work. Each line is connected to ground when active.
+In the menus, either joystick moves the cursor and fire selects an item.
 
 | Joystick | Up     | Down   | Left   | Right  | Fire   |
 |----------|--------|--------|--------|--------|--------|

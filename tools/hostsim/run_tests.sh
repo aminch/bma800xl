@@ -151,6 +151,16 @@ echo "atari800's menu from the BMA800XL menu"
 run emumenu 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n180 key 0x28 1\n182 key 0x28 0\n210 shot menu.ppm\n220 quit\n'
 check_image emumenu menu
 
+echo "GPIO joystick menu navigation"
+for port in 0 1; do
+    run "gpiomenu$port" 50 "gpio_joysticks=1" "150 key 0x3a 1\n152 key 0x3a 0\n170 gpio $port 0x02\n172 gpio $port 0\n190 gpio $port 0x01\n192 gpio $port 0\n210 gpio $port 0x10\n212 gpio $port 0\n240 shot menu.ppm\n250 quit\n"
+    if cmp -s "$OUT/gpiomenu$port/menu.ppm" "$OUT/emumenu/menu.ppm"; then
+        pass "gpiomenu$port: down, up and fire open the emulator menu"
+    else
+        fail "gpiomenu$port" "GPIO navigation differs from keyboard navigation"
+    fi
+done
+
 echo "Alt+D goes straight to atari800's disk menu"
 run altd 50 "" '150 key 0xe2 1\n152 key 0x07 1\n154 key 0x07 0\n156 key 0xe2 0\n190 shot disks.ppm\n200 quit\n'
 check_image altd disks

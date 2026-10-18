@@ -11,6 +11,7 @@
  *   <frame> key <usage> <0|1>     press or release a key (USB HID usage)
  *   <frame> type <text>            type text (US layout, one key per frame)
  *   <frame> pad <n> <bits>         set gamepad n to HOST_PAD_* bits
+ *   <frame> gpio <n> <bits>        set GPIO joystick n to HOST_JOY_* bits
  *   <frame> shot <file.ppm>        save the visible screen
  *   <frame> audio                  print audio statistics
  *   <frame> webui <reboot|coldstart>  a request from the web UI
@@ -239,6 +240,7 @@ static int q_usage[QSIZE], q_pressed[QSIZE];
 static int q_head, q_tail;
 static unsigned char key_state[256];
 static int pads[HOST_PADS] = {-1, -1, -1, -1};
+static int gpio_joysticks[2] = {0, 0};
 /* The mouse moves this much every time it is read, until the script
    changes it. */
 static int mouse_dx, mouse_dy;
@@ -276,7 +278,11 @@ unsigned host_key_modifiers(void)
 }
 
 int host_pad_state(int pad) { return pad >= 0 && pad < HOST_PADS ? pads[pad] : -1; }
-int host_gpio_joystick(int port) { (void) port; return 0; }
+int host_gpio_joystick(int port)
+{
+	return port >= 0 && port < 2 && host_option_int("gpio_joysticks", 0)
+	     ? gpio_joysticks[port] : 0;
+}
 
 unsigned host_mouse(int *dx, int *dy)
 {
@@ -382,6 +388,13 @@ static void run_script(void)
 			int pad, bits;
 			sscanf(line + n, "%d %i", &pad, &bits);
 			pads[pad] = bits;
+		} else if (strcmp(cmd, "gpio") == 0) {
+			int port, bits;
+			if (sscanf(line + n, "%d %i", &port, &bits) != 2 || port < 0 || port >= 2) {
+				fprintf(stderr, "[sim] invalid GPIO joystick command: %s\n", line);
+				exit(1);
+			}
+			gpio_joysticks[port] = bits;
 		} else if (strcmp(cmd, "mouse") == 0) {
 			sscanf(line + n, "%d %d %u", &mouse_dx, &mouse_dy, &mouse_buttons);
 		} else if (strcmp(cmd, "shot") == 0) {
