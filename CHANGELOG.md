@@ -1,6 +1,7 @@
 ## 1.4.2
 
 - R: device (850 interface and modem) to call telnet BBSes over Ethernet or Wi-Fi. See `docs/NETWORKING.md`)
+- Enable menu navigation from GPIO connected joysticks
 
 ## 1.4.1 – 2026-10-17
 
