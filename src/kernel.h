@@ -15,6 +15,7 @@
 
 #include <SDCard/emmc.h>
 #include <circle/actled.h>
+#include <circle/cputhrottle.h>
 #include <circle/devicenameservice.h>
 #include <circle/exceptionhandler.h>
 #include <circle/gpiomanager.h>
@@ -169,6 +170,9 @@ private:
   CLogger mLogger;
   CScheduler mScheduler;
   CGPIOManager mGPIOManager;
+  // Sets the ARM's clock to its maximum when cmdline.txt has fast=true
+  // otherwise bare metal runs at the minimum (Circle's doc/realtime.txt).
+  CCPUThrottle mCPUThrottle;
 #if RASPPI <= 3
   CVCHIQDevice mVCHIQ;
 #endif

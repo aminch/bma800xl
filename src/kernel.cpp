@@ -191,6 +191,14 @@ bool CKernel::Initialize(void) {
   mLogger.RegisterPanicHandler(PanicHandler);
   mLogger.Write(FromKernel, LogNotice, "BMA800XL " BMA800XL_VERSION " (" BMA800XL_GIT
                 ", atari800 " A8_VERSION ")");
+  if (mCPUThrottle.IsDynamic()) {
+    mLogger.Write(FromKernel, LogNotice, "ARM clock %u MHz (maximum %u MHz)",
+                  mCPUThrottle.GetClockRate() / 1000000,
+                  mCPUThrottle.GetMaxClockRate() / 1000000);
+  } else {
+    mLogger.Write(FromKernel, LogNotice, "ARM clock %u MHz",
+                  mCPUThrottle.GetClockRate() / 1000000);
+  }
 
   if (!mTimer.Initialize()) {
     return false;

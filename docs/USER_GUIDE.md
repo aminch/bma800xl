@@ -355,6 +355,7 @@ edited from the web UI.
 | `webui_pin`         | digits                       | none     | PIN for the web UI |
 | `timezone`          | minutes east of UTC          | `0`      | Time zone for the network clock |
 | `usbpowerdelay`     | milliseconds                 | Circle's | Circle: wait for USB devices to power up (by default 300 ms, 510 ms behind a hub) |
+| `fast`              | `true`, `false`              | `true` in the supplied `cmdline.txt` | Circle: run the ARM at its full clock speed (the firmware still slows it down if the chip gets too hot); without it the ARM runs at its lowest clock. Only read from `cmdline.txt` |
 
 
 ## ROMs
@@ -372,7 +373,7 @@ in the menu to choose the ROMs, then *Save Configuration*.
 ## Logging
 
 BMA800XL logs what it is doing, which helps when something doesn't work:
-the version, the display and sound set up, gamepads coming and going,
+the version, the ARM's clock speed, the display and sound set up, gamepads coming and going,
 network status, and when the Atari crashes, the crash with the registers
 and the disks in use. Choose where it goes with *Logging* in the menu (it
 changes at once), or `enable_logging` in `cmdline.txt`:

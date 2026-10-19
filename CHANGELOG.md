@@ -1,3 +1,8 @@
+## 1.4.3
+
+- Add support for USB paddles
+- Add `fast=true` to `cmdline.txt` to ensure the Pi is running at normal speed
+
 ## 1.4.2
 
 - R: device (850 interface and modem) to call telnet BBSes over Ethernet or Wi-Fi. See `docs/NETWORKING.md`

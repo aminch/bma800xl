@@ -1,1 +1,1 @@
-audio_out=auto
+fast=true audio_out=auto
