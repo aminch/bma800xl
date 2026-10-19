@@ -221,7 +221,7 @@ check_image setting controllers
 
 echo "Per-port gamepad button editor and keyboard capture"
 run padmapping 50 "" '1 pad 0 0\n1 padname 0 Generic USB Controller\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x4f 1\n222 key 0x4f 0\n240 key 0x28 1\n242 key 0x28 0\n260 key 0x28 1\n262 key 0x28 0\n280 pad 0 1\n282 pad 0 0\n300 key 0x51 1\n302 key 0x51 0\n320 key 0x28 1\n322 key 0x28 0\n340 key 0x51 1\n342 key 0x51 0\n360 key 0x51 1\n362 key 0x51 0\n380 key 0x28 1\n382 key 0x28 0\n400 key 0x28 1\n402 key 0x28 0\n420 pad 0 2\n422 pad 0 0\n440 key 0x28 1\n442 key 0x28 0\n460 key 0x28 1\n462 key 0x28 0\n480 key 0x0d 1\n482 key 0x0d 0\n510 shot mapping.ppm\n520 quit\n'
-if grep -qx 'joy1_buttons=2,1013,2,1040,7,0,3,4' "$OUT/padmapping/bma800xl.cfg" 2>/dev/null; then
+if grep -qx 'joy1_buttons=2,1013,2,1040,7,20,3,4' "$OUT/padmapping/bma800xl.cfg" 2>/dev/null; then
     pass "padmapping: Option and captured J saved for port 1"
 else
     fail "padmapping" "button editor did not save the expected mapping"
@@ -251,7 +251,7 @@ else
 fi
 
 echo "Per-port direction, axis, dead-zone and diagonal menus"
-run padinputsettings 50 "" '1 pad 0 0\n1 padaxis 0 2 0 -100 100\n1 padaxis 0 3 0 -100 100\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n260 key 0x28 1\n262 key 0x28 0\n280 key 0x51 1\n282 key 0x51 0\n320 key 0x28 1\n322 key 0x28 0\n340 key 0x51 1\n342 key 0x51 0\n360 key 0x28 1\n362 key 0x28 0\n380 key 0x51 1\n382 key 0x51 0\n400 key 0x51 1\n402 key 0x51 0\n420 key 0x51 1\n422 key 0x51 0\n440 key 0x28 1\n442 key 0x28 0\n460 key 0x51 1\n462 key 0x51 0\n480 key 0x28 1\n482 key 0x28 0\n500 key 0x52 1\n502 key 0x52 0\n520 key 0x52 1\n522 key 0x52 0\n540 key 0x28 1\n542 key 0x28 0\n560 key 0x51 1\n562 key 0x51 0\n580 key 0x28 1\n582 key 0x28 0\n600 key 0x51 1\n602 key 0x51 0\n620 key 0x51 1\n622 key 0x51 0\n640 key 0x28 1\n642 key 0x28 0\n660 shot configured.ppm\n680 quit\n'
+run padinputsettings 50 "" '1 pad 0 0\n1 padaxis 0 2 0 -100 100\n1 padaxis 0 3 0 -100 100\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x51 1\n242 key 0x51 0\n260 key 0x28 1\n262 key 0x28 0\n280 key 0x51 1\n282 key 0x51 0\n320 key 0x28 1\n322 key 0x28 0\n340 key 0x51 1\n342 key 0x51 0\n360 key 0x28 1\n362 key 0x28 0\n380 key 0x51 1\n382 key 0x51 0\n400 key 0x51 1\n402 key 0x51 0\n420 key 0x51 1\n422 key 0x51 0\n440 key 0x28 1\n442 key 0x28 0\n460 key 0x51 1\n462 key 0x51 0\n480 key 0x28 1\n482 key 0x28 0\n500 key 0x52 1\n502 key 0x52 0\n520 key 0x52 1\n522 key 0x52 0\n540 key 0x28 1\n542 key 0x28 0\n560 key 0x51 1\n562 key 0x51 0\n580 key 0x28 1\n582 key 0x28 0\n600 key 0x51 1\n602 key 0x51 0\n620 key 0x51 1\n622 key 0x51 0\n640 key 0x28 1\n642 key 0x28 0\n660 shot configured.ppm\n680 quit\n'
 if grep -qx 'joy1_input=2,2,40,2' "$OUT/padinputsettings/bma800xl.cfg" 2>/dev/null \
     && ! grep -q '^joy2_input=' "$OUT/padinputsettings/bma800xl.cfg"; then
     pass "padinputsettings: all four options saved for port 1 only"
@@ -279,11 +279,20 @@ else
 fi
 
 echo "Axis menu has Automatic and four zero-based pairs"
-run padaxischoices 50 "" '1 pad 0 0\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x51 1\n242 key 0x51 0\n260 key 0x28 1\n262 key 0x28 0\n280 key 0x51 1\n282 key 0x51 0\n300 key 0x51 1\n302 key 0x51 0\n320 key 0x51 1\n322 key 0x51 0\n330 key 0x51 1\n332 key 0x51 0\n335 key 0x51 1\n337 key 0x51 0\n340 key 0x28 1\n342 key 0x28 0\n360 quit\n'
+run padaxischoices 50 "" '1 pad 0 0\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n230 key 0x51 1\n232 key 0x51 0\n240 key 0x51 1\n242 key 0x51 0\n260 key 0x28 1\n262 key 0x28 0\n280 key 0x51 1\n282 key 0x51 0\n300 key 0x51 1\n302 key 0x51 0\n320 key 0x51 1\n322 key 0x51 0\n330 key 0x51 1\n332 key 0x51 0\n335 key 0x51 1\n337 key 0x51 0\n340 key 0x28 1\n342 key 0x28 0\n360 quit\n'
 if grep -qx 'joy1_input=1,3,50,0' "$OUT/padaxischoices/bma800xl.cfg" 2>/dev/null; then
     pass "padaxischoices: four numeric choices stop at 3 & 4, with automatic source by default"
 else
     fail "padaxischoices" "unexpected axis choices or default direction source"
+fi
+
+echo "Joystick type set to paddles"
+run padtype 50 "" '1 pad 0 0\n150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x28 1\n182 key 0x28 0\n200 key 0x28 1\n202 key 0x28 0\n220 key 0x51 1\n222 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n260 key 0x51 1\n262 key 0x51 0\n280 key 0x28 1\n282 key 0x28 0\n300 quit\n'
+if grep -qx 'joy1_mode=paddles' "$OUT/padtype/bma800xl.cfg" 2>/dev/null \
+    && ! grep -q '^joy2_mode=' "$OUT/padtype/bma800xl.cfg"; then
+    pass "padtype: joystick 1 saved as paddles"
+else
+    fail "padtype" "paddle type was not saved for port 1"
 fi
 
 echo "M30 standard button order and physical-letter defaults"

@@ -658,13 +658,18 @@ int BMA_JoystickState(int port)
 	return port >= 0 && port < 4 ? joystick_state(port) : 0;
 }
 
-/* All four joysticks' state in one number, to notice changes. */
+/* All four joysticks' state, and paddle positions, in one number to notice
+   changes. */
 static int joystick_signature(void)
 {
-	int port, signature = 0;
-	for (port = 0; port < 4; port++)
-		signature |= joystick_state(port) << (5 * port);
-	return signature;
+	unsigned port, signature = 0;
+	for (port = 0; port < 4; port++) {
+		signature |= (unsigned) joystick_state(port) << (5 * port);
+		if (BMA_PadPaddles(port))
+			signature ^= ((unsigned) BMA_PaddlePosition(port, 0) << 20)
+			            ^ ((unsigned) BMA_PaddlePosition(port, 1) << 24);
+	}
+	return (int) (signature & 0x7fffffff);
 }
 
 static int stick_bits(int state)

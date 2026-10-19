@@ -1,8 +1,9 @@
 /*
  * menu_controllers.c - BMA800XL controller settings and joystick test.
  *
- * Split from BMA800XL's menu.c. Button assignment choices follow
- * atari800's SDL2 controller menu (src/ui.c); drawing uses its ui.h interface.
+ * Split from BMA800XL's menu.c. Button assignment choices and the
+ * joystick/paddle mode follow atari800's SDL2 controller menu (src/ui.c);
+ * drawing uses its ui.h interface.
  * Input and device profiles are supplied by gamepad.h.
  *
  * This file is part of BMA800XL. See LICENSE for licensing details.
@@ -53,6 +54,14 @@ static void joystick_test(void)
 				snprintf(source, sizeof(source), "Gamepad %d", pad + 1);
 			else
 				strcpy(source, "");
+			if (BMA_PadPaddles(port)) {
+				int a = BMA_PaddlePosition(port, 0), b = BMA_PaddlePosition(port, 1);
+				snprintf(line[port], sizeof(line[port]), "%d %-10s Pad %3d %3d %s %s",
+				         port + 1, source, a < 0 ? 228 : a, b < 0 ? 228 : b,
+				         s & HOST_JOY_LEFT ? "Fire" : "----",
+				         s & HOST_JOY_RIGHT ? "Fire" : "----");
+				continue;
+			}
 			snprintf(line[port], sizeof(line[port]), "%d %-10s %s %s %s %s %s",
 			         port + 1, source,
 			         s & HOST_JOY_UP ? "Up" : "--",
@@ -90,8 +99,8 @@ static int button_action(int pad, int button, int current)
 	static const char *const categories[] = {"Action", "Atari Key", "Keyboard Key", "None", NULL};
 	static const char *const keyboard[] = {"Press Keyboard Key...", "Escape Key", NULL};
 	static const int actions[] = {
-		BMA_PAD_FIRE, BMA_PAD_MENU, BMA_PAD_KEYBOARD, BMA_PAD_WARMSTART,
-		BMA_PAD_COLDSTART, BMA_PAD_TURBO, BMA_PAD_RUN, BMA_PAD_DISK,
+		BMA_PAD_FIRE, BMA_PAD_PADDLE_FIRE, BMA_PAD_MENU, BMA_PAD_KEYBOARD,
+		BMA_PAD_WARMSTART, BMA_PAD_COLDSTART, BMA_PAD_TURBO, BMA_PAD_RUN, BMA_PAD_DISK,
 		BMA_PAD_CARTRIDGE, BMA_PAD_TAPE, BMA_PAD_SAVE, BMA_PAD_LOAD,
 		BMA_PAD_QUICKSAVE, BMA_PAD_QUICKLOAD
 	};
@@ -278,9 +287,11 @@ static void joystick_menu(int port)
 	};
 	static const int axis_values[] = {-1, 0, 1, 2, 3};
 	static const char *const diagonals[] = {"Original", "None", "Narrow", "Wide", NULL};
+	static const char *const modes[] = {"Joystick", "Paddles", NULL};
 	char text[80], title[32], axes[64], deadzone[16];
 	UI_tMenuItem items[] = {
 		UI_MENU_ACTION_PREFIX(0, "Device: ", text),
+		UI_MENU_ACTION_PREFIX(6, "Type: ", ""),
 		UI_MENU_ACTION_PREFIX(2, "Direction Source: ", ""),
 		UI_MENU_ACTION_PREFIX(3, "Axes: ", axes),
 		UI_MENU_ACTION_PREFIX(4, "Dead Zone: ", deadzone),
@@ -297,6 +308,7 @@ static void joystick_menu(int port)
 		char name[4][48];
 		const char *choices[6];
 		int i, selected = -1, connected, axis_x, axis_y, available, source = 0;
+		int paddles = BMA_PadPaddles(port);
 		BMA_GamepadMenuWatch(TRUE);
 		port_device_text(port, text, sizeof(text));
 		BMA_GetPadInputSettings(port, &settings);
@@ -317,8 +329,15 @@ static void joystick_menu(int port)
 		for (i = 1; i < 3; i++)
 			if (settings.source == source_values[i])
 				source = i;
-		items[1].item = (char *) sources[source];
-		items[4].item = (char *) diagonals[settings.diagonals];
+		items[1].item = (char *) modes[paddles];
+		items[2].item = (char *) sources[source];
+		items[5].item = (char *) diagonals[settings.diagonals];
+		/* Paddles take their positions from the axes, without directions. */
+		items[3].prefix = paddles ? "Paddle Axes: " : "Axes: ";
+		for (i = 2; i <= 5; i++)
+			if (i != 3)
+				items[i].flags = (items[i].flags & ~UI_ITEM_TYPE)
+				               | (paddles ? UI_ITEM_HIDDEN : UI_ITEM_ACTION);
 		if (controller_select(title, 0, &option, items))
 			continue;
 		if (option == 0) {
@@ -326,6 +345,11 @@ static void joystick_menu(int port)
 		}
 		else if (option == 1)
 			button_mapping(port);
+		else if (option == 6) {
+			i = BMA_MenuChoose("Type", modes, paddles);
+			if (i >= 0 && i != paddles && !BMA_SavePadPaddles(port, i))
+				UI_driver->fMessage("Cannot save joystick type", 1);
+		}
 		else if (option == 2) {
 			selected = BMA_MenuChoose("Direction Source", sources, source);
 			if (selected >= 0)

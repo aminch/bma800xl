@@ -22,7 +22,7 @@ static const char *const standard_names[BMA_PAD_BUTTONS] = {
 
 static const int standard_bindings[BMA_PAD_BUTTONS] = {
 	BMA_PAD_FIRE, BMA_PAD_KEY_BASE + K_SPACE, BMA_PAD_OPTION,
-	BMA_PAD_KEY_BASE + K_RETURN, BMA_PAD_MENU, BMA_PAD_NONE,
+	BMA_PAD_KEY_BASE + K_RETURN, BMA_PAD_MENU, BMA_PAD_PADDLE_FIRE,
 	BMA_PAD_SELECT, BMA_PAD_START
 };
 
@@ -34,7 +34,7 @@ static const char *const m30_button_names[BMA_PAD_BUTTONS] = {
 static const int m30_bindings[BMA_PAD_BUTTONS] = {
 	BMA_PAD_KEY_BASE + K_RETURN, BMA_PAD_KEY_BASE + K_SPACE,
 	BMA_PAD_FIRE, BMA_PAD_OPTION, BMA_PAD_NONE, BMA_PAD_NONE,
-	BMA_PAD_SELECT, BMA_PAD_START, BMA_PAD_MENU, BMA_PAD_NONE
+	BMA_PAD_SELECT, BMA_PAD_START, BMA_PAD_MENU, BMA_PAD_PADDLE_FIRE
 };
 
 static const unsigned char m30_button_order[BMA_PAD_BUTTONS] = {

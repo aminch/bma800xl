@@ -25,6 +25,9 @@ struct bma_pad_input_settings {
 
 void BMA_GetPadInputSettings(int port, struct bma_pad_input_settings *settings);
 int BMA_SavePadInputSettings(int port, const struct bma_pad_input_settings *settings);
+int BMA_PadPaddles(int port);
+int BMA_SavePadPaddles(int port, int paddles);
+int BMA_PaddlePosition(int port, int paddle);
 
 void BMA_GamepadInit(void);
 void BMA_GamepadSettingsChanged(void);

@@ -18,6 +18,7 @@ static int pads[HOST_PADS], keys[256], save_ok = 1, set_ok = 1, logs;
 static char saved[HOST_PADS][72];
 static char saved_extra[HOST_PADS][3][72];
 static char saved_input[HOST_PADS][72];
+static char saved_mode[HOST_PADS][16];
 static struct host_pad_input pad_inputs[HOST_PADS];
 static uint32_t extra_buttons[HOST_PADS];
 static char usb_ids[HOST_PADS][24];
@@ -35,6 +36,9 @@ const char *host_option(const char *name, const char *fallback)
 		snprintf(name_input, sizeof(name_input), "joy%d_input", port + 1);
 		if (strcmp(name, name_input) == 0 && saved_input[port][0])
 			return saved_input[port];
+		snprintf(name_input, sizeof(name_input), "joy%d_mode", port + 1);
+		if (strcmp(name, name_input) == 0 && saved_mode[port][0])
+			return saved_mode[port];
 		for (group = 0; group < 4; group++) {
 			char key[24];
 			const char *value = group == 0 ? saved[port] : saved_extra[port][group - 1];
@@ -63,6 +67,12 @@ int host_option_set(const char *name, const char *value)
 		if (strcmp(name, name_input) == 0) {
 			assert(strlen(value) < sizeof(saved_input[port]));
 			strcpy(saved_input[port], value);
+			return 1;
+		}
+		snprintf(name_input, sizeof(name_input), "joy%d_mode", port + 1);
+		if (strcmp(name, name_input) == 0) {
+			assert(strlen(value) < sizeof(saved_mode[port]));
+			strcpy(saved_mode[port], value);
 			return 1;
 		}
 	}
@@ -126,6 +136,7 @@ static void reset(void)
 	memset(saved, 0, sizeof(saved));
 	memset(saved_extra, 0, sizeof(saved_extra));
 	memset(saved_input, 0, sizeof(saved_input));
+	memset(saved_mode, 0, sizeof(saved_mode));
 	memset(pad_inputs, 0, sizeof(pad_inputs));
 	memset(extra_buttons, 0, sizeof(extra_buttons));
 	memset(usb_ids, 0, sizeof(usb_ids));
@@ -235,7 +246,7 @@ static void actions(void)
 	int bindings[BMA_PAD_BUTTONS], action, i;
 	reset();
 	BMA_DefaultPadBindings(0, bindings);
-	for (action = BMA_PAD_MENU; action < BMA_PAD_ACTIONS; action++) {
+	for (action = BMA_PAD_MENU; action <= BMA_PAD_QUICKLOAD; action++) {
 		bindings[4] = action;
 		assert(BMA_SavePadBindings(0, bindings));
 		pads[0] = HOST_PAD_L;
@@ -368,7 +379,7 @@ static void profiles(void)
 	const int m30_defaults[BMA_PAD_BUTTONS] = {
 		BMA_PAD_KEY_BASE + K_RETURN, BMA_PAD_KEY_BASE + K_SPACE,
 		BMA_PAD_FIRE, BMA_PAD_OPTION, BMA_PAD_NONE, BMA_PAD_NONE,
-		BMA_PAD_SELECT, BMA_PAD_START, BMA_PAD_MENU, BMA_PAD_NONE
+		BMA_PAD_SELECT, BMA_PAD_START, BMA_PAD_MENU, BMA_PAD_PADDLE_FIRE
 	};
 	int bindings[BMA_PAD_BUTTONS], button, position;
 	uint32_t seen = 0;
@@ -737,6 +748,86 @@ static void axis_thresholds(void)
 	assert(axis_position(&axis, 50, &active) == 0 && !active);
 }
 
+static void paddles(void)
+{
+	struct bma_pad_input_settings settings;
+	int bindings[BMA_PAD_BUTTONS], before;
+	reset();
+	set_axis(0, 0, -32768, -32768, 32767);
+	set_axis(0, 1, 32767, -32768, 32767);
+	assert(!BMA_PadPaddles(0));
+	assert(Atari_POT(0) == 228 && Atari_POT(1) == 228);
+	assert(BMA_JoystickState(0) == (HOST_JOY_LEFT | HOST_JOY_DOWN));
+
+	/* Paddle mode: the axes give positions, not directions. */
+	assert(BMA_SavePadPaddles(0, TRUE));
+	assert(strcmp(saved_mode[0], "paddles") == 0);
+	assert(BMA_PadPaddles(0) && !BMA_PadPaddles(1));
+	assert(Atari_POT(0) == 228 && Atari_POT(1) == 1);
+	assert(BMA_JoystickState(0) == 0);
+	set_axis(0, 0, 0, -32768, 32767);
+	assert(Atari_POT(0) == 114);
+	set_axis(0, 0, 255, 0, 255);
+	set_axis(0, 1, 0, 0, 255);
+	assert(Atari_POT(0) == 1 && Atari_POT(1) == 228);
+	set_axis(0, 0, 400, 0, 255);
+	assert(Atari_POT(0) == 1);
+	assert(Atari_POT(2) == 228 && Atari_POT(7) == 228);
+
+	/* The axis pair setting chooses the paddle axes. */
+	BMA_GetPadInputSettings(0, &settings);
+	settings.axis = 2;
+	assert(BMA_SavePadInputSettings(0, &settings));
+	assert(Atari_POT(0) == 228 && Atari_POT(1) == 228);
+	set_axis(0, 2, 0, 0, 255);
+	set_axis(0, 3, 255, 0, 255);
+	assert(Atari_POT(0) == 228 && Atari_POT(1) == 1);
+
+	/* Fire and Second Paddle Fire are the left and right lines. */
+	pads[0] = HOST_PAD_A;
+	assert(BMA_JoystickState(0) == HOST_JOY_LEFT);
+	assert(PLATFORM_TRIG(0) == 1);
+	assert((PLATFORM_PORT(0) & 0x0f) == (INPUT_STICK_CENTRE & ~0x04));
+	BMA_DefaultPadBindings(0, bindings);
+	bindings[1] = BMA_PAD_PADDLE_FIRE;
+	assert(BMA_SavePadBindings(0, bindings));
+	pads[0] = HOST_PAD_A | HOST_PAD_B;
+	assert(BMA_JoystickState(0) == (HOST_JOY_LEFT | HOST_JOY_RIGHT));
+	pads[0] = 0;
+
+	/* Saved, reloaded, and back to a joystick. */
+	BMA_InputSettingsChanged();
+	assert(BMA_PadPaddles(0));
+	assert(BMA_SavePadPaddles(0, FALSE));
+	assert(strcmp(saved_mode[0], "joystick") == 0);
+	assert(Atari_POT(0) == 228);
+	pads[0] = HOST_PAD_B;
+	assert(BMA_JoystickState(0) == (HOST_JOY_LEFT | HOST_JOY_DOWN));
+	pads[0] = 0;
+	save_ok = 0;
+	assert(!BMA_SavePadPaddles(0, TRUE));
+	assert(!BMA_PadPaddles(0) && strcmp(saved_mode[0], "joystick") == 0);
+	save_ok = 1;
+	strcpy(saved_mode[0], "spinner");
+	before = logs;
+	BMA_InputSettingsChanged();
+	assert(logs == before + 1 && !BMA_PadPaddles(0));
+
+	/* Only a button claims an automatic port in paddle mode. */
+	reset();
+	strcpy(saved_mode[0], "paddles");
+	BMA_InputSettingsChanged();
+	port_pad[0] = -1;
+	set_axis(0, 0, 255, 0, 255);
+	BMA_GamepadUpdate();
+	BMA_GamepadUpdate();
+	assert(port_pad[0] == -1);
+	pads[0] = HOST_PAD_A;
+	BMA_GamepadUpdate();
+	assert(port_pad[0] == 0);
+	pads[0] = 0;
+}
+
 static void persistence(void)
 {
 	const char *invalid[] = {"", "1,2", "1,2,3,4,5,6,7,8,9",
@@ -789,8 +880,9 @@ int main(void)
 	menu_open_defaults();
 	direction_settings();
 	axis_thresholds();
+	paddles();
 	persistence();
 	puts("PASS per-device profiles, per-port overrides, independent buttons, legacy mappings, "
-	     "held keys, action edges, menu controls, unplugging and settings validation");
+	     "held keys, action edges, menu controls, unplugging, paddles and settings validation");
 	return 0;
 }

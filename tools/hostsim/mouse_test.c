@@ -31,6 +31,12 @@ int PLATFORM_TRIG(int port)
 	return 1;
 }
 
+int Atari_POT(int pot)
+{
+	(void) pot;
+	return 228;
+}
+
 static int previous, pulses_x, pulses_y, wrong_direction;
 static int signed_x, signed_y;
 static int clock_tick, last_pulse_x, largest_gap_x, smallest_gap_x;

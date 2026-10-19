@@ -1,0 +1,14 @@
+diff --git a/src/input.h b/src/input.h
+index d106c759..f7a1dea6 100644
+--- a/src/input.h
++++ b/src/input.h
+@@ -94,6 +94,9 @@ int INPUT_PlaybackInt(void);
+ extern int Atari_POT(int);
+ #elif SDL2
+ extern int Atari_POT(int);
++#elif defined(BMA800XL)
++/* BMA800XL: USB paddles, from gamepad axes. */
++extern int Atari_POT(int);
+ #else
+ #define Atari_POT(x) 228
+ #endif

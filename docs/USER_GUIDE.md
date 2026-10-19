@@ -152,7 +152,7 @@ buttons are:
 | Y               | Return                    |
 | X               | Option                    |
 | L               | Menu                      |
-| R               | Unassigned                |
+| R               | Second paddle's fire (paddle mode only) |
 | Select          | Select                    |
 | Start           | Start                     |
 | Home, or Select+Start | Menu                |
@@ -164,6 +164,7 @@ back.
 
 | Setting | Choices |
 |---------|---------|
+| Type | Joystick (default) or Paddles |
 | Direction Source | Automatic (default, axes + D-pad), Axes Only, D-pad / Hat Only |
 | Axes | Automatic (device profile), 0 & 1, 1 & 2, 2 & 3, or 3 & 4 |
 | Dead Zone | 0–95%, in 5% steps; default 50% of the travel from centre |
@@ -179,6 +180,15 @@ Dead zone and diagonal shaping affect axes only, not D-pad/hat buttons.
 Narrow and Wide use 30- and 45-degree diagonal sectors; None selects one
 cardinal direction (horizontal at an exact tie). Menu navigation and
 keyboard/GPIO joysticks are unaffected. 
+
+**Paddles**: set *Type* to *Paddles* for paddle games (Super Breakout,
+Kaboom!). The port's two paddles follow the first and second axis of
+*Paddle Axes*, so a USB paddle adapter or a gamepad stick works; the axis's
+full travel is the paddle's full turn. *Fire* is the first paddle's button
+and *Second Paddle Fire* (under *Button Mapping*) the second's. In paddle
+mode press a button to claim an automatic port. *Joystick Test* shows the
+paddle positions (1–228). Paddles work on joysticks 1–2, and on 3–4 with
+the Atari 400/800.
 
 To remap buttons, open **F1 → Controllers → Joystick 1–4 → Button
 Mapping**, select *Select to Start Button Detection...*, then press and release
@@ -333,6 +343,7 @@ edited from the web UI.
 | `audio_buffer_ms`   | 10 or more                   | `40`     | Sound buffer; raise it if the sound breaks up |
 | `keyboard`          | `us`, `uk`, `no`             | `us`     | PC keyboard layout |
 | `joy1_pad` ... `joy4_pad` | `0` automatic, `1`-`4` a gamepad, `-1` none | `0` | Gamepad for each Atari joystick port |
+| `joy1_mode` ... `joy4_mode` | `joystick`, `paddles` | `joystick` | Joystick or a pair of paddles on each Atari joystick port |
 | `joy1_input` ... `joy4_input` | `source,axis,deadzone,diagonals` | `1,-1,50,0` | Source: 1 auto (0 also combines both), 2 axes, 3 D-pad. Axis: zero-based first axis, -1 device default. Dead zone: 0–95%. Diagonals: 0 original, 1 none, 2 narrow, 3 wide. |
 | `keypad_joystick`   | `0`, `1`                     | `1`      | Numeric keypad as joystick 1 |
 | `arrow_joystick`    | `0`, `1`                     | `0`      | Arrow keys as joystick 1 |

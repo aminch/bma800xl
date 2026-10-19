@@ -3,6 +3,9 @@
  *
  * Button actions follow atari800's sdl/input.h and ui.c interfaces.
  * Direction choices and diagonal sectors follow its SDL2 controller menu.
+ * Paddles follow its SDL2 paddle mode (Atari_POT, PLATFORM_PORT in
+ * sdl/input.c): two axes give the port's two POT values, and the paddle
+ * triggers are the port's left and right direction lines.
  * USB reports use BMA800XL's host.h; defaults are in gamepad_profiles.c.
  * This file is part of BMA800XL. See LICENSE for licensing details.
  */
@@ -49,7 +52,8 @@ static const char *const pad_action_names[BMA_PAD_ACTIONS] = {
 	"None", "Fire", "Option", "Select", "Start", "Help", "Break",
 	"Open Menu", "On-screen Keyboard", "Warm Reset", "Cold Reset", "Turbo",
 	"Run Program", "Disk Menu", "Cartridge Menu", "Tape Menu",
-	"Save State", "Load State", "Quick Save", "Quick Load"
+	"Save State", "Load State", "Quick Save", "Quick Load",
+	"Second Paddle Fire"
 };
 static int pad_bindings[HOST_PADS][BMA_PAD_BUTTONS];
 static unsigned action_held[HOST_PADS], action_pending[HOST_PADS];
@@ -58,6 +62,7 @@ static const struct bma_pad_input_settings default_input = {
 	BMA_PAD_SOURCE_AUTO, -1, 50, BMA_PAD_DIAGONALS_ORIGINAL
 };
 static struct bma_pad_input_settings pad_input_settings[HOST_PADS];
+static int port_paddles[HOST_PADS];
 
 static int menu_watch;
 static int menu_connected[HOST_PADS], menu_ports[HOST_PADS];
@@ -178,6 +183,50 @@ int BMA_SavePadInputSettings(int port, const struct bma_pad_input_settings *sett
 	return TRUE;
 }
 
+int BMA_PadPaddles(int port)
+{
+	return port >= 0 && port < HOST_PADS && port_paddles[port];
+}
+
+static void load_paddles(int port)
+{
+	char name[24];
+	const char *value;
+	snprintf(name, sizeof(name), "joy%d_mode", port + 1);
+	value = host_option(name, "joystick");
+	port_paddles[port] = strcmp(value, "paddles") == 0;
+	if (!port_paddles[port] && strcmp(value, "joystick") != 0) {
+		char message[64];
+		snprintf(message, sizeof(message), "Invalid joy%d_mode; using joystick", port + 1);
+		host_log(message);
+	}
+}
+
+int BMA_SavePadPaddles(int port, int paddles)
+{
+	char name[24], previous[72];
+	snprintf(name, sizeof(name), "joy%d_mode", port + 1);
+	snprintf(previous, sizeof(previous), "%s", host_option(name, "joystick"));
+	if (!host_option_set(name, paddles ? "paddles" : "joystick"))
+		return FALSE;
+	if (!host_options_save()) {
+		if (!host_option_set(name, previous))
+			host_log("Cannot restore joystick mode after save failure");
+		return FALSE;
+	}
+	port_paddles[port] = paddles != 0;
+	return TRUE;
+}
+
+/* The axis pair a port uses: its setting, or the device profile's. */
+static void port_axes(int port, int pad, int *axis_x, int *axis_y)
+{
+	const struct bma_pad_input_settings *settings = &pad_input_settings[port];
+	const struct bma_gamepad_profile *profile = pad_profile(pad);
+	*axis_x = settings->axis < 0 ? profile->axis_x : settings->axis;
+	*axis_y = settings->axis < 0 ? profile->axis_y : settings->axis + 1;
+}
+
 static int axis_position(const struct host_pad_axis *axis, int deadzone, int *active)
 {
 	int64_t range = (int64_t) axis->maximum - axis->minimum;
@@ -203,11 +252,10 @@ static int pad_directions(int port, int pad)
 {
 	struct host_pad_input input;
 	const struct bma_pad_input_settings *settings = &pad_input_settings[port];
-	const struct bma_gamepad_profile *profile = pad_profile(pad);
-	int axis_x = settings->axis < 0 ? profile->axis_x : settings->axis;
-	int axis_y = settings->axis < 0 ? profile->axis_y : settings->axis + 1;
+	int axis_x, axis_y;
 	int x = 0, y = 0, active_x = FALSE, active_y = FALSE, state = 0;
 	int ax, ay, diagonal;
+	port_axes(port, pad, &axis_x, &axis_y);
 	if (!host_pad_input(pad, &input))
 		return 0;
 	if (settings->source == BMA_PAD_SOURCE_DPAD)
@@ -237,6 +285,44 @@ static int pad_directions(int port, int pad)
 	if (settings->source == BMA_PAD_SOURCE_BOTH || settings->source == BMA_PAD_SOURCE_AUTO)
 		state |= input.dpad;
 	return state;
+}
+
+/* POT value (1-228) of paddle PADDLE (0 or 1) on Atari joystick PORT, or -1
+   when the port is not in paddle mode or its axis is missing. The axis's
+   minimum gives 228 and its maximum 1, as a paddle turned fully left and
+   fully right. */
+int BMA_PaddlePosition(int port, int paddle)
+{
+	struct host_pad_input input;
+	const struct host_pad_axis *axis;
+	int pad, axis_x, axis_y, number;
+	int64_t range, value;
+	if (!BMA_PadPaddles(port) || paddle < 0 || paddle > 1)
+		return -1;
+	pad = port_pad[port];
+	if (!host_pad_input(pad, &input))
+		return -1;
+	port_axes(port, pad, &axis_x, &axis_y);
+	number = paddle == 0 ? axis_x : axis_y;
+	if (number < 0 || number >= HOST_PAD_AXES || !(input.axis_mask & (1u << number)))
+		return -1;
+	axis = &input.axes[number];
+	range = (int64_t) axis->maximum - axis->minimum;
+	if (range <= 0)
+		return -1;
+	value = (int64_t) axis->value - axis->minimum;
+	if (value < 0)
+		value = 0;
+	if (value > range)
+		value = range;
+	return 228 - (int) ((value * 227 + range / 2) / range);
+}
+
+/* atari800's paddle input (input.h): POTs 0-7, two to a joystick port. */
+int Atari_POT(int pot)
+{
+	int value = BMA_PaddlePosition(pot / 2, pot & 1);
+	return value < 0 ? 228 : value;
 }
 
 const char *BMA_PadButtonName(int button)
@@ -465,11 +551,16 @@ void BMA_GamepadUpdate(void)
 		port = pad_port(pad);
 		if (s >= 0) {
 			s = (s & 0x1ff) != 0 || host_pad_buttons(pad) != 0;
-			if (port >= 0)
-				s |= pad_directions(port, pad) != 0;
+			/* A paddle's position is never idle, so only its
+			   buttons claim a port. */
+			if (port >= 0) {
+				if (!port_paddles[port])
+					s |= pad_directions(port, pad) != 0;
+			}
 			else
 				for (port = 0; port < HOST_PADS; port++)
-					if (port_mode[port] == 0 && port_pad[port] < 0)
+					if (port_mode[port] == 0 && port_pad[port] < 0
+					    && !port_paddles[port])
 						s |= pad_directions(port, pad) != 0;
 		}
 		int prev = pad_prev[pad];
@@ -508,6 +599,7 @@ void BMA_GamepadSettingsChanged(void)
 	for (port = 0; port < HOST_PADS; port++) {
 		load_port_bindings(port);
 		load_input_settings(port);
+		load_paddles(port);
 	}
 	memset(action_pending, 0, sizeof(action_pending));
 }
@@ -525,6 +617,7 @@ void BMA_GamepadInit(void)
 		pad_prev[port] = -1;
 		port_profile[port] = NULL;
 		pad_input_settings[port] = default_input;
+		port_paddles[port] = FALSE;
 	}
 }
 
@@ -759,18 +852,26 @@ int BMA_CapturePadButton(int port)
 }
 
 
+/* In paddle mode Fire is the first paddle's trigger (the left direction
+   line) and Second Paddle Fire the second's (the right one). */
 int BMA_GamepadJoystick(int port)
 {
-	int state = pad_directions(port, port_pad[port]);
+	int paddles = BMA_PadPaddles(port);
+	int state = paddles ? 0 : pad_directions(port, port_pad[port]);
 	int pad = port_pad[port] >= 0 ? host_pad_state(port_pad[port]) : -1;
 	uint32_t buttons = host_pad_buttons(port_pad[port]);
 
 	if (pad >= 0 && !pad_menu_pressed(pad)) {
 		int button;
-		for (button = 0; button < BMA_PAD_BUTTONS; button++)
-			if ((buttons & (UINT32_C(1) << button))
-			    && pad_bindings[port][button] == BMA_PAD_FIRE)
-				state |= HOST_JOY_FIRE;
+		for (button = 0; button < BMA_PAD_BUTTONS; button++) {
+			int binding = pad_bindings[port][button];
+			if (!(buttons & (UINT32_C(1) << button)))
+				continue;
+			if (binding == BMA_PAD_FIRE)
+				state |= paddles ? HOST_JOY_LEFT : HOST_JOY_FIRE;
+			else if (binding == BMA_PAD_PADDLE_FIRE && paddles)
+				state |= HOST_JOY_RIGHT;
+		}
 	}
 
 	return state;
