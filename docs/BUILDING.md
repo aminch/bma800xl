@@ -106,6 +106,9 @@ PHY settings.
 tools/pi4kms/run_tests.sh
 ```
 
+`build_sdcard.sh` runs all three first and stops if any test fails;
+`--skip-tests` leaves them out.
+
 ## The web UI
 
 The web UI's pages are in `src/webui/assets/`. They are compiled into the

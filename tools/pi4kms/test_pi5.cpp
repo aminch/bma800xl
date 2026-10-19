@@ -59,7 +59,9 @@ static void TestScaled(void) {
   Check(w[7] == 0x12345678, name, "pointer 1: address");
   Check(w[8] == 1536, name, "pointer 2: pitch");
   Check(w[9] == 36, name, "line buffer start");
-  Check(w[10] == 0x40444460 && w[11] == 0x40444460, name, "PPF words, smooth");
+  // Step 0x4444 (384/1440 and 288/1080); phase -32/64 plus half the step
+  // (8/64) = -24/64.
+  Check(w[10] == 0x40444468 && w[11] == 0x40444468, name, "PPF words, smooth");
   Check(w[12] == 0xC0C0C0C0, name, "vertical PPF context");
   Check(w[13] == 3072 && w[16] == 3072, name, "kernel words");
   Check(w[17] == 0x80000000 && w[18] == 0x80000000, name, "entry end and list end");
@@ -67,7 +69,7 @@ static void TestScaled(void) {
   n = kms::BuildList(Scaled(true), m, true, w);
   Check(n == 19 && w[0] == 0x520C4007, name, "control 0 (D): fixed alpha mask");
   Check(w[2] == 0x2000FFF0, name, "control 2 (D)");
-  Check(w[10] == 0xC0444460, name, "PPF word, sharp");
+  Check(w[10] == 0xC0444468, name, "PPF word, sharp");
 
   kms::Plane high = Scaled(false);
   high.address = 0x0123456780ull;
