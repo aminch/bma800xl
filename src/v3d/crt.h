@@ -36,12 +36,13 @@ public:
   // curvature: crt-pi's curved screen (with crt only).
   void SetMode(bool crt, bool smooth, bool curvature);
 
-  // The source is 8-bit indexed, SRC_PITCH bytes per line; the part shown
-  // starts at (VX, VY) and is VW x VH; it is drawn DW x DH.
+  // The source is 8-bit indexed (BYTES_PER_PIXEL 1) or RGB565 (2),
+  // SRC_PITCH bytes per line; the part shown starts at (VX, VY) and is
+  // VW x VH; it is drawn DW x DH.
   bool Configure(unsigned src_pitch, int vx, int vy, int vw, int vh, unsigned dw,
-                 unsigned dh);
+                 unsigned dh, unsigned bytes_per_pixel = 1);
 
-  // RGB is 0xRRGGBB.
+  // For an indexed source; RGB is 0xRRGGBB.
   void SetPalette(int index, uint32_t rgb);
 
   // Draws a frame from SRC into TARGET with its top left corner at (X, Y);
@@ -62,6 +63,7 @@ private:
   bool m_bReady;
   bool m_bCrt, m_bSmooth, m_bCurvature;
   unsigned m_nPitch;
+  unsigned m_nBytesPerPixel;
   int m_nViewX, m_nViewY, m_nViewW, m_nViewH;
   unsigned m_nDestW, m_nDestH;
   uint32_t m_Palette[256];  // 0xFFRRGGBB
