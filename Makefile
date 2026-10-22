@@ -55,7 +55,7 @@ OBJS += src/kms/pi4/dlist.o src/kms/pi4/hvs.o src/kms/pi4/display.o \
 else
 OBJS += src/kms/pi5/dlist.o src/kms/pi5/hvs.o src/kms/pi5/display.o \
         src/kms/pi5/phy.o src/kms/pi5/modeset.o \
-        src/pi45/fan.o
+        src/pi45/board.o src/pi45/fan.o
 endif
 # Smooth scaling and the CRT shader are drawn by the ARM: -O3 lets GCC turn
 # their per-pixel loops into NEON code (tools/pi4scaler tests the same).

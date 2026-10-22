@@ -21,9 +21,6 @@
 // SoC's temperature with the same steps as Raspberry Pi OS. Called from
 // the board code (board.cpp).
 //
-// Modified for BMA800XL from BMC64's src/pi45/fan.h: called from the
-// kernel's core 0 loop (kernel.cpp).
-//
 
 #ifndef BMC64_PI45_FAN_H_
 #define BMC64_PI45_FAN_H_
