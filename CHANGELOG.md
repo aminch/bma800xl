@@ -1,3 +1,8 @@
+## 1.4.4
+
+- Move the Pi5 Power button onto src/pi45/board.cpp
+- Add PWM fan control for Pi 5
+
 ## 1.4.3
 
 - Add support for USB paddles
