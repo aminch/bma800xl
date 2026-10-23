@@ -1,6 +1,22 @@
 //
 // modeset.h
 //
+// BMA800XL - A bare metal Atari 800XL emulator for Raspberry Pi
+// Copyright (C) 2026 aminch <https://github.com/aminch>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
 // The Pi 5's direct display driver's mode setting: re-times the HDMI port
 // in use to another mode of the same size, through its pixel valve (0 or
 // 1), the HDMI encoder and its PHY, with the HVS channel restarted to
@@ -10,9 +26,6 @@
 //
 // The steps and their order follow the behaviour of the Linux vc4 display
 // driver.
-//
-// This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
-// Raspberry Pi. See LICENSE for licensing details.
 //
 
 #ifndef BMA800XL_KMS_PI5_MODESET_H_

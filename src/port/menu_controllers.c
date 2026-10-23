@@ -1,12 +1,26 @@
 /*
  * menu_controllers.c - BMA800XL controller settings and joystick test.
  *
+ * BMA800XL - A bare metal Atari 800XL emulator for Raspberry Pi
+ * Copyright (C) 2026 aminch <https://github.com/aminch>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * Split from BMA800XL's menu.c. Button assignment choices and the
  * joystick/paddle mode follow atari800's SDL2 controller menu (src/ui.c);
  * drawing uses its ui.h interface.
  * Input and device profiles are supplied by gamepad.h.
- *
- * This file is part of BMA800XL. See LICENSE for licensing details.
  */
 
 #include "config.h"

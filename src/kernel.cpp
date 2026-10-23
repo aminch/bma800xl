@@ -1,26 +1,6 @@
 //
 // kernel.cpp
 //
-// BMA800XL - A bare metal Atari 800XL emulator for Raspberry Pi
-// Copyright (C) 2026 aminch <https://github.com/aminch>
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// Parts of the USB, frame buffer and sound handling are modified for
-// BMA800XL from BMC64's kernel.cpp, and those parts remain under BMC64's
-// license:
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -32,6 +12,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// Modifications Copyright (C) 2026 aminch <https://github.com/aminch>
+// Modified for BMA800XL from BMC64's src/kernel.cpp: parts of the USB,
+// frame buffer and sound handling come from it; the rest is BMA800XL's.
 //
 // Gamepad names and individual buttons use Circle's usb/usbgamepad.h and
 // device.h interfaces.

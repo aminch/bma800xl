@@ -2,6 +2,22 @@
  * modem.c - the R: device: an Atari 850 serial port with a modem on it
  * that dials TCP addresses, for calling BBSes over the network.
  *
+ * BMA800XL - A bare metal Atari 800XL emulator for Raspberry Pi
+ * Copyright (C) 2026 aminch <https://github.com/aminch>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * Takes the place of atari800's rdevice.c (not built): the same RDevice_*
  * entry points, which atari800's devices.c installs as the R: handler when
  * "R: device" is on in the Emulator Settings. The connection itself is the
@@ -38,9 +54,6 @@
  *    its two bytes; moving it back two runs it again, so READ waits for a
  *    character while the emulator keeps going. BRKKEY (17) is 0 after the
  *    Break key, which the OS's handlers report as error 128 and reset.
- *
- * This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
- * Raspberry Pi. See LICENSE for licensing details.
  */
 
 #include "config.h"

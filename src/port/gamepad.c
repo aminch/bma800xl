@@ -1,13 +1,28 @@
 /*
  * gamepad.c - gamepad assignment, mappings and Atari input for BMA800XL.
  *
+ * BMA800XL - A bare metal Atari 800XL emulator for Raspberry Pi
+ * Copyright (C) 2026 aminch <https://github.com/aminch>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * Button actions follow atari800's sdl/input.h and ui.c interfaces.
  * Direction choices and diagonal sectors follow its SDL2 controller menu.
  * Paddles follow its SDL2 paddle mode (Atari_POT, PLATFORM_PORT in
  * sdl/input.c): two axes give the port's two POT values, and the paddle
  * triggers are the port's left and right direction lines.
  * USB reports use BMA800XL's host.h; defaults are in gamepad_profiles.c.
- * This file is part of BMA800XL. See LICENSE for licensing details.
  */
 
 #include "config.h"
