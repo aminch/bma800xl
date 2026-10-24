@@ -1,3 +1,7 @@
+## 1.4.5
+
+- Speed up web UI uploads 5x
+
 ## 1.4.4
 
 - Move the Pi5 Power button onto src/pi45/board.cpp
