@@ -294,6 +294,9 @@ The web UI has:
   *Run Atari Program*. `cmdline.txt`, `config.txt`, `bma800xl.cfg`,
   `atari800.cfg` and `wpa_supplicant.conf` can be **edited** in the browser; changes take
   effect after a reboot, and the previous version is kept as `.bak`.
+- **Update**: the installed version and the latest releases on GitHub.
+  Drop a downloaded release zip on it to install it on the next boot; see
+  [The BMA800XL Updater](UPDATER.md).
 
 Uploads can't overwrite `cmdline.txt`, `config.txt` or `wpa_supplicant.conf`
 (edit them instead), or anything in `firmware`. Everything else, including

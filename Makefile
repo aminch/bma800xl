@@ -39,6 +39,21 @@ OBJS = src/main.o src/kernel.o src/logging.o src/options.o src/gamepad_profiles.
        src/webui/webui_machine.o src/webui/webui_assets.o \
        src/sdcard/sd_fs_fatfs.o src/sdcard/sd_fs_file.o
 
+# The BMA800XL Updater (src/update/, with zlib) is built in when updater.cfg
+# says updater = on or kernel_only; otherwise a stub whose two entry points
+# do nothing (see docs/BUILDING.md).
+UPDATER_KERNEL := $(shell python3 tools/update/updater_cfg.py kernel 2>/dev/null)
+UPDATER_OBJS = src/update/update_boot.o src/update/update_view.o src/update/update_host.o \
+               src/update/update_apply.o src/update/update_plan.o src/update/update_manifest.o \
+               src/update/update_zip.o src/update/update_hash.o \
+               third_party/zlib/inflate.o third_party/zlib/inftrees.o third_party/zlib/inffast.o \
+               third_party/zlib/zutil.o third_party/zlib/crc32.o third_party/zlib/adler32.o
+ifeq ($(UPDATER_KERNEL),yes)
+OBJS += $(UPDATER_OBJS)
+else
+OBJS += src/update/update_stub.o
+endif
+
 # Display and sound. The Pi 2 and 3 use the VideoCore through VCHIQ
 # (dispmanx, from BMC64); the Pi 4 and 5 use Circle's framebuffer and HDMI
 # sound drivers (src/av/, shared by both; see docs/PI4.md and docs/PI5.md).
@@ -69,6 +84,13 @@ include $(CIRCLEHOME)/Rules.mk
 
 INCLUDE := $(CIRCLE_STDLIB_INCLUDES) $(INCLUDE) -I $(CIRCLEHOME)/addon/fatfs
 
+# zlib (third_party/zlib, decompression for the updater) without its gz*
+# file functions; the updater supplies zalloc/zfree. It is built unchanged,
+# without warnings, like atari800.
+CFLAGS += -DZ_SOLO
+third_party/zlib/%.o third_party/zlib/%.d: CFLAGS += -w
+src/update/update_zip.o src/update/update_zip.d: CFLAGS += -I third_party/zlib
+
 # See src/port/fswrap.c
 LDFLAGS += --wrap=stat
 
@@ -80,6 +102,8 @@ CPPFLAGS += $(VERSION_DEFINES)
 # The port's C files include atari800 headers, and src/port/config.h must be
 # found before anything else called config.h.
 src/port/%.o src/port/%.d: CFLAGS += -I src/port -I $(A8_DIR)
+# The updater draws its view on atari800's screen.
+src/update/update_host.o src/update/update_host.d: CFLAGS += -I src/port -I $(A8_DIR)
 
 # atari800 itself: compiled into build/ so the submodule stays clean.
 A8_CFLAGS = -I src/port -I $(A8_DIR) -w
@@ -94,9 +118,12 @@ $(A8_LIB): $(A8_OBJS)
 	@rm -f $@
 	@$(AR) cr $@ $(A8_OBJS)
 
-# The web UI's pages are compiled in. Regenerate them when they change.
+# The web UI's pages are compiled in. Regenerate them when they change, or
+# when the Update page's settings (updater.cfg) or its list of official
+# releases (release/release_digests.txt) do.
 WEBUI_ASSETS = $(shell find src/webui/assets -type f)
-src/webui/webui_assets.c: $(WEBUI_ASSETS) tools/gen_webui_assets.py
+src/webui/webui_assets.c: $(WEBUI_ASSETS) tools/gen_webui_assets.py \
+                          release/release_digests.txt $(wildcard updater.cfg)
 	@echo "  GEN   $@"
 	@python3 tools/gen_webui_assets.py
 
@@ -143,7 +170,8 @@ EXTRACLEAN += $(OBJS) src/*.o src/port/*.d src/*.d src/webui/*.d src/sdcard/*.d 
               src/av/*.o src/av/*.d src/kms/common/*.o src/kms/common/*.d \
               src/kms/pi4/*.o src/kms/pi4/*.d \
               src/kms/pi5/*.o src/kms/pi5/*.d src/v3d/*.o src/v3d/*.d \
-              src/pi45/*.o src/pi45/*.d
+              src/pi45/*.o src/pi45/*.d \
+              $(UPDATER_OBJS) src/update/*.d src/update/update_stub.o third_party/zlib/*.d
 .PHONY: check-submodule distclean
 
 distclean: clean

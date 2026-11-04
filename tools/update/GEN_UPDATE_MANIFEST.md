@@ -1,0 +1,201 @@
+# gen_update_manifest.py
+
+`gen_update_manifest.py` builds `bma800xl-manifest.txt`, the file that drives
+the BMA800XL Updater, and looks after the release history the manifest is made
+from.
+
+For how users update, see [docs/UPDATER.md](../../docs/UPDATER.md).
+
+## Why the updater needs a manifest
+
+When BMA800XL applies `bma800xl-update.zip`, it has to decide what to offer for
+each file on the SD card:
+
+- **up to date**: the file is already the new version;
+- **Update**: the file is an untouched copy from *some* earlier release, so
+  it is safe to replace;
+- **Changed**: the file matches no release, so the user edited it (for
+  example `config.txt` or `cmdline.txt`), and it is kept unless the user says
+  otherwise.
+
+To tell these apart, the updater needs the SHA-256 of every file of the new
+version and of **every release before it**. The manifest carries both, and
+is packed inside each release zip.
+
+## The files
+
+| File | What it is |
+| --- | --- |
+| `release/manifest_history.txt` | In the repository. Every file of every release so far: version, SHA-256, size and path. It only ever grows. |
+| `bma800xl-manifest.txt` | In each release zip (and at the root of a card after installing). This release's files marked as the `target`, plus the whole history. |
+| `release/release_digests.txt` | In the repository. Every official release zip: tag, `stable` or `pre`, and the SHA-256 of the whole release zip (`bma800xl-vX.Y.Z.zip`). It only ever grows. |
+| `src/webui/assets/update/official_releases.js` | Generated from `release_digests.txt`. The Web UI's Update page checks a dropped zip against GitHub first and then this list, so a pre-release deleted from GitHub, or any release while GitHub can't be reached, is still recognised as official. |
+
+The history and the manifest use the same plain-text format, one record per
+line:
+
+```
+# BMA800XL update manifest
+format 1
+target v1.5.0
+# <version> <sha256> <size> <path>
+v1.5.0 3f9a…c21 4094676 kernel8-32.img
+v1.5.0 1a2b…77c 3022848 start.elf
+…
+v1.4.4 448d…9e5 4094608 kernel8-32.img
+…
+```
+
+- `format` is the manifest format version. The updater refuses a format it
+  doesn't know.
+- `target` is the version the zip installs. Every `target` line must match a
+  file in the zip with the same size.
+- The other lines are history. The history file has no `format` or `target`
+  lines.
+
+Paths are relative to the card root, use `/`, and may not contain spaces,
+`..`, backslashes or non-ASCII characters. The script stops if a release has
+such a path. The manifest never lists itself.
+
+The Pi also reads the card's copy of `bma800xl-manifest.txt` (from the version
+that is installed) and adds it to the history. That is what lets a downgrade
+recognise the newer release's untouched files.
+
+Release zips from before the updater have no manifest. For those the Pi uses
+the card's copy alone: it finds the release whose files match the zip's names
+and sizes, confirms it with the SHA-256 of a kernel, and installs it with that
+release's records as the target. So the history must keep every release,
+including ones no longer on GitHub.
+
+## Commands
+
+Run from the repository root. `--history` defaults to
+`release/manifest_history.txt`, and `--repo` to the `repo` setting in
+`updater.cfg` (see "The BMA800XL Updater" in
+[docs/BUILDING.md](../../docs/BUILDING.md)).
+
+### release: used by build_sdcard.sh
+
+```sh
+python3 tools/update/gen_update_manifest.py release \
+    --stage build/sdcard --version v1.5.0
+```
+
+This hashes every file in the staged SD card folder and writes
+`build/sdcard/bma800xl-manifest.txt` (this version plus the history).
+`--update-history` also adds the version to the history file, but
+`build_sdcard.sh` doesn't use it: releases are built on a GitHub runner,
+where a change to the history would be lost.
+
+`build_sdcard.sh` runs this with the version in `VERSION`, the release
+workflow zips `build/sdcard` with it, and `check_release_files.sh` requires
+`bma800xl-manifest.txt`.
+
+### After publishing a release
+
+The next build after a release is published records it: `make_all.sh` runs
+`sync` (below), which updates `release/manifest_history.txt`,
+`release/release_digests.txt` and `src/webui/assets/update/official_releases.js`.
+Commit them. Until then the next release doesn't know about this one. Build
+before deleting any pre-releases from GitHub. If one is already gone, use
+`add` with its zip.
+
+### sync: new releases on GitHub
+
+```sh
+python3 tools/update/gen_update_manifest.py sync
+```
+
+This checks GitHub's public API (no login needed) for published releases
+missing from the release list, downloads only those zips, and adds them to
+the history and the release list. It also updates a release's `stable` or
+`pre` flag if that changed on GitHub. When all is up to date it changes
+nothing. `make_all.sh` runs it on every build, except on GitHub's release
+build, which uses the committed files.
+
+If GitHub can't be reached it warns and changes nothing, so the build
+carries on. It stops with an error, changing nothing, if a release zip on
+GitHub differs from the one recorded: a published release should never
+change.
+
+### add: releases from local zips
+
+```sh
+python3 tools/update/gen_update_manifest.py add ~/Desktop/bma800xl-v1.0.*.zip
+```
+
+This adds release zips you have locally to the history and the release list,
+and regenerates `official_releases.js`. It reads the version from the file
+name (`bma800xl-v1.0.1.zip` → `v1.0.1`); use `--version` if the name
+doesn't follow that pattern. A release keeps the kind (`stable` or `pre`) it
+already has in the list; a new one is a pre-release unless you give
+`--kind stable`. Use it for releases that are no longer on GitHub.
+
+### seed: releases on GitHub
+
+```sh
+python3 tools/update/gen_update_manifest.py seed --cache ~/bma800xl-release-zips
+```
+
+This downloads every non-draft release's zip from the repository in
+`updater.cfg` (into `--cache`, skipping files already there). It checks each
+zip against GitHub's SHA-256, adds it to the
+history and the release list (with GitHub's stable or pre-release flag), and
+regenerates `official_releases.js`. `--repo` picks another repository.
+
+### webui: regenerate the Web UI's list
+
+```sh
+python3 tools/update/gen_update_manifest.py webui
+```
+
+This writes `official_releases.js` from `release_digests.txt`, only if it
+changed. `seed` and `add` do this themselves, and `tools/gen_webui_assets.py`
+runs it on every Web UI build, so it can't fall behind the list.
+
+### check: a finished release zip
+
+```sh
+python3 tools/update/gen_update_manifest.py check bma800xl-v1.5.0.zip
+```
+
+This confirms that the zip's manifest lists every file in the zip with the
+right size and SHA-256, and nothing else.
+
+### package: a test update from your own build
+
+```sh
+python3 tools/update/gen_update_manifest.py package \
+    --stage build/sdcard --version v1.5.0 --out bma800xl-update.zip
+```
+
+This makes a `bma800xl-update.zip` from any staged SD-card folder, such as
+`build_sdcard.sh`'s `build/sdcard`, so the updater can be tried before a
+release. It does not change the history file or the stage folder. Put the
+zip at the root of a card and boot.
+
+The Web UI's Update page accepts such a zip after warning that it doesn't
+match a release on GitHub; you can also copy it to the card yourself.
+
+## How `add`, `seed` and `sync` change the history and the release list
+
+All three merge by whole version, and none ever removes one. Releases can
+disappear from GitHub, but the files they put on SD cards are still out
+there, and a deleted pre-release is still an official release. For each
+version they report one of:
+
+- `added`: the version was new;
+- `already in the history, identical`: nothing changed;
+- `REPLACED (the history had different files)`: the zip differs from what
+  was recorded. **Check why before committing.** A published release should
+  never change.
+
+The release list reports `added to the release list` or `REPLACED in the
+release list` the same way. Don't edit either file by hand.
+
+## Tests
+
+`tools/update/test/run_tests.py` uses this script to build synthetic
+releases and manifests, then runs the updater against them.
+`build_sdcard.sh` runs it with the other PC tests. See the docstring at the
+top of `run_tests.py`.

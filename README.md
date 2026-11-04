@@ -23,8 +23,11 @@ See [third-party](docs/THIRD_PARTY.md) acknowledgements for details.
   Atari joysticks wired to the GPIO header
 - A BMA800XL menu (F1) for network, controllers, video and sound settings,
   with atari800's own menus one item away for everything else
-- Optional Ethernet or Wi-Fi with BMC64's web UI: manage the SD card from a
+- Optional Ethernet or Wi-Fi with Web UI: manage the SD card from a
   browser (upload, download, edit config files, start programs, reboot)
+- The BMA800XL Updater: install a new release from its zip, with
+  the web UI or by copying it to the card, keeping the files you changed and
+  backing up the rest (see [docs/UPDATER.md](docs/UPDATER.md))
 
 ## Supported hardware
 
@@ -119,6 +122,7 @@ src/main.cpp, kernel.cpp   Circle kernel: USB, GPIO, SD card; runs atari800 on c
 src/fbl.cpp                Display (dispmanx layer, optional CRT shader), from BMC64
 src/vchiqsound*.cpp        Sound over HDMI or the headphone jack, from BMC64
 src/network.cpp, webui/    Ethernet / Wi-Fi and the web UI, from BMC64
+src/update/                The BMA800XL Updater, from BMC64
 src/host.h                 What the kernel offers the emulator
 src/port/                  atari800's platform layer (PLATFORM_* functions),
                            its config.h and the list of atari800 sources

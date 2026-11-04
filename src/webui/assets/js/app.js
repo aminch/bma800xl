@@ -18,7 +18,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //
 // Modified for BMA800XL from BMC64's src/webui/assets/js/app.js: without
-// the Profiles and Update pages.
+// the Profiles page.
 //
 // Entry point: wires the modules together and switches between views.
 //
@@ -29,6 +29,7 @@
 //   files.js      SD card file browser
 //   menu.js       pop-up menu for a file row's Actions button
 //   editor.js     overlay editor for config files
+//   ../update/    the Update page (release check, upload of bma800xl-update.zip)
 //
 
 import { $ } from "./util.js";
@@ -36,12 +37,16 @@ import { initDashboard, refreshVolumes, startStatusPolling } from "./dashboard.j
 import { initFiles, loadDir, filesHash, pathFromHash } from "./files.js";
 import { initEditor } from "./editor.js";
 import { loadMachine } from "./machine.js";
+import { initUpdate, showUpdate } from "../update/update.js";
+import { UPDATER } from "../update/settings.js";
 
 function route() {
   const hash = location.hash || "#/dashboard";
-  const view = hash.startsWith("#/files") ? "files" : "dashboard";
+  const view = hash.startsWith("#/files") ? "files"
+             : hash.startsWith("#/update") && UPDATER.enabled ? "update" : "dashboard";
   $("view-dashboard").hidden = view !== "dashboard";
   $("view-files").hidden = view !== "files";
+  $("view-update").hidden = view !== "update";
   $("fb-drop").hidden = view !== "files";
 
   document.querySelectorAll(".nav-item[data-view]").forEach((el) => {
@@ -50,6 +55,8 @@ function route() {
 
   if (view === "files") {
     loadDir(pathFromHash());
+  } else if (view === "update") {
+    showUpdate();
   } else {
     refreshVolumes();
   }
@@ -58,6 +65,12 @@ function route() {
 initDashboard();
 initFiles();
 initEditor();
+// The Update page is left out when updater.cfg turns it off.
+if (UPDATER.enabled) {
+  initUpdate($("view-update"));
+} else {
+  document.querySelector('.nav-item[data-view="update"]').remove();
+}
 
 $("qa-files").addEventListener("click", () => { location.hash = filesHash("/"); });
 window.addEventListener("hashchange", route);

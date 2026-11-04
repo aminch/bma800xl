@@ -55,6 +55,7 @@
 #include "util.h"
 
 #include "../host.h"
+#include "../update/update.h"
 #include "bma800xl.h"
 
 /* On-screen message (see below). */
@@ -771,6 +772,13 @@ void bma800xl_main(void)
 		Util_strlcpy(UI_saved_files_dir[0], sd_root(), FILENAME_MAX);
 		UI_n_saved_files_dir = 1;
 	}
+
+	/* An update waiting on the SD card (src/update/) shows its view before
+	   the emulation starts. It returns if the user carries on without
+	   updating; its view is atari800's normal one, so the border setting's
+	   is set again. */
+	update_run_if_pending();
+	apply_view();
 
 	for (;;) {
 		INPUT_key_code = PLATFORM_Keyboard();

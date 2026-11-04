@@ -137,6 +137,13 @@ fi
 RELEASE_DIRECTORY=${1:-$SRC_DIR/build/sdcard}
 RELEASE_DIRECTORY=${RELEASE_DIRECTORY%/}
 
+# The updater's manifest, and the notice of the zlib code it uses, when the
+# updater is built in (updater.cfg).
+if [ "$(python3 "$SRC_DIR/tools/update/updater_cfg.py" kernel)" = "yes" ]
+then
+    REQUIRED_FILES+=("bma800xl-manifest.txt" "licenses/zlib.txt")
+fi
+
 if [ ! -d "$RELEASE_DIRECTORY" ]
 then
     echo "Release directory does not exist: $RELEASE_DIRECTORY" >&2

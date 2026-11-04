@@ -6,6 +6,7 @@
 |---|---|
 | [INSTALLATION.md](INSTALLATION.md) | What you need, preparing the SD card, first start |
 | [USER_GUIDE.md](USER_GUIDE.md) | The menus, keyboard, joysticks, PAL/NTSC, networking and the web UI, all `cmdline.txt` options, ROMs, logging, troubleshooting |
+| [UPDATER.md](UPDATER.md) | Updating BMA800XL from a release zip with the BMA800XL Updater |
 | [NETWORKING.md](NETWORKING.md) | Calling BBSes over the network with the R: device, with Ice-T and BobTerm |
 | [PI4.md](PI4.md) | The Raspberry Pi 4 B and Pi 400 |
 | [PI5.md](PI5.md) | The Raspberry Pi 5, Pi 500 and Pi 500+ |

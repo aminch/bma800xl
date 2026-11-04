@@ -18,8 +18,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
-# Modified for BMA800XL from BMC64's tools/gen_webui_assets.py: the Update
-# page's generated files are no longer refreshed first.
+# Modified for BMA800XL from BMC64's tools/gen_webui_assets.py: BMA800XL's
+# name.
 #
 
 """Embed the web UI static assets into a C source file (from BMC64).
@@ -34,6 +34,7 @@ The generated file is checked in so a normal build needs no extra tooling.
 """
 
 import os
+import subprocess
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -71,6 +72,15 @@ def list_assets():
 def main():
     if not os.path.isdir(ASSET_DIR):
         sys.exit("asset directory not found: " + ASSET_DIR)
+
+    # The Update page's settings (from updater.cfg) and its built-in list of
+    # official releases (from release/release_digests.txt) are generated;
+    # refresh them before embedding the assets.
+    update_tools = os.path.join(REPO_ROOT, "tools", "update")
+    subprocess.run([sys.executable, os.path.join(update_tools, "updater_cfg.py"),
+                    "webui-js"], check=True)
+    subprocess.run([sys.executable, os.path.join(update_tools, "gen_update_manifest.py"),
+                    "webui"], check=True)
 
     files = list_assets()
     if not files:

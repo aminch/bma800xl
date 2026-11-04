@@ -36,8 +36,9 @@
 #
 # Several boards can be given, e.g. ./build_sdcard.sh pi4 pi5.
 #
-# The PC tests (tools/hostsim, tools/pi4kms, tools/pi4scaler) run first, and
-# the build stops if any of them fails. --skip-tests leaves them out.
+# The PC tests (tools/hostsim, tools/pi4kms, tools/pi4scaler, and
+# tools/update/test when the updater is built in) run first, and the build
+# stops if any of them fails. --skip-tests leaves them out.
 #
 # Without --skip-patches each board is built from clean_all.sh. With it, the
 # third party libraries already built are kept and only the kernel is
@@ -55,6 +56,8 @@ BUILD_DIR="$SRC_DIR/build"
 STAGING_DIR="$BUILD_DIR/sdcard"
 # circle-stdlib's configure writes the board (RASPPI) into Circle's Config.mk.
 CIRCLE_CONFIG="$SRC_DIR/third_party/circle-stdlib/libs/circle/Config.mk"
+# The BMA800XL Updater is built in (updater.cfg, see docs/BUILDING.md).
+UPDATER_KERNEL=$(python3 "$SRC_DIR/tools/update/updater_cfg.py" kernel)
 ALL_BOARDS=(pi0 pi2 pi3 pi4 pi5)
 BOARDS=()
 SKIP_PATCHES=0
@@ -152,6 +155,10 @@ then
     fi
     run_tests "$SRC_DIR/tools/pi4kms/run_tests.sh"
     run_tests "$SRC_DIR/tools/pi4scaler/run_tests.sh"
+    if [ "$UPDATER_KERNEL" = "yes" ]
+    then
+        run_tests python3 "$SRC_DIR/tools/update/test/run_tests.py"
+    fi
 fi
 
 # The SD card is staged once; each board's build adds its kernel.
@@ -223,6 +230,16 @@ do
         cp "$SRC_DIR/third_party/circle-stdlib/libs/circle/boot/armstub8-rpi4.bin" "$STAGING_DIR/"
     fi
 done
+
+# The updater's manifest, as a release has: this version's files plus every
+# earlier release's (release/manifest_history.txt), which is left alone.
+if [ "$UPDATER_KERNEL" = "yes" ] &&
+   ! python3 "$SRC_DIR/tools/update/gen_update_manifest.py" release \
+       --stage "$STAGING_DIR" --version "v$("$SRC_DIR/tools/version.sh" --semver)"
+then
+    echo "BUILD FAILED: could not create bma800xl-manifest.txt." >&2
+    exit 1
+fi
 
 if ! "$SRC_DIR/check_release_files.sh" "$STAGING_DIR"
 then

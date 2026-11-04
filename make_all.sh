@@ -110,6 +110,20 @@ fi
 
 source "$SRC_DIR/get_gnu_toolchain.sh"
 
+# Record any newly published release in the updater's history, so it is
+# committed before the next release is built (see
+# tools/update/GEN_UPDATE_MANIFEST.md). Skipped on GitHub's release build,
+# which must use exactly the committed history.
+if [ -z "${GITHUB_ACTIONS:-}" ] &&
+   [ "$(python3 "$SRC_DIR/tools/update/updater_cfg.py" kernel)" = "yes" ]
+then
+    if ! python3 "$SRC_DIR/tools/update/gen_update_manifest.py" sync
+    then
+        echo "Updating the release history failed." >&2
+        exit 1
+    fi
+fi
+
 if [ ! -f "$CIRCLE_HOME/Rules.mk" ] || [ ! -f "$SRC_DIR/third_party/atari800/src/atari.c" ]
 then
     echo "Fetching submodules..."

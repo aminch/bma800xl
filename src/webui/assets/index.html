@@ -19,7 +19,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
   Modified for BMA800XL from BMC64's src/webui/assets/index.html:
-  BMA800XL's name and look, without the Update and Profiles pages.
+  BMA800XL's name and look, without the Profiles page.
 -->
 
 <html lang="en">
@@ -29,6 +29,7 @@
 <title>BMA800XL</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%233a2a20'/%3E%3Cpath d='M2 4h12v1.6H2z' fill='%23f4c64a'/%3E%3Cpath d='M2 6.8h12v1.6H2z' fill='%23ef9a33'/%3E%3Cpath d='M2 9.6h12v1.6H2z' fill='%23e2672b'/%3E%3Cpath d='M2 12.4h12V14H2z' fill='%23c43b28'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/update/update.css">
 <!-- Fetch every module up front: it saves a round trip per import level on the device. -->
 <link rel="modulepreload" href="/js/util.js">
 <link rel="modulepreload" href="/js/api.js">
@@ -36,6 +37,12 @@
 <link rel="modulepreload" href="/js/editor.js">
 <link rel="modulepreload" href="/js/files.js">
 <link rel="modulepreload" href="/js/menu.js">
+<link rel="modulepreload" href="/update/update.js">
+<link rel="modulepreload" href="/update/logic.js">
+<link rel="modulepreload" href="/update/zip.js">
+<link rel="modulepreload" href="/update/sha256.js">
+<link rel="modulepreload" href="/update/official_releases.js">
+<link rel="modulepreload" href="/update/settings.js">
 </head>
 <body>
 <div id="app">
@@ -44,6 +51,7 @@
     <nav class="nav">
       <a class="nav-item" href="#/dashboard" data-view="dashboard"><span class="ni-ico">▦</span>Dashboard</a>
       <a class="nav-item" href="#/files" data-view="files"><span class="ni-ico">▤</span>Files</a>
+      <a class="nav-item" href="#/update" data-view="update"><span class="ni-ico">⇪</span>Update</a>
     </nav>
     <label class="up-drop side-drop" id="fb-drop" hidden>
       <input type="file" id="fb-drop-file" multiple hidden>
@@ -153,6 +161,8 @@
         </div>
       </div>
     </section>
+
+    <section class="view" id="view-update" hidden></section>
 
     <footer class="footer">
       <span>BMA800XL &nbsp;·&nbsp; Bare Metal Atari 800XL</span>

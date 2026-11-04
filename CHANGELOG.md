@@ -1,6 +1,10 @@
 ## 1.4.5
 
 - Speed up web UI uploads 5x
+- BMA800XL Updater, from BMC64: install a release from `bma800xl-update.zip` at boot. See `docs/UPDATER.md`
+  - zlib 1.3.2 decompression added for the updater
+  - `build_test_update.sh` makes a test update from `build/sdcard`
+- `tools/webui_dev_server.py` runs the web UI on a PC with a mock API
 
 ## 1.4.4
 

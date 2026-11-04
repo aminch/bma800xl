@@ -1,0 +1,157 @@
+//
+// logic.js
+//
+// BMC64 - A bare metal Commodore emulator for Raspberry Pi
+// Copyright (C) 2026 aminch <https://github.com/aminch>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+// Modified for BMA800XL from BMC64's src/webui/assets/update/logic.js:
+// BMA800XL's names, release zips (bma800xl-vX.Y.Z.zip) and files.
+//
+// The Update page's checks, kept free of the page so they can be tested with
+// Node (tools/update/test/). The Pi repeats its own checks when it applies
+// the update (src/update/).
+//
+
+// GitHub's release list for a repository ("owner/name", from updater.cfg).
+export const releasesUrl = (repo) =>
+  "https://api.github.com/repos/" + repo + "/releases?per_page=100";
+export const MANIFEST = "bma800xl-manifest.txt";
+export const UPDATE_PATH = "/bma800xl-update.zip";
+
+// Files every release has had (the first ones had only the Pi 3 kernel); a
+// zip without them is not a BMA800XL release.
+const CORE_FILES = ["kernel8-32.img", "bootcode.bin", "start.elf", "fixup.dat",
+                    "config.txt", "cmdline.txt"];
+// Files a complete release has now: every board's kernel.
+const RELEASE_FILES = CORE_FILES.concat(["kernel.img", "kernel7.img", "kernel8-rpi4.img",
+                                         "kernel_2712.img"]);
+
+// A release's zip on GitHub (the release workflow's): bma800xl-v1.4.5.zip.
+const RELEASE_ZIP = /^bma800xl-v?\d[\w.-]*\.zip$/;
+
+// Compares "v5.1.10" and "5.1.9" numerically: < 0, 0 or > 0.
+export function compareVersions(a, b) {
+  const pa = String(a).replace(/^v/i, "").split(".").map((x) => parseInt(x, 10) || 0);
+  const pb = String(b).replace(/^v/i, "").split(".").map((x) => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+export function zipAsset(release) {
+  return (release.assets || []).find((a) => RELEASE_ZIP.test(a.name)) || null;
+}
+
+// The newest stable and newest pre-release (by version number) that have a
+// release zip. Drafts are never offered.
+export function latestReleases(releases) {
+  let stable = null;
+  let pre = null;
+  for (const r of releases) {
+    if (r.draft || !zipAsset(r)) continue;
+    if (r.prerelease) {
+      if (!pre || compareVersions(r.tag_name, pre.tag_name) > 0) pre = r;
+    } else if (!stable || compareVersions(r.tag_name, stable.tag_name) > 0) {
+      stable = r;
+    }
+  }
+  return { stable, pre };
+}
+
+// A release from the built-in list (official_releases.js) whose zip has this
+// SHA-256, in the same shape as findOfficial(), or null.
+export function findKnownRelease(list, sha) {
+  const r = list.find((x) => x.sha256 === sha);
+  return r ? { release: { tag_name: r.tag, prerelease: r.prerelease } } : null;
+}
+
+// The release whose zip has this SHA-256, or null.
+export function findOfficial(releases, sha) {
+  for (const r of releases) {
+    const a = zipAsset(r);
+    if (a && a.digest === "sha256:" + sha) return { release: r, asset: a };
+  }
+  return null;
+}
+
+// Parses bma800xl-manifest.txt; returns { target, files: Map(path -> size) }
+// for the version the zip installs.
+export function parseManifest(text) {
+  let format = 0;
+  let target = "";
+  const lines = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const w = line.split(/\s+/);
+    if (w[0] === "format") format = parseInt(w[1], 10);
+    else if (w[0] === "target") target = w[1] || "";
+    else if (w.length === 4) lines.push(w);
+    else throw new Error("Its " + MANIFEST + " is damaged.");
+  }
+  if (format !== 1) throw new Error("Its " + MANIFEST + " has a format this version can't read.");
+  if (!target) throw new Error("Its " + MANIFEST + " is damaged.");
+  const files = new Map();
+  for (const [version, , size, path] of lines) {
+    if (version === target) files.set(path, parseInt(size, 10));
+  }
+  if (!files.size) throw new Error("Its " + MANIFEST + " lists no files.");
+  return { target, files };
+}
+
+// A release from before the updater has no manifest. BMA800XL recognises it from
+// the card's own bma800xl-manifest.txt; here it only has to look like a release.
+// Returns { unpackedSize }.
+export function checkOlderPackage(entries) {
+  const names = new Set(entries.filter((e) => !e.isDir).map((e) => e.name.toLowerCase()));
+  for (const f of CORE_FILES) {
+    if (!names.has(f)) throw new Error("This is not a BMA800XL release zip (no " + f + ").");
+  }
+  if (entries.some((e) => e.flags & 1)) throw new Error("Encrypted zips are not supported.");
+  return { unpackedSize: entries.reduce((n, e) => n + (e.isDir ? 0 : e.size), 0) };
+}
+
+// The warning for a release from before the updater.
+export function olderReleaseWarning(tag) {
+  return tag + " was released before the updater. After installing it you won't be able " +
+    "to use the updater; to update again, copy a newer release to the card by hand.";
+}
+
+// The warning for a zip that doesn't match an official release on GitHub.
+export const UNOFFICIAL_WARNING =
+  "This file doesn't match an official BMA800XL release on GitHub, or GitHub couldn't be " +
+  "reached to check it. It may be a test build, modified or damaged. Uploading and " +
+  "installing it is at your own risk. BMA800XL still checks every file it installs against " +
+  "its recorded checksum, but can't tell whether the zip itself is genuine.";
+
+// Checks the zip's directory against its manifest. Throws an Error with a
+// message for the user; returns { target, unpackedSize, missing }. BMA800XL
+// only needs the files the manifest lists, so a partial package (a test build
+// for one Pi model) is allowed: missing lists the usual release files it lacks.
+export function checkPackage(entries, manifest) {
+  const byName = new Map(entries.filter((e) => !e.isDir).map((e) => [e.name.toLowerCase(), e]));
+  const missing = RELEASE_FILES.filter((f) => !byName.has(f));
+  let unpackedSize = 0;
+  for (const [path, size] of manifest.files) {
+    const e = byName.get(path.toLowerCase());
+    if (!e || e.size !== size) throw new Error("The zip is incomplete (" + path + ").");
+    if (e.flags & 1) throw new Error("Encrypted zips are not supported.");
+    unpackedSize += size;
+  }
+  return { target: manifest.target, unpackedSize, missing };
+}

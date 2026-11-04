@@ -1,0 +1,542 @@
+#!/usr/bin/env python3
+#
+# gen_update_manifest.py
+#
+# BMC64 - A bare metal Commodore emulator for Raspberry Pi
+# Copyright (C) 2026 aminch <https://github.com/aminch>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+# Modified for BMA800XL from BMC64's tools/update/gen_update_manifest.py:
+# BMA800XL's names and its release zips (bma800xl-vX.Y.Z.zip, made by the
+# release workflow from build_sdcard.sh's build/sdcard).
+#
+
+"""Build bma800xl-manifest.txt, the file that drives the BMA800XL Updater.
+
+The manifest lists every file of every released BMA800XL version with its
+SHA-256 and size, so the updater on the Pi can tell, for each file on the SD
+card, whether it is the new version, an untouched file from some earlier
+release, or a file the user changed. See GEN_UPDATE_MANIFEST.md next to
+this script.
+
+  seed     Hash every published release zip of the official repository and
+           add it to the history file (release/manifest_history.txt) and the
+           release list (release/release_digests.txt).
+  sync     Add any published release missing from the release list, and
+           update stable/pre-release flags that changed on GitHub. make_all.sh
+           runs it on every build; it does nothing when all is up to date.
+  add      Add local release zips (bma800xl-vX.Y.Z.zip) to the history and
+           the release list, for releases no longer on GitHub.
+  webui    Write the Web UI's list of official releases
+           (src/webui/assets/update/official_releases.js) from
+           release/release_digests.txt. seed and add do this too, and the
+           Web UI build runs it.
+  release  Hash a staged release folder (build_sdcard.sh's build/sdcard) and
+           write <stage>/bma800xl-manifest.txt (this version + the history); with
+           --update-history, also add the version to the history file.
+  check    Check a release zip's bma800xl-manifest.txt against the zip contents.
+  package  Make a bma800xl-update.zip from any staged SD card folder (for example
+           build_sdcard.sh's output), to test the updater before a release.
+           The history file is not changed.
+
+Manifest format (plain text, one record per line):
+
+  # comment
+  format 1
+  target v1.5.0
+  <version> <sha256 hex> <size> <path>
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+import urllib.request
+import zipfile
+
+MANIFEST_NAME = "bma800xl-manifest.txt"
+FORMAT = 1
+# A release's zip on GitHub (the release workflow's): bma800xl-v1.4.5.zip.
+RELEASE_ZIP = re.compile(r"bma800xl-(v?\d[\w.-]*)\.zip$")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import updater_cfg  # noqa: E402
+
+# The repository whose releases are official: updater.cfg's repo.
+DEFAULT_REPO = updater_cfg.load()["repo"]
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+DEFAULT_HISTORY = os.path.join(REPO_ROOT, "release", "manifest_history.txt")
+DEFAULT_DIGESTS = os.path.join(REPO_ROOT, "release", "release_digests.txt")
+DEFAULT_WEBUI_JS = os.path.join(REPO_ROOT, "src", "webui", "assets", "update",
+                                "official_releases.js")
+
+
+def sha256_bytes(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def version_key(version):
+    """Numeric sort key for tags such as v1.4.10 or v1.4."""
+    parts = []
+    for p in version.lstrip("vV").split("."):
+        digits = "".join(c for c in p if c.isdigit())
+        parts.append(int(digits) if digits else 0)
+    return parts
+
+
+def check_path(path):
+    if (path.startswith("/") or "\\" in path or ".." in path.split("/") or
+            any(ord(c) < 0x20 or ord(c) > 0x7e for c in path) or " " in path):
+        sys.exit("unsupported path in release: %r" % path)
+
+
+def records_from_zip(zip_path, version):
+    records = []
+    with zipfile.ZipFile(zip_path) as zf:
+        for info in zf.infolist():
+            if info.is_dir() or info.filename == MANIFEST_NAME:
+                continue
+            check_path(info.filename)
+            data = zf.read(info)
+            records.append((version, sha256_bytes(data), len(data), info.filename))
+    return records
+
+
+def records_from_dir(stage, version):
+    records = []
+    for folder, _dirs, names in os.walk(stage):
+        for name in names:
+            full = os.path.join(folder, name)
+            rel = os.path.relpath(full, stage).replace(os.sep, "/")
+            if rel == MANIFEST_NAME:
+                continue
+            check_path(rel)
+            records.append((version, sha256_file(full), os.path.getsize(full), rel))
+    return records
+
+
+def read_history(path):
+    records = []
+    if not os.path.exists(path):
+        return records
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            version, digest, size, rel = line.split(" ", 3)
+            records.append((version, digest, int(size), rel))
+    return records
+
+
+def sort_records(records):
+    return sorted(records, key=lambda r: ([-k for k in version_key(r[0])], r[3].lower()))
+
+
+def write_history(path, records):
+    with open(path, "w", newline="\n") as f:
+        f.write("# BMA800XL release file history, used to build bma800xl-manifest.txt.\n")
+        f.write("# Generated by tools/update/gen_update_manifest.py; do not edit.\n")
+        f.write("# <version> <sha256> <size> <path>\n")
+        for r in sort_records(records):
+            f.write("%s %s %d %s\n" % r)
+
+
+def write_manifest(path, target, records):
+    with open(path, "w", newline="\n") as f:
+        f.write("# BMA800XL update manifest\n")
+        f.write("format %d\n" % FORMAT)
+        f.write("target %s\n" % target)
+        f.write("# <version> <sha256> <size> <path>\n")
+        # Target lines first, then the history, newest first.
+        target_lines = [r for r in records if r[0] == target]
+        others = [r for r in records if r[0] != target]
+        for r in sorted(target_lines, key=lambda r: r[3].lower()) + sort_records(others):
+            f.write("%s %s %d %s\n" % r)
+
+
+def github_get(url):
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "bma800xl-gen-update-manifest",
+        "Accept": "application/vnd.github+json",
+    })
+    return urllib.request.urlopen(req, timeout=60)
+
+
+def published_releases(repo):
+    """The repository's non-draft releases that have a release zip, from
+    GitHub's public API (no login needed), as a list of
+    (tag, kind, asset name, download URL, sha256 or None)."""
+    releases = []
+    page = 1
+    while True:
+        with github_get("https://api.github.com/repos/%s/releases?per_page=100&page=%d"
+                        % (repo, page)) as resp:
+            batch = json.load(resp)
+        if not batch:
+            break
+        releases += batch
+        page += 1
+    found = []
+    for rel in releases:
+        if rel.get("draft"):
+            continue
+        tag = rel["tag_name"]
+        assets = [a for a in rel.get("assets", []) if RELEASE_ZIP.match(a["name"])]
+        if not assets:
+            print("skip %s: no release zip asset" % tag)
+            continue
+        asset = assets[0]
+        digest = asset.get("digest") or ""
+        found.append((tag, "pre" if rel.get("prerelease") else "stable", asset["name"],
+                      asset["browser_download_url"],
+                      digest[7:] if digest.startswith("sha256:") else None))
+    return found
+
+
+def download_release(name, url, sha256, folder):
+    """Downloads a release zip into folder unless it is already there, and
+    checks it against GitHub's SHA-256. Returns the zip's SHA-256."""
+    local = os.path.join(folder, name)
+    if not os.path.exists(local):
+        print("download %s" % name)
+        with github_get(url) as resp, open(local + ".part", "wb") as f:
+            shutil.copyfileobj(resp, f)
+        os.replace(local + ".part", local)
+    local_sha = sha256_file(local)
+    if sha256 and local_sha != sha256:
+        sys.exit("%s does not match GitHub's digest" % local)
+    return local, local_sha
+
+
+def merge_history(path, new):
+    """Adds or replaces whole versions in the history file. Versions already
+    there are never dropped: releases can disappear from GitHub, but the
+    files they put on SD cards stay."""
+    history = read_history(path)
+    by_version = {}
+    for r in history:
+        by_version.setdefault(r[0], []).append(r)
+    for version in sorted({r[0] for r in new}, key=version_key):
+        recs = [r for r in new if r[0] == version]
+        old = by_version.get(version)
+        if old is None:
+            print("%s: added, %d files" % (version, len(recs)))
+        elif sorted(old) == sorted(recs):
+            print("%s: already in the history, identical" % version)
+        else:
+            print("%s: REPLACED (the history had different files)" % version)
+        by_version[version] = recs
+    write_history(path, [r for recs in by_version.values() for r in recs])
+
+
+def read_digests(path):
+    """{tag: (kind, sha256)}, kind being "stable" or "pre"."""
+    digests = {}
+    if not os.path.exists(path):
+        return digests
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            tag, kind, digest = line.split()
+            digests[tag] = (kind, digest)
+    return digests
+
+
+def merge_digests(path, new):
+    """Adds or replaces releases in the release list. Like the history, it
+    never drops one: a deleted pre-release is still an official release."""
+    digests = read_digests(path)
+    for tag in sorted(new, key=version_key):
+        kind, digest = new[tag]
+        old = digests.get(tag)
+        if old is None:
+            print("%s: added to the release list (%s)" % (tag, kind))
+        elif old != (kind, digest):
+            print("%s: REPLACED in the release list (was %s %s)" % (tag, old[0], old[1][:12]))
+        digests[tag] = (kind, digest)
+    with open(path, "w", newline="\n") as f:
+        f.write("# Official BMA800XL release zips: <tag> <stable|pre> <sha256 of the release zip>\n")
+        f.write("# Generated by tools/update/gen_update_manifest.py; do not edit.\n")
+        for tag in sorted(digests, key=lambda t: [-k for k in version_key(t)]):
+            f.write("%s %s %s\n" % (tag, digests[tag][0], digests[tag][1]))
+
+
+def write_webui_list(digests_path, js_path):
+    """Writes the Web UI's built-in list of official releases. It lets the
+    Update page recognise a release that is no longer on GitHub, or when
+    GitHub can't be reached. Only rewrites the file if it changed."""
+    digests = read_digests(digests_path)
+    lines = [
+        "// Official BMA800XL releases known when this build was made. The Update page",
+        "// checks GitHub first and then this list, so releases no longer on GitHub",
+        "// (deleted pre-releases), or any release while GitHub can't be reached, are",
+        "// still recognised. Generated from release/release_digests.txt by",
+        "// tools/update/gen_update_manifest.py; do not edit.",
+        "",
+        "export const OFFICIAL_RELEASES = [",
+    ]
+    for tag in sorted(digests, key=lambda t: [-k for k in version_key(t)]):
+        kind, digest = digests[tag]
+        lines.append('  { tag: "%s", prerelease: %s, sha256: "%s" },' %
+                     (tag, "true" if kind == "pre" else "false", digest))
+    lines.append("];")
+    text = "\n".join(lines) + "\n"
+    if os.path.exists(js_path):
+        with open(js_path) as f:
+            if f.read() == text:
+                return
+    with open(js_path, "w", newline="\n") as f:
+        f.write(text)
+    print("wrote %s (%d releases)" % (os.path.relpath(js_path, REPO_ROOT), len(digests)))
+
+
+def cmd_webui(opts):
+    write_webui_list(opts.digests, opts.webui_js)
+
+
+def cmd_seed(opts):
+    if not opts.repo:
+        sys.exit("No repo in updater.cfg; give one with --repo owner/name.")
+    os.makedirs(opts.cache, exist_ok=True)
+    records = []
+    digests = {}
+    for tag, kind, name, url, sha256 in published_releases(opts.repo):
+        local, local_sha = download_release(name, url, sha256, opts.cache)
+        records += records_from_zip(local, tag)
+        digests[tag] = (kind, local_sha)
+    merge_history(opts.history, records)
+    merge_digests(opts.digests, digests)
+    write_webui_list(opts.digests, opts.webui_js)
+
+
+def cmd_sync(opts):
+    if not opts.repo:
+        print("No repo in updater.cfg; not checking GitHub for new releases.")
+        return
+    try:
+        releases = published_releases(opts.repo)
+    except OSError as e:
+        # Offline, or GitHub unreachable: build with the committed files.
+        print("Could not check GitHub for new releases (%s); "
+              "the release history may be out of date." % e)
+        return
+    known = read_digests(opts.digests)
+    missing = []
+    digests = {}
+    for tag, kind, name, url, sha256 in releases:
+        old = known.get(tag)
+        if old is None:
+            missing.append((tag, kind, name, url, sha256))
+        elif sha256 and old[1] != sha256:
+            # A published release should never change; don't record it.
+            sys.exit("%s on GitHub does not match release/release_digests.txt "
+                     "(%s, recorded %s). Check why before changing the history."
+                     % (tag, sha256[:12], old[1][:12]))
+        elif old[0] != kind:
+            digests[tag] = (kind, old[1])
+    if not missing and not digests:
+        print("Release history is up to date (%d releases on GitHub)." % len(releases))
+        return
+    records = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for tag, kind, name, url, sha256 in missing:
+            local, local_sha = download_release(name, url, sha256, tmp)
+            records += records_from_zip(local, tag)
+            digests[tag] = (kind, local_sha)
+    merge_history(opts.history, records)
+    merge_digests(opts.digests, digests)
+    write_webui_list(opts.digests, opts.webui_js)
+    print("The release history changed. Commit %s, %s and %s." % tuple(
+        os.path.relpath(p, REPO_ROOT) for p in (opts.history, opts.digests, opts.webui_js)))
+
+
+def cmd_add(opts):
+    records = []
+    digests = {}
+    known = read_digests(opts.digests)
+    for path in opts.zips:
+        m = RELEASE_ZIP.match(os.path.basename(path))
+        version = opts.version or (m and m.group(1))
+        if not version:
+            sys.exit("can't tell the version of %s; use --version" % path)
+        if not version.startswith("v"):
+            version = "v" + version
+        records += records_from_zip(path, version)
+        # Stable or pre-release: as given, else as already listed, else a
+        # pre-release (the releases that disappear from GitHub).
+        kind = opts.kind or known.get(version, ("pre",))[0]
+        digests[version] = (kind, sha256_file(path))
+    merge_history(opts.history, records)
+    merge_digests(opts.digests, digests)
+    write_webui_list(opts.digests, opts.webui_js)
+
+
+def cmd_release(opts):
+    version = opts.version if opts.version.startswith("v") else "v" + opts.version
+    history = [r for r in read_history(opts.history) if r[0] != version]
+    current = records_from_dir(opts.stage, version)
+    if not current:
+        sys.exit("no files in " + opts.stage)
+    write_manifest(os.path.join(opts.stage, MANIFEST_NAME), version, current + history)
+    if opts.update_history:
+        write_history(opts.history, current + history)
+    print("wrote %s: %s, %d files, %d history records" %
+          (MANIFEST_NAME, version, len(current), len(history)))
+
+
+def cmd_check(opts):
+    with zipfile.ZipFile(opts.zip) as zf:
+        try:
+            text = zf.read(MANIFEST_NAME).decode("ascii")
+        except KeyError:
+            sys.exit("no %s in %s" % (MANIFEST_NAME, opts.zip))
+        target = None
+        wanted = {}
+        for line in text.splitlines():
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("format "):
+                if int(line.split()[1]) != FORMAT:
+                    sys.exit("unsupported format")
+                continue
+            if line.startswith("target "):
+                target = line.split()[1]
+                continue
+            version, digest, size, rel = line.split(" ", 3)
+            if version == target:
+                wanted[rel] = (digest, int(size))
+        if not target or not wanted:
+            sys.exit("manifest has no target files")
+        names = {i.filename for i in zf.infolist() if not i.is_dir()}
+        for rel, (digest, size) in wanted.items():
+            if rel not in names:
+                sys.exit("missing from zip: " + rel)
+            data = zf.read(rel)
+            if len(data) != size or sha256_bytes(data) != digest:
+                sys.exit("mismatch: " + rel)
+        extra = names - set(wanted) - {MANIFEST_NAME}
+        if extra:
+            sys.exit("files in zip but not in manifest: %s" % sorted(extra))
+    print("%s: %s OK (%d files)" % (opts.zip, target, len(wanted)))
+
+
+def cmd_package(opts):
+    version = opts.version if opts.version.startswith("v") else "v" + opts.version
+    stage = opts.stage
+    history = [r for r in read_history(opts.history) if r[0] != version]
+    current = records_from_dir(stage, version)
+    if not current:
+        sys.exit("no files in " + stage)
+    manifest = os.path.join(stage, MANIFEST_NAME)
+    had_manifest = os.path.exists(manifest)
+    backup = None
+    if had_manifest:
+        with open(manifest, "rb") as f:
+            backup = f.read()
+    write_manifest(manifest, version, current + history)
+    try:
+        with zipfile.ZipFile(opts.out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+            for folder, dirs, names in os.walk(stage):
+                for d in sorted(dirs):
+                    rel = os.path.relpath(os.path.join(folder, d), stage).replace(os.sep, "/")
+                    zf.writestr(rel + "/", b"")
+                for name in sorted(names):
+                    full = os.path.join(folder, name)
+                    zf.write(full, os.path.relpath(full, stage).replace(os.sep, "/"))
+    finally:
+        # Leave the stage folder as it was.
+        if had_manifest:
+            with open(manifest, "wb") as f:
+                f.write(backup)
+        else:
+            os.remove(manifest)
+    print("wrote %s: %s, %d files" % (opts.out, version, len(current)))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("seed")
+    s.add_argument("--repo", default=DEFAULT_REPO)
+    s.add_argument("--cache", required=True, help="folder for downloaded release zips")
+    s.add_argument("--history", default=DEFAULT_HISTORY)
+    s.add_argument("--digests", default=DEFAULT_DIGESTS)
+    s.add_argument("--webui-js", default=DEFAULT_WEBUI_JS)
+    s.set_defaults(func=cmd_seed)
+
+    y = sub.add_parser("sync")
+    y.add_argument("--repo", default=DEFAULT_REPO)
+    y.add_argument("--history", default=DEFAULT_HISTORY)
+    y.add_argument("--digests", default=DEFAULT_DIGESTS)
+    y.add_argument("--webui-js", default=DEFAULT_WEBUI_JS)
+    y.set_defaults(func=cmd_sync)
+
+    a = sub.add_parser("add")
+    a.add_argument("zips", nargs="+", help="release zips, bma800xl-vX.Y.Z.zip")
+    a.add_argument("--version", help="version, if the file name doesn't say")
+    a.add_argument("--kind", choices=["stable", "pre"],
+                   help="stable or pre-release (default: as already listed, else pre)")
+    a.add_argument("--history", default=DEFAULT_HISTORY)
+    a.add_argument("--digests", default=DEFAULT_DIGESTS)
+    a.add_argument("--webui-js", default=DEFAULT_WEBUI_JS)
+    a.set_defaults(func=cmd_add)
+
+    w = sub.add_parser("webui")
+    w.add_argument("--digests", default=DEFAULT_DIGESTS)
+    w.add_argument("--webui-js", default=DEFAULT_WEBUI_JS)
+    w.set_defaults(func=cmd_webui)
+
+    r = sub.add_parser("release")
+    r.add_argument("--stage", required=True)
+    r.add_argument("--version", required=True)
+    r.add_argument("--history", default=DEFAULT_HISTORY)
+    r.add_argument("--update-history", action="store_true",
+                   help="also add this version to the history file")
+    r.set_defaults(func=cmd_release)
+
+    c = sub.add_parser("check")
+    c.add_argument("zip")
+    c.set_defaults(func=cmd_check)
+
+    k = sub.add_parser("package")
+    k.add_argument("--stage", required=True)
+    k.add_argument("--version", required=True)
+    k.add_argument("--out", default="bma800xl-update.zip")
+    k.add_argument("--history", default=DEFAULT_HISTORY)
+    k.set_defaults(func=cmd_package)
+
+    opts = ap.parse_args()
+    opts.func(opts)
+
+
+if __name__ == "__main__":
+    main()

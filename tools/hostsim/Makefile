@@ -18,7 +18,7 @@ OUT := build
 OBJS := $(addprefix $(OUT)/a8/,$(A8_SRCS:.c=.o)) \
         $(OUT)/port/platform.o $(OUT)/port/keyboard.o $(OUT)/port/gamepad.o \
         $(OUT)/port/menu.o $(OUT)/port/menu_controllers.o $(OUT)/port/modem.o \
-        $(OUT)/gamepad_profiles.o $(OUT)/host_sim.o
+        $(OUT)/gamepad_profiles.o $(OUT)/host_sim.o $(OUT)/update_stub.o
 
 all: $(OUT)/bma800xl_sim
 
@@ -53,6 +53,12 @@ $(OUT)/port/menu.o $(OUT)/port/menu_controllers.o: $(ROOT)/src/port/menu.h
 
 $(OUT)/gamepad_profiles.o: $(ROOT)/src/gamepad_profiles.c $(GAMEPAD_HEADERS)
 	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -Wall -c -o $@ $<
+
+# The updater (src/update/) has its own tests (tools/update/test/); here
+# its entry points do nothing.
+$(OUT)/update_stub.o: $(ROOT)/src/update/update_stub.c $(ROOT)/src/update/update.h
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Wall -c -o $@ $<
 
 $(OUT)/host_sim.o: host_sim.c $(ROOT)/src/host.h

@@ -13,6 +13,8 @@ projects; this folder has their notices and licences:
   Linux-V3D.txt   Parts of the Linux kernel's V3D and BCM2835 power
                   drivers, for the Raspberry Pi 4 and Pi 5 GPU (GPL
                   version 2 or later).
+  zlib.txt        zlib's decompression code, for the BMA800XL Updater
+                  (zlib licence).
   Apache-2.0.txt  The Apache License 2.0, for the BMC64 code under it.
   GPL-2.0.txt     The GNU General Public License version 2, for the files
                   above under it.

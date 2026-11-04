@@ -106,7 +106,17 @@ PHY settings.
 tools/pi4kms/run_tests.sh
 ```
 
-`build_sdcard.sh` runs all three first and stops if any test fails;
+`tools/update/test/run_tests.py` builds the BMA800XL Updater (`src/update/`)
+with the PC's C compiler (`cc`, or `HOST_CC`, with AddressSanitizer) and runs
+it on test cards: updates, downgrades, repairs, bad packages and a power cut
+at every step. With Node.js on the PATH it also tests the web UI's Update
+page. `--cache DIR` adds a test with two real releases (see the script).
+
+```
+python3 tools/update/test/run_tests.py
+```
+
+`build_sdcard.sh` runs these first and stops if any test fails;
 `--skip-tests` leaves them out.
 
 ## The web UI
@@ -114,6 +124,50 @@ tools/pi4kms/run_tests.sh
 The web UI's pages are in `src/webui/assets/`. They are compiled into the
 kernel through `src/webui/webui_assets.c`, which the Makefile regenerates
 with `tools/gen_webui_assets.py` whenever an asset changes.
+
+`tools/webui_dev_server.py` serves the pages on the PC with mock `/api/*`
+answers, so the whole web UI (dashboard, files, Update page) can be tried
+without a Pi; the file browser shows a real folder (`--root`, the repository
+by default). The browser reloads when an asset changes.
+
+```
+python3 tools/webui_dev_server.py      # http://localhost:8000/
+```
+
+## The BMA800XL Updater
+
+The updater ([UPDATER.md](UPDATER.md)) is configured by `updater.cfg` in the
+top folder:
+
+| `updater` | What is built |
+| --- | --- |
+| `on` | The updater and the web UI's Update page. |
+| `kernel_only` | The updater only, with no Update page: an update is a release zip copied to the card as `bma800xl-update.zip`. |
+| `off` | No updater: `src/update/` and zlib are left out, `bma800xl-update.zip` is ignored, there is no Update page, the SD card gets no `bma800xl-manifest.txt`, and the updater's tests and release check are skipped. No `updater.cfg` is the same. |
+
+`repo` is the GitHub repository whose releases are official. The Update page
+lists and trusts its releases, and `make_all.sh` runs
+`tools/update/gen_update_manifest.py sync`, which adds newly published
+releases to `release/manifest_history.txt` and `release/release_digests.txt`;
+commit those. Leave `repo` empty to never contact GitHub. A fork with its own
+releases sets `repo` to its repository, empties `release/release_digests.txt`
+and runs `gen_update_manifest.py seed`.
+
+`build_sdcard.sh` writes `bma800xl-manifest.txt` (this version's files and
+every earlier release's) into `build/sdcard`, so release zips carry it. See
+[tools/update/GEN_UPDATE_MANIFEST.md](../tools/update/GEN_UPDATE_MANIFEST.md).
+
+To try an update before a release:
+
+```
+./build_test_update.sh [version]
+```
+
+turns `build/sdcard` into `build/bma800xl-update.zip`, labelled one version
+above `VERSION` (the same version is a repair, a lower one a downgrade). Put
+it in the top folder of a card running a build with the updater, by hand or
+with the web UI's Update page (which warns that it isn't an official
+release), and boot.
 
 ## Layout
 
@@ -123,7 +177,8 @@ with `tools/gen_webui_assets.py` whenever an asset changes.
 | `src/network.*`              | Ethernet / Wi-Fi start up (from BMC64)      |
 | `src/network_time_sync.*`    | Clock from the network (from BMC64)         |
 | `src/webui/`                 | Web UI server, file manager and pages (from BMC64) |
-| `src/sdcard/`                | SD card helpers used by the web UI (from BMC64) |
+| `src/sdcard/`                | SD card helpers used by the web UI and the updater (from BMC64) |
+| `src/update/`                | The BMA800XL Updater (from BMC64)           |
 | `src/fbl.*`, `crt_pi_*`      | Display layer and CRT shaders (from BMC64)  |
 | `src/vchiqsound*`            | Sound through the VideoCore (from BMC64)    |
 | `src/options.*`              | `cmdline.txt` options                       |
@@ -136,6 +191,8 @@ with `tools/gen_webui_assets.py` whenever an asset changes.
 | `sdcard/`                    | Files for the SD card                       |
 | `third_party/atari800`       | atari800 (submodule)                        |
 | `third_party/circle-stdlib`  | Circle and newlib (submodule)               |
+| `third_party/zlib`           | zlib's decompression, for the updater (`tools/vendor_zlib.py`) |
+| `release/`                   | The updater's history of every release's files |
 | `src/av/`                   | Shared Pi 4/5 video, ARM scaling / CRT shader and sound |
 | `src/v3d/`                  | Shared Pi 4/5 GPU driver and CRT rendering   |
 | `src/kms/common/`           | Shared Pi 4/5 filter kernels and mode calculations |
@@ -144,3 +201,5 @@ with `tools/gen_webui_assets.py` whenever an asset changes.
 | `tools/hostsim`              | PC test harness                             |
 | `tools/pi4scaler`            | PC test of shared Pi 4/5 ARM scaling and CRT rendering |
 | `tools/pi4kms`               | PC test of Pi 4/5 display driver calculations |
+| `tools/update`               | The updater's release tools and PC tests     |
+| `tools/webui_dev_server.py`  | The web UI on the PC, with a mock API        |

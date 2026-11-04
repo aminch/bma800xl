@@ -72,8 +72,12 @@ networks in range and asks for the password. See
 
 ## Upgrading
 
-Copy the new release's files over the old ones, except for files you have
-changed: `config.txt` and `cmdline.txt` if you edited them. Your settings
+If your installed version includes the BMA800XL Updater, use it: it
+replaces only what has changed, keeps files you changed unless you choose
+otherwise, and backs up the originals. See [UPDATER.md](UPDATER.md).
+
+Otherwise, copy the new release's files over the old ones, except for files
+you have changed: `config.txt` and `cmdline.txt` if you edited them. Your settings
 (`bma800xl.cfg`, `atari800.cfg`, `wpa_supplicant.conf`), ROMs and Atari
 files are not in the release zip and stay as they are. To move the card to
 a Pi 2, the `config.txt` must have the `[pi2]` section that picks

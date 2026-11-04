@@ -26,6 +26,7 @@
 #include "logging.h"
 #include "network.h"
 #include "pi45/board.h"
+#include "update/update.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -238,6 +239,11 @@ bool CKernel::Initialize(void) {
     return false;
   }
   CGlueStdioInit(mConsole);
+  mLog.Flush();
+
+  // Finish an update that was interrupted (and reboot into it), and note
+  // whether /bma800xl-update.zip is waiting (src/update/).
+  update_boot_check();
   mLog.Flush();
 
   // Before USB, as BMC64 does: the Pi 3's Ethernet is a USB device and

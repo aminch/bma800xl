@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+#
+# vendor_zlib.py
+#
+# BMC64 - A bare metal Commodore emulator for Raspberry Pi
+# Copyright (C) 2026 aminch <https://github.com/aminch>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+# Modified for BMA800XL from BMC64's tools/vendor_zlib.py: BMA800XL's name.
+#
+
+"""Copy the parts of zlib that BMA800XL uses into third_party/zlib/.
+
+BMA800XL uses only zlib's decompression (the updater, src/update/). This script
+is the only way those files get into the tree: it downloads the official
+release from https://github.com/madler/zlib, checks it against the SHA-256
+below, and copies the listed files unchanged, with zlib's LICENSE and README.
+It also writes third_party/zlib/UPDATING.md, which explains how to update.
+"""
+
+import hashlib
+import os
+import shutil
+import sys
+import tarfile
+import tempfile
+import urllib.request
+
+VERSION = "1.3.2"
+SHA256 = "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
+URL = ("https://github.com/madler/zlib/releases/download/v{0}/zlib-{0}.tar.gz"
+       .format(VERSION))
+
+# Decompression only (inflate), built with Z_SOLO (no gz* file functions).
+FILES = [
+    "adler32.c", "crc32.c", "crc32.h", "inffast.c", "inffast.h", "inffixed.h",
+    "inflate.c", "inflate.h", "inftrees.c", "inftrees.h", "zutil.c", "zutil.h",
+    "zlib.h", "zconf.h", "LICENSE", "README",
+]
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEST = os.path.join(REPO, "third_party", "zlib")
+
+NOTE = """# zlib in BMA800XL
+
+This folder holds only zlib's decompression files, copied unchanged from the
+official release. The BMA800XL Updater (`src/update/`) uses them to unpack
+release zips. The files are built with `Z_SOLO` (no `gz*` file functions).
+
+| | |
+| --- | --- |
+| Version | {version} |
+| Source | <https://github.com/madler/zlib> |
+| Release | <https://github.com/madler/zlib/releases/tag/v{version}> |
+| Archive | <{url}> |
+| SHA-256 | `{sha}` |
+| Licence | zlib licence, see [LICENSE](LICENSE) |
+
+Files: {files}
+
+## Updating
+
+Don't edit these files. They are copied by `tools/vendor_zlib.py`, which
+downloads the release archive, checks its SHA-256 and replaces this folder.
+
+1. In `tools/vendor_zlib.py`, set `VERSION` to the new release and `SHA256`
+   to its archive's SHA-256. Take the hash from the release page
+   (<https://github.com/madler/zlib/releases>) and check that the same file on
+   <https://zlib.net> has the same hash.
+2. Run `python3 tools/vendor_zlib.py`.
+3. If the release adds or renames a decompression file, update `FILES` in the
+   script and the zlib objects in the top-level `Makefile` and in
+   `tools/update/test/run_tests.py`.
+4. Run the updater tests (`python3 tools/update/test/run_tests.py`) and a
+   build, then commit this folder and the script together.
+5. Update the version in `docs/THIRD_PARTY.md`.
+"""
+
+
+def main():
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = os.path.join(tmp, "zlib.tar.gz")
+        print("downloading " + URL)
+        with urllib.request.urlopen(URL) as r, open(archive, "wb") as f:
+            shutil.copyfileobj(r, f)
+        with open(archive, "rb") as f:
+            digest = hashlib.sha256(f.read()).hexdigest()
+        if digest != SHA256:
+            sys.exit("SHA-256 mismatch: got %s, expected %s" % (digest, SHA256))
+
+        prefix = "zlib-%s/" % VERSION
+        with tarfile.open(archive) as tar:
+            members = {m.name: m for m in tar.getmembers()}
+            missing = [n for n in FILES if prefix + n not in members]
+            if missing:
+                sys.exit("not in this release: " + ", ".join(missing))
+            shutil.rmtree(DEST, ignore_errors=True)
+            os.makedirs(DEST)
+            for name in FILES:
+                data = tar.extractfile(members[prefix + name]).read()
+                with open(os.path.join(DEST, name), "wb") as out:
+                    out.write(data)
+
+    with open(os.path.join(DEST, "UPDATING.md"), "w", newline="\n") as f:
+        f.write(NOTE.format(version=VERSION, url=URL, sha=SHA256,
+                            files=", ".join("`%s`" % n for n in FILES)))
+    print("copied %d files to %s" % (len(FILES), os.path.relpath(DEST, REPO)))
+
+
+if __name__ == "__main__":
+    main()

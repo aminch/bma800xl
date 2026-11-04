@@ -1,0 +1,702 @@
+#!/usr/bin/env python3
+#
+# run_tests.py
+#
+# BMC64 - A bare metal Commodore emulator for Raspberry Pi
+# Copyright (C) 2026 aminch <https://github.com/aminch>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+# Modified for BMA800XL from BMC64's tools/update/test/run_tests.py: the
+# synthetic releases have BMA800XL's files (every board's kernel, the Pi 4's
+# firmware and the user's own files), and the real-release test takes two
+# BMA800XL releases.
+#
+
+"""Host tests for the BMA800XL Updater (src/update/).
+
+Builds the planner/apply/zip code with the PC's C compiler against a folder
+that stands in for the SD card, then runs update scenarios end to end with
+synthetic releases: plan, apply, backups, downgrade, repair, bad packages and
+power cuts at every step of the commit.
+
+  python3 tools/update/test/run_tests.py
+  python3 tools/update/test/run_tests.py --cache DIR   # also a real-release
+                                                      # test, using the zips
+                                                      # gen_update_manifest.py
+                                                      # seed downloaded
+
+The real-release test updates a card from REAL_OLD to REAL_NEW, then goes back
+with REAL_OLD's own zip (which has no manifest), recognised from the history in
+release/manifest_history.txt.
+"""
+
+import argparse
+import hashlib
+import os
+import random
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import zipfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+SRC = os.path.join(REPO, "src", "update")
+GEN = os.path.join(REPO, "tools", "update", "gen_update_manifest.py")
+ZLIB = os.path.join(REPO, "third_party", "zlib")
+SOURCES = ["update_apply.c", "update_plan.c", "update_manifest.c",
+           "update_zip.c", "update_hash.c"]
+ZLIB_SOURCES = ["inflate.c", "inftrees.c", "inffast.c", "zutil.c", "crc32.c",
+                "adler32.c"]
+
+failures = []
+
+
+def check(cond, what):
+    if not cond:
+        failures.append(what)
+        print("  FAIL: " + what)
+
+
+# ---- helpers ----
+
+def build(work):
+    exe = os.path.join(work, "update_cli")
+    # HOST_CC, not CC: a build environment may point CC at the Arm compiler.
+    cc = os.environ.get("HOST_CC", "cc")
+    common = ["-g", "-O1", "-fsanitize=address,undefined", "-fno-sanitize-recover=all",
+              "-DZ_SOLO", "-I", ZLIB]
+    # zlib is third-party code, built as the kernel builds it (no -Werror).
+    objs = []
+    for s in ZLIB_SOURCES:
+        obj = os.path.join(work, "zlib_" + s.replace(".c", ".o"))
+        subprocess.run([cc, "-c"] + common + ["-o", obj, os.path.join(ZLIB, s)], check=True)
+        objs.append(obj)
+    cmd = [cc, "-std=gnu11", "-Wall", "-Wextra", "-Werror"] + common + [
+           "-I", SRC, "-o", exe,
+           os.path.join(HERE, "update_cli.c"), os.path.join(REPO, "tools", "sdcard", "sd_fs_posix.c"),
+           os.path.join(REPO, "src", "sdcard", "sd_fs_file.c")]
+    cmd += [os.path.join(SRC, s) for s in SOURCES] + objs
+    subprocess.run(cmd, check=True)
+    return exe
+
+
+def cli(exe, card, *args, crash_after=None, free_kb=None):
+    env = dict(os.environ, SD_TEST_ROOT=card)
+    if crash_after is not None:
+        env["SD_TEST_CRASH_AFTER"] = str(crash_after)
+    if free_kb is not None:
+        env["SD_TEST_FREE_KB"] = str(free_kb)
+    r = subprocess.run([exe] + list(args), env=env, capture_output=True, text=True)
+    if r.returncode not in (0, 1, 3):
+        print(r.stdout, r.stderr)
+        raise SystemExit("update_cli crashed (%d)" % r.returncode)
+    return r.returncode, r.stdout
+
+
+def parse_plan(out):
+    plan = {"items": {}}
+    for line in out.splitlines():
+        w = line.split()
+        if w[0] == "target":
+            plan["target"], plan["direction"], plan["up_to_date"] = w[1], int(w[3]), int(w[5])
+            plan["legacy"] = int(w[7])
+        elif w[0] == "item":
+            plan["items"][w[6]] = {"group": w[1], "status": w[2], "choice": w[3],
+                                   "this_board": w[4] == "1"}
+        elif w[0] == "apply":
+            plan["apply"] = int(w[1])
+        elif w[0] == "error":
+            plan["error"] = line[6:]
+    return plan
+
+
+def tree(root):
+    out = {}
+    for folder, dirs, names in os.walk(root):
+        for d in dirs:
+            out[os.path.relpath(os.path.join(folder, d), root) + "/"] = "dir"
+        for n in names:
+            p = os.path.join(folder, n)
+            with open(p, "rb") as f:
+                out[os.path.relpath(p, root)] = hashlib.sha256(f.read()).hexdigest()
+    return out
+
+
+def read(card, path):
+    with open(os.path.join(card, path), "rb") as f:
+        return f.read()
+
+
+def write(card, path, data):
+    full = os.path.join(card, path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "wb") as f:
+        f.write(data if isinstance(data, bytes) else data.encode())
+
+
+# ---- synthetic releases ----
+
+DIRS = ["disks/", "programs/", "ROM/", "states/", "firmware/", "overlays/", "licenses/"]
+
+
+def blob(seed, size):
+    # Half random, half repetitive text, so deflate uses all block types.
+    rnd = random.Random(seed)
+    text = ("BMA800XL %d " % seed).encode() * (size // 20)
+    noise = bytes(rnd.getrandbits(8) for _ in range(size // 2))
+    return (noise + text)[:size]
+
+
+def release_files(version):
+    n = {"v1.0.0": 0, "v1.1.0": 1, "v1.2.0": 2}[version]
+    files = {
+        "config.txt": "disable_overscan=1\n",
+        "cmdline.txt": "machine=xl\n",
+        "licenses/atari800.txt": "atari800 notice\n",
+        "README.txt": "BMA800XL %s\n" % version,
+        "disks/README.txt": "Disk images %d\n" % min(n, 1),
+        "wpa_supplicant.conf.example": "network={}\n",
+        "firmware/wifi.bin": blob(900, 3000),
+        "bootcode.bin": blob(800, 5000),
+        "start.elf": blob(801 + min(n, 1), 60000),
+        "fixup.dat": blob(802 + min(n, 1), 700),
+        "start4.elf": blob(803 + min(n, 1), 60000),
+        "fixup4.dat": blob(804 + min(n, 1), 700),
+        "armstub8-rpi4.bin": blob(805, 3000),
+        "bcm2711-rpi-4-b.dtb": blob(806 + min(n, 1), 5000),
+        "overlays/bcm2712d0.dtbo": blob(807, 1000),
+    }
+    for i, k in enumerate(["kernel.img", "kernel7.img", "kernel8-32.img",
+                           "kernel8-rpi4.img", "kernel_2712.img"]):
+        files[k] = blob(100 * n + i, 40000 + 997 * n + i)
+    if n >= 1:
+        files["programs/README.txt"] = "Programs\n"
+    return {k: v if isinstance(v, bytes) else v.encode() for k, v in files.items()}
+
+
+def make_package(work, version, history, with_manifest=True, tamper=None):
+    stage = os.path.join(work, "stage-" + version)
+    shutil.rmtree(stage, ignore_errors=True)
+    for path, data in release_files(version).items():
+        write(stage, path, data)
+    for d in DIRS:
+        os.makedirs(os.path.join(stage, d), exist_ok=True)
+    if with_manifest:
+        subprocess.run([sys.executable, GEN, "release", "--stage", stage, "--version",
+                        version, "--history", history, "--update-history"],
+                       check=True, capture_output=True)
+    if tamper:
+        tamper(stage)
+    zpath = os.path.join(work, "bma800xl-%s.zip" % version)
+    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        for folder, dirs, names in os.walk(stage):
+            for d in dirs:
+                rel = os.path.relpath(os.path.join(folder, d), stage) + "/"
+                zf.writestr(rel, b"")
+            for name in names:
+                full = os.path.join(folder, name)
+                rel = os.path.relpath(full, stage)
+                # Some entries stored, like the real releases.
+                zf.write(full, rel, compress_type=zipfile.ZIP_STORED
+                         if name.endswith(".dat") else zipfile.ZIP_DEFLATED)
+    return stage, zpath
+
+
+def install_fresh(card, stage):
+    shutil.rmtree(card, ignore_errors=True)
+    shutil.copytree(stage, card)
+
+
+def drop_zip(card, zpath):
+    shutil.copy(zpath, os.path.join(card, "bma800xl-update.zip"))
+
+
+# ---- tests ----
+
+def test_inflate(exe, work):
+    print("inflate / zip reader")
+    card = os.path.join(work, "inflate")
+    os.makedirs(card, exist_ok=True)
+    samples = {
+        "empty": b"",
+        "tiny": b"a",
+        "text": b"The quick brown fox jumps over the lazy dog. " * 5000,
+        "random": bytes(random.Random(1).getrandbits(8) for _ in range(200000)),
+        "mixed": blob(7, 300000),
+        "runs": b"\0" * 100000 + b"\1" * 70000,
+    }
+    zpath = os.path.join(card, "t.zip")
+    with zipfile.ZipFile(zpath, "w") as zf:
+        for name, data in samples.items():
+            for level in (0, 1, 6, 9):
+                info = zipfile.ZipInfo("%s-%d" % (name, level))
+                info.compress_type = zipfile.ZIP_STORED if level == 0 else zipfile.ZIP_DEFLATED
+                zf.writestr(info, data, compresslevel=level or None)
+    for name, data in samples.items():
+        for level in (0, 1, 6, 9):
+            out = os.path.join(work, "out.bin")
+            rc, _ = cli(exe, card, "extract", "/t.zip", "%s-%d" % (name, level), out)
+            ok = rc == 0 and open(out, "rb").read() == data
+            check(ok, "extract %s level %d" % (name, level))
+
+    # A corrupted entry must be rejected (CRC).
+    raw = bytearray(open(zpath, "rb").read())
+    raw[len(raw) // 3] ^= 0xFF
+    open(os.path.join(card, "bad.zip"), "wb").write(raw)
+    bad = 0
+    for name in samples:
+        for level in (0, 9):
+            rc, _ = cli(exe, card, "extract", "/bad.zip", "%s-%d" % (name, level),
+                        os.path.join(work, "out.bin"))
+            bad += rc != 0
+    check(bad >= 1, "a corrupted zip entry is rejected")
+
+
+def test_update(exe, work):
+    print("update v1.0.0 -> v1.1.0")
+    hist = os.path.join(work, "history.txt")
+    stage0, zip0 = make_package(work, "v1.0.0", hist)
+    stage1, zip1 = make_package(work, "v1.1.0", hist)
+
+    card = os.path.join(work, "card")
+    install_fresh(card, stage0)
+    # The user's own files and edits.
+    write(card, "bma800xl.cfg", "webui=1\n")
+    write(card, "ROM/ATARIXL.ROM", blob(5, 16384))
+    write(card, "config.txt", "disable_overscan=1\ngpu_mem=64\n")
+    write(card, "wpa_supplicant.conf.example", "network={ssid=\"home\"}\n")
+    write(card, "backup/mystuff/keep.txt", "mine\n")
+    drop_zip(card, zip1)
+    before = tree(card)
+
+    rc, out = cli(exe, card, "plan", "1.0.0", "kernel8-32.img")
+    plan = parse_plan(out)
+    items = plan["items"]
+    check(plan.get("target") == "v1.1.0" and plan["direction"] == -1, "plan target/direction")
+    check(all(items.get(k, {}).get("status") == "update" for k in
+              ["kernel.img", "kernel7.img", "kernel8-32.img", "kernel8-rpi4.img",
+               "kernel_2712.img"]),
+          "kernels are updates")
+    check(items["kernel8-32.img"]["this_board"] and not items["kernel7.img"]["this_board"],
+          "this board's kernels")
+    check(items["start4.elf"]["group"] == "firmware" and
+          items["bcm2711-rpi-4-b.dtb"]["group"] == "firmware" and
+          items["kernel8-rpi4.img"]["group"] == "kernel", "the Pi 4's boot files are firmware")
+    check(items["disks/README.txt"]["status"] == "update" and
+          items["disks/README.txt"]["choice"] == "replace", "untouched file is replaced")
+    check(items["programs/README.txt"]["status"] == "new", "new file is added")
+    check(items["config.txt"]["status"] == "changed" and
+          items["config.txt"]["choice"] == "keep", "user's config.txt is kept by default")
+    check(items["wpa_supplicant.conf.example"]["status"] == "changed",
+          "user's changed file shows as changed")
+    check("bootcode.bin" not in items and "licenses/atari800.txt" not in items,
+          "unchanged files not listed")
+    check(tree(card) == before, "planning changes nothing")
+
+    rc, out = cli(exe, card, "apply", "1.0.0", "kernel8-32.img")
+    plan = parse_plan(out)
+    check(plan.get("apply") == 0, "apply succeeds: " + out.splitlines()[-1])
+    new = release_files("v1.1.0")
+    old = release_files("v1.0.0")
+    for path in ["kernel8-32.img", "kernel.img", "kernel8-rpi4.img", "disks/README.txt",
+                 "programs/README.txt", "start.elf", "fixup.dat", "start4.elf", "README.txt"]:
+        check(read(card, path) == new[path], "installed " + path)
+    check(read(card, "config.txt").startswith(b"disable_overscan=1\ngpu_mem="), "config.txt kept")
+    check(read(card, "wpa_supplicant.conf.example") == b'network={ssid="home"}\n',
+          "user's changed file kept")
+    check(read(card, "bma800xl.cfg") == b"webui=1\n", "bma800xl.cfg untouched")
+    check(read(card, "ROM/ATARIXL.ROM") == blob(5, 16384), "user's ROM untouched")
+    check(read(card, "backup/mystuff/keep.txt") == b"mine\n", "user's /backup folder untouched")
+    check(read(card, "backup/kernel/v1.0.0/kernel8-32.img") == old["kernel8-32.img"],
+          "old kernel in /backup/kernel/v1.0.0")
+    check(read(card, "backup/v1.0.0/disks/README.txt") == old["disks/README.txt"],
+          "old file in /backup/v1.0.0")
+    check(read(card, "backup/v1.0.0/start.elf") == old["start.elf"], "old firmware backed up")
+    check(os.path.exists(os.path.join(card, "backup/v1.0.0/.bma800xl-backup")), "backup marker")
+    check(b"target v1.0.0" in read(card, "backup/v1.0.0/bma800xl-manifest.txt"),
+          "old manifest backed up")
+    check(b"target v1.1.0" in read(card, "bma800xl-manifest.txt"), "manifest now v1.1.0")
+    report = read(card, "backup/v1.0.0/update-report.txt").decode()
+    check("Kept (not replaced)" in report and "config.txt" in report, "report lists kept files")
+    check(os.path.exists(os.path.join(card, "backup/v1.0.0/RESTORE.txt")), "RESTORE.txt")
+    check(not os.path.exists(os.path.join(card, "bma800xl-update.zip")), "zip removed")
+    check(not os.path.exists(os.path.join(card, "update_tmp")), "staging removed")
+    check(os.path.isdir(os.path.join(card, "states")), "folders from the zip exist")
+    reference = tree(card)
+
+    print("power cut at every step of the commit")
+    for n in range(0, 200):
+        install_fresh(card, stage0)
+        write(card, "bma800xl.cfg", "webui=1\n")
+        write(card, "ROM/ATARIXL.ROM", blob(5, 16384))
+        write(card, "config.txt", "disable_overscan=1\ngpu_mem=64\n")
+        write(card, "wpa_supplicant.conf.example", "network={ssid=\"home\"}\n")
+        write(card, "backup/mystuff/keep.txt", "mine\n")
+        drop_zip(card, zip1)
+        rc, _ = cli(exe, card, "apply", "1.0.0", "kernel8-32.img", crash_after=n)
+        if rc != 3:
+            check(tree(card) == reference, "no crash at step %d" % n)
+            print("  %d crash points checked" % n)
+            break
+        rc, out = cli(exe, card, "resume")
+        check("resumed 1" in out, "resume after power cut %d" % n)
+        check(tree(card) == reference, "same result after power cut at step %d" % n)
+
+    print("unfinished journal is discarded")
+    install_fresh(card, stage0)
+    drop_zip(card, zip1)
+    write(card, "update_tmp/journal.txt", "bma800xl-update-journal 1\nmove /a /b\n")
+    rc, out = cli(exe, card, "resume")
+    check("resumed 0" in out and not os.path.exists(os.path.join(card, "update_tmp")) and
+          os.path.exists(os.path.join(card, "bma800xl-update.zip")), "unfinished journal discarded")
+
+    return hist, stage0, zip0, stage1, zip1
+
+
+def test_second_update_and_downgrade(exe, work, hist, stage0, zip0, stage1, zip1):
+    print("second update keeps one backup; kernel backups are kept")
+    stage2, zip2 = make_package(work, "v1.2.0", hist)
+    card = os.path.join(work, "card2")
+    install_fresh(card, stage0)
+    write(card, "backup/v9.9.9/mine.txt", "not made by BMA800XL\n")
+    drop_zip(card, zip1)
+    cli(exe, card, "apply", "1.0.0", "kernel8-32.img")
+    drop_zip(card, zip2)
+    rc, out = cli(exe, card, "apply", "1.1.0", "kernel8-32.img")
+    check(parse_plan(out).get("apply") == 0, "second update applies")
+    check(not os.path.exists(os.path.join(card, "backup/v1.0.0")), "older backup removed")
+    check(os.path.exists(os.path.join(card, "backup/v1.1.0/.bma800xl-backup")), "new backup")
+    check(os.path.exists(os.path.join(card, "backup/kernel/v1.0.0/kernel7.img")) and
+          os.path.exists(os.path.join(card, "backup/kernel/v1.1.0/kernel7.img")),
+          "kernel backups of every version kept")
+    check(os.path.exists(os.path.join(card, "backup/v9.9.9/mine.txt")),
+          "a /backup/v* folder without the marker is left alone")
+
+    print("downgrade v1.2.0 -> v1.0.0 (old package, card manifest gives history)")
+    drop_zip(card, zip0)
+    rc, out = cli(exe, card, "plan", "1.2.0", "kernel8-32.img")
+    plan = parse_plan(out)
+    check(plan.get("direction") == 1, "downgrade detected")
+    check(plan["items"].get("disks/README.txt", {}).get("status") == "update",
+          "newer release's untouched file is an update, not 'changed'")
+    rc, out = cli(exe, card, "apply", "1.2.0", "kernel8-32.img")
+    check(parse_plan(out).get("apply") == 0, "downgrade applies")
+    check(read(card, "kernel7.img") == release_files("v1.0.0")["kernel7.img"],
+          "downgraded kernel installed")
+
+    print("repair: same version with a missing and a damaged file")
+    install_fresh(card, stage1)
+    os.remove(os.path.join(card, "disks/README.txt"))
+    write(card, "kernel7.img", b"damaged")
+    drop_zip(card, zip1)
+    rc, out = cli(exe, card, "plan", "1.1.0", "kernel8-32.img")
+    plan = parse_plan(out)
+    check(plan.get("direction") == 0 and set(plan["items"]) ==
+          {"disks/README.txt", "kernel7.img"}, "repair lists only the broken files")
+    rc, out = cli(exe, card, "apply", "1.1.0", "kernel8-32.img")
+    check(parse_plan(out).get("apply") == 0 and
+          read(card, "kernel7.img") == release_files("v1.1.0")["kernel7.img"], "repair applies")
+
+    print("choosing Keep for a file leaves it alone")
+    install_fresh(card, stage0)
+    drop_zip(card, zip1)
+    rc, out = cli(exe, card, "apply", "1.0.0", "kernel8-32.img", "keep", "kernel7.img",
+                  "keep", "start.elf")
+    check(read(card, "kernel7.img") == release_files("v1.0.0")["kernel7.img"],
+          "kept kernel unchanged")
+    check(read(card, "start.elf") == release_files("v1.0.0")["start.elf"], "kept firmware unchanged")
+
+
+def without_manifest(zpath, out):
+    """A copy of a release zip without its manifest, like releases made before
+    the updater."""
+    with zipfile.ZipFile(zpath) as src, zipfile.ZipFile(out, "w") as dst:
+        for info in src.infolist():
+            if info.filename != "bma800xl-manifest.txt":
+                dst.writestr(info, src.read(info))
+    return out
+
+
+def test_older_release(exe, work, stage0, zip0, stage1):
+    print("older release without a manifest (from before the updater)")
+    legacy = without_manifest(zip0, os.path.join(work, "legacy-v1.0.0.zip"))
+    card = os.path.join(work, "card4")
+    install_fresh(card, stage1)   # v1.1.0: its manifest's history knows v1.0.0
+    drop_zip(card, legacy)
+    rc, out = cli(exe, card, "plan", "1.1.0", "kernel8-32.img")
+    plan = parse_plan(out)
+    check(plan.get("target") == "v1.0.0" and plan.get("legacy") == 1 and
+          plan.get("direction") == 1, "older release recognised from the card's manifest")
+    check(plan["items"].get("kernel7.img", {}).get("status") == "update" and
+          "programs/README.txt" not in plan["items"], "older release is planned like a downgrade")
+    rc, out = cli(exe, card, "apply", "1.1.0", "kernel8-32.img")
+    check(parse_plan(out).get("apply") == 0, "older release applies")
+    old = release_files("v1.0.0")
+    check(read(card, "kernel7.img") == old["kernel7.img"] and
+          read(card, "disks/README.txt") == old["disks/README.txt"], "older release installed")
+    check(b"target v1.1.0" in read(card, "bma800xl-manifest.txt"),
+          "the card keeps its manifest (the older release has none)")
+    report = read(card, "backup/v1.1.0/update-report.txt").decode()
+    check("before the updater" in report, "report says the updater can't be used again")
+
+    install_fresh(card, stage1)
+    os.remove(os.path.join(card, "bma800xl-manifest.txt"))
+    drop_zip(card, legacy)
+    rc, out = cli(exe, card, "plan", "1.1.0", "kernel8-32.img")
+    check(rc == 1 and "card has no" in out, "without the card's manifest it is refused")
+
+    tampered = os.path.join(work, "legacy-tampered.zip")
+    with zipfile.ZipFile(legacy) as src, zipfile.ZipFile(tampered, "w") as dst:
+        for info in src.infolist():
+            data = src.read(info)
+            if info.filename == "kernel8-32.img":
+                data = bytes([data[0] ^ 1]) + data[1:]   # same size, other bytes
+            dst.writestr(info, data)
+    install_fresh(card, stage1)
+    drop_zip(card, tampered)
+    before = tree(card)
+    rc, out = cli(exe, card, "apply", "1.1.0", "kernel8-32.img")
+    check(rc == 1 and "damaged" in out and tree(card) == before,
+          "a changed file in an older release stops the update, card unchanged")
+
+    missing = os.path.join(work, "legacy-missing.zip")
+    with zipfile.ZipFile(legacy) as src, zipfile.ZipFile(missing, "w") as dst:
+        for info in src.infolist():
+            if info.filename != "README.txt":
+                dst.writestr(info, src.read(info))
+    install_fresh(card, stage1)
+    drop_zip(card, missing)
+    rc, out = cli(exe, card, "plan", "1.1.0", "kernel8-32.img")
+    check(rc == 1 and "doesn't match" in out, "an incomplete older release is refused")
+
+
+def test_bad_packages(exe, work, hist, stage0):
+    print("bad packages")
+    card = os.path.join(work, "card3")
+
+    _, nomanifest = make_package(work, "v1.1.0", hist, with_manifest=False)
+    install_fresh(card, stage0)
+    drop_zip(card, nomanifest)
+    rc, out = cli(exe, card, "plan", "1.0.0", "kernel8-32.img")
+    check(rc == 1 and "bma800xl-manifest.txt" in out,
+          "a zip without a manifest that the card doesn't know is refused")
+
+    _, missing = make_package(work, "v1.1.0", hist,
+                              tamper=lambda s: os.remove(os.path.join(s, "kernel7.img")))
+    install_fresh(card, stage0)
+    drop_zip(card, missing)
+    rc, out = cli(exe, card, "plan", "1.0.0", "kernel8-32.img")
+    check(rc == 1 and "incomplete" in out, "zip missing a listed file is refused")
+
+    def unsafe(stage):
+        path = os.path.join(stage, "bma800xl-manifest.txt")
+        text = open(path).read().replace(" programs/README.txt", " ../evil.txt")
+        open(path, "w").write(text)
+    _, evil = make_package(work, "v1.1.0", hist, tamper=unsafe)
+    install_fresh(card, stage0)
+    drop_zip(card, evil)
+    rc, out = cli(exe, card, "plan", "1.0.0", "kernel8-32.img")
+    check(rc == 1 and "unsafe" in out, "unsafe path is refused")
+
+    _, good = make_package(work, "v1.1.0", hist)
+    install_fresh(card, stage0)
+    drop_zip(card, good)
+    before = tree(card)
+    rc, out = cli(exe, card, "apply", "1.0.0", "kernel8-32.img", free_kb=10)
+    check(rc == 1 and "space" in out and tree(card) == before,
+          "not enough space: refused, card unchanged")
+
+    open(os.path.join(card, "bma800xl-update.zip"), "wb").write(b"not a zip")
+    rc, out = cli(exe, card, "plan", "1.0.0", "kernel8-32.img")
+    check(rc == 1 and "not a zip" in out, "a non-zip is refused")
+
+
+# The two releases the real-release test uses, from gen_update_manifest.py
+# seed's --cache folder.
+REAL_OLD, REAL_NEW = "v1.4.3", "v1.4.4"
+
+
+def test_real_release(exe, work, cache):
+    old = os.path.join(cache, "bma800xl-%s.zip" % REAL_OLD)
+    new = os.path.join(cache, "bma800xl-%s.zip" % REAL_NEW)
+    if not (os.path.exists(old) and os.path.exists(new)):
+        print("real release test skipped (need %s and %s zips in --cache)" % (REAL_OLD, REAL_NEW))
+        return
+    print("real release: %s card, %s package" % (REAL_OLD, REAL_NEW))
+    stage = os.path.join(work, "real-stage")
+    with zipfile.ZipFile(new) as zf:
+        zf.extractall(stage)
+    hist = os.path.join(REPO, "release", "manifest_history.txt")
+    tmp_hist = os.path.join(work, "real-history.txt")
+    shutil.copy(hist, tmp_hist)
+    subprocess.run([sys.executable, GEN, "release", "--stage", stage, "--version",
+                    REAL_NEW, "--history", tmp_hist], check=True, capture_output=True)
+    package = os.path.join(work, "real-package.zip")
+    with zipfile.ZipFile(new) as src, zipfile.ZipFile(package, "w") as dst:
+        for info in src.infolist():
+            dst.writestr(info, src.read(info))
+        dst.write(os.path.join(stage, "bma800xl-manifest.txt"), "bma800xl-manifest.txt",
+                  compress_type=zipfile.ZIP_DEFLATED)
+    card = os.path.join(work, "real-card")
+    shutil.rmtree(card, ignore_errors=True)
+    with zipfile.ZipFile(old) as zf:
+        zf.extractall(card)
+        old_files = {i.filename: zf.read(i) for i in zf.infolist() if not i.is_dir()}
+    with zipfile.ZipFile(new) as zf:
+        differ = {i.filename for i in zf.infolist()
+                  if not i.is_dir() and old_files.get(i.filename) != zf.read(i)}
+    drop_zip(card, package)
+    rc, out = cli(exe, card, "plan", REAL_OLD[1:], "kernel8-32.img")
+    plan = parse_plan(out)
+    check(set(plan["items"]) == differ,
+          "%s -> %s lists exactly the %d files that differ" % (REAL_OLD, REAL_NEW, len(differ)))
+    start = time.time()
+    rc, out = cli(exe, card, "apply", REAL_OLD[1:], "kernel8-32.img")
+    check(parse_plan(out).get("apply") == 0, "real update applies")
+    with zipfile.ZipFile(new) as zf:
+        same = all(read(card, i.filename) == zf.read(i) for i in zf.infolist()
+                   if not i.is_dir())
+    check(same, "card matches %s after the update" % REAL_NEW)
+    print("  applied in %.1f s on this PC (with sanitizers)" % (time.time() - start))
+
+    # Going back needs REAL_OLD in the history (gen_update_manifest.py seed).
+    with open(tmp_hist) as f:
+        if not any(line.startswith(REAL_OLD + " ") for line in f):
+            print("real release downgrade skipped (%s is not in %s)" %
+                  (REAL_OLD, os.path.relpath(hist, REPO)))
+            return
+    print("real release: official %s zip (no manifest) as a downgrade" % REAL_OLD)
+    drop_zip(card, old)
+    rc, out = cli(exe, card, "plan", REAL_NEW[1:], "kernel8-32.img")
+    plan = parse_plan(out)
+    check(plan.get("target") == REAL_OLD and plan.get("legacy") == 1,
+          "official %s zip recognised from the card's manifest" % REAL_OLD)
+    rc, out = cli(exe, card, "apply", REAL_NEW[1:], "kernel8-32.img")
+    check(parse_plan(out).get("apply") == 0, "official %s zip applies" % REAL_OLD)
+    with zipfile.ZipFile(old) as zf:
+        same = all(read(card, i.filename) == zf.read(i) for i in zf.infolist()
+                   if not i.is_dir())
+    check(same, "card matches %s after the downgrade" % REAL_OLD)
+
+
+def test_release_list(work, zip0, zip1):
+    print("release list (release_digests.txt and official_releases.js)")
+    hist = os.path.join(work, "list-history.txt")
+    digests = os.path.join(work, "list-digests.txt")
+    js = os.path.join(work, "list.js")
+    run = lambda *args: subprocess.run([sys.executable, GEN] + list(args) + [
+        "--history", hist, "--digests", digests, "--webui-js", js],
+        check=True, capture_output=True, text=True).stdout
+    first, second = zip0, zip1   # named bma800xl-v1.0.0.zip, bma800xl-v1.1.0.zip
+    run("add", first, "--kind", "stable")
+    out = run("add", second)
+    check("v1.1.0: added to the release list (pre)" in out, "add defaults to a pre-release")
+    lines = [l.split() for l in open(digests) if not l.startswith("#")]
+    sha = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()
+    check(lines == [["v1.1.0", "pre", sha(second)], ["v1.0.0", "stable", sha(first)]],
+          "release list has both zips, newest first, with their SHA-256")
+    out = run("add", first)
+    check("REPLACED" not in out and "v1.0.0 stable" in open(digests).read(),
+          "adding again keeps a release's kind and changes nothing")
+    text = open(js).read()
+    check('{ tag: "v1.0.0", prerelease: false, sha256: "%s" }' % sha(first) in text and
+          '{ tag: "v1.1.0", prerelease: true' in text, "official_releases.js matches the list")
+
+
+def test_updater_cfg(work):
+    print("updater.cfg settings")
+    tool = os.path.join(REPO, "tools", "update", "updater_cfg.py")
+    cfg = os.path.join(work, "updater.cfg")
+
+    def get(key, text):
+        if text is None:
+            if os.path.exists(cfg):
+                os.remove(cfg)
+        else:
+            open(cfg, "w").write(text)
+        r = subprocess.run([sys.executable, tool, key, "--cfg", cfg],
+                           capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 else "error: " + r.stderr.strip()
+
+    on = "# comment\nupdater = on\nrepo = someone/bma800xl\n"
+    check(get("kernel", on) == "yes" and
+          get("webui", on) == "yes" and get("repo", on) == "someone/bma800xl", "updater = on")
+    kernel_only = "updater = kernel_only\n"
+    check(get("kernel", kernel_only) == "yes" and get("webui", kernel_only) == "no",
+          "updater = kernel_only builds the updater without the Update page")
+    off = "updater = off\n"
+    check(get("kernel", off) == "no" and get("webui", off) == "no", "updater = off")
+    check(get("kernel", None) == "no" and get("webui", None) == "no" and
+          get("repo", None) == "", "no updater.cfg is the same as off")
+    check(get("repo", "updater = on\nrepo =\n") == "", "repo can be left empty")
+    check(get("kernel", "updater = maybe\n").startswith("error"), "a bad updater value is refused")
+    check(get("kernel", "kernel = yes\n").startswith("error"), "an unknown setting is refused")
+    check(get("repo", "repo = just-a-name\n").startswith("error"), "repo must be owner/name")
+
+    js = os.path.join(work, "settings.js")
+    open(cfg, "w").write("updater = kernel_only\nrepo = someone/bma800xl\n")
+    subprocess.run([sys.executable, tool, "webui-js", "--cfg", cfg, "--out", js],
+                   check=True, capture_output=True)
+    check('export const UPDATER = { enabled: false, repo: "someone/bma800xl" };' in open(js).read(),
+          "settings.js carries the Update page switch and the repo")
+
+
+def test_web(work, zpath):
+    print("web UI update modules (Node)")
+    node = shutil.which("node")
+    if not node:
+        print("  skipped: no Node.js on the PATH")
+        return
+    r = subprocess.run([node, os.path.join(HERE, "web.test.mjs"), zpath],
+                       capture_output=True, text=True)
+    for line in r.stdout.splitlines():
+        print("  " + line.strip())
+    check(r.returncode == 0, "web tests" + (": " + r.stderr[-500:] if r.stderr else ""))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--cache", help="folder with official release zips")
+    ap.add_argument("--keep", action="store_true", help="keep the work folder")
+    opts = ap.parse_args()
+    work = tempfile.mkdtemp(prefix="bma800xl-update-test-")
+    try:
+        exe = build(work)
+        test_inflate(exe, work)
+        hist, stage0, zip0, stage1, zip1 = test_update(exe, work)
+        test_second_update_and_downgrade(exe, work, hist, stage0, zip0, stage1, zip1)
+        test_updater_cfg(work)
+        test_release_list(work, zip0, zip1)
+        test_older_release(exe, work, stage0, zip0, stage1)
+        test_bad_packages(exe, work, hist, stage0)
+        test_web(work, zip1)
+        if opts.cache:
+            test_real_release(exe, work, opts.cache)
+    finally:
+        if opts.keep:
+            print("work folder: " + work)
+        else:
+            shutil.rmtree(work, ignore_errors=True)
+    if failures:
+        print("\n%d FAILED" % len(failures))
+        sys.exit(1)
+    print("\nall updater tests passed")
+
+
+if __name__ == "__main__":
+    main()

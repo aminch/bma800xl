@@ -36,6 +36,12 @@ See [BMC64](https://github.com/randyrossi/bmc64) for its source and its accompan
 
 BMC64-derived files retain their original license and attribution notices: the Apache License 2.0 (see [the included license](../sdcard/licenses/Apache-2.0.txt)) or BMC64's GNU General Public License version 3. Modifications are identified in their headers.
 
+## zlib
+
+BMA800XL incorporates the decompression code of [zlib](https://github.com/madler/zlib), version 1.3.2, unchanged, for the BMA800XL Updater.
+
+See [`third_party/zlib/`](../third_party/zlib/) for the files used and their copyright and license information. Its notice is in [`sdcard/licenses/zlib.txt`](../sdcard/licenses/zlib.txt), under the zlib license.
+
 ## Raspberry Pi Firmware
 
 BMA800XL includes the Raspberry Pi boot firmware (`bootcode.bin`, `start.elf`, `fixup.dat`, and for the Raspberry Pi 4 `start4.elf` and `fixup4.dat`) and the Raspberry Pi 4 and Pi 5 device trees from the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware).
