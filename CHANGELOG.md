@@ -5,6 +5,8 @@
   - zlib 1.3.2 decompression added for the updater
   - `build_test_update.sh` makes a test update from `build/sdcard`
 - `tools/webui_dev_server.py` runs the web UI on a PC with a mock API
+- Sort the web UI's file view by name, size or date, from BMC64
+- Fix Pi 5 HDMI sound pitch when the display mode the firmware set is kept
 
 ## 1.4.4
 
