@@ -1,3 +1,7 @@
+## 1.4.6
+
+- Fix web UI uploads stopping with "upload truncated", from BMC64
+
 ## 1.4.5
 
 - Speed up web UI uploads 5x
