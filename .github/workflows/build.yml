@@ -1,5 +1,9 @@
 name: Build
 
+# Builds each board on its own runner, alongside the PC tests, then puts
+# the boards' files together into one SD card that starts on any supported
+# Pi
+
 on:
   # Tags are built by release.yml.
   push:
@@ -9,8 +13,35 @@ on:
   workflow_dispatch:
 
 jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends texinfo wget imagemagick python3-pil
+
+      - name: PC tests
+        run: |
+          tools/hostsim/run_tests.sh
+          tools/pi4kms/run_tests.sh
+          tools/pi4scaler/run_tests.sh
+          if [ "$(python3 tools/update/updater_cfg.py kernel)" = "yes" ]
+          then
+            python3 tools/update/test/run_tests.py
+          fi
+
   build:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [pi0, pi2, pi3, pi4, pi5]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,11 +59,53 @@ jobs:
           path: ~/.cache/bma800xl/toolchains
           key: arm-gnu-toolchain-15.2.rel1-arm-none-eabi-aarch64-none-elf
 
-      - name: Build
-        run: ./build_sdcard.sh
+      - name: Build ${{ matrix.board }}
+        run: ./build_sdcard.sh ${{ matrix.board }} --skip-tests
+
+      # Only for the sdcard job below; deleted once it has the files.
+      - name: Upload ${{ matrix.board }} SD card files
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdcard-${{ matrix.board }}
+          path: build/sdcard/
+          if-no-files-found: error
+          retention-days: 1
+
+  sdcard:
+    needs: [tests, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Put the boards' files together
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sdcard-*
+          path: build/sdcard
+          merge-multiple: true
+
+      # Each board's manifest lists only its own kernel.
+      - name: Write the updater's manifest
+        run: |
+          if [ "$(python3 tools/update/updater_cfg.py kernel)" = "yes" ]
+          then
+            python3 tools/update/gen_update_manifest.py release \
+              --stage build/sdcard --version "v$(tools/version.sh --semver)"
+          fi
+
+      - name: Check the SD card files
+        run: ./check_release_files.sh build/sdcard
 
       - name: Upload SD card files
         uses: actions/upload-artifact@v4
         with:
           name: bma800xl-sdcard
           path: build/sdcard/
+          if-no-files-found: error
+
+      - uses: geekyeggo/delete-artifact@v5
+        with:
+          name: sdcard-pi*
