@@ -127,7 +127,9 @@ public:
   uint32_t PadButtons(int pad);
   int PadInput(int pad, struct host_pad_input *input);
   unsigned Mouse(int *dx, int *dy);
-  unsigned USBStick(void) const { return m_USBStick; }
+  unsigned USBStick(int n) const {
+    return n >= 0 && n < HOST_USB_STICKS ? m_USBStick[n] : 0;
+  }
   int GpioJoystick(int port);
   double Time(void);
   void Reboot(void);
@@ -160,7 +162,7 @@ private:
   void SetupUSBKeyboards(void);
   void SetupUSBGamePads(void);
   void SetupUSBMice(void);
-  void SetupUSBStick(void);
+  void SetupUSBSticks(void);
   void SetupGPIOJoysticks(void);
   void PushKeyEvent(int usage, int pressed);
   void UpdateMergedKeys(void);
@@ -190,11 +192,11 @@ private:
 #endif
   CEMMCDevice mEMMC;
   FATFS mFileSystem;
-  // The USB stick (umsd1) as the FatFs volume "USB:". Mounted once at boot
-  // without reading it; FatFs reads the stick in when it is first used, and
-  // again after it has been pulled out or swapped (Circle's
-  // addon/fatfs/diskio.cpp drops a removed device).
-  FATFS mUSBFileSystem;
+  // The USB sticks (umsd1..umsd3) as the FatFs volumes "USB:", "USB2:" and
+  // "USB3:". Mounted once at boot without reading them; FatFs reads a stick
+  // in when it is first used, and again after it has been pulled out or
+  // swapped (Circle's addon/fatfs/diskio.cpp drops a removed device).
+  FATFS mUSBFileSystem[HOST_USB_STICKS];
   CUSBHCIDevice mUSBHCI;
   CConsole mConsole;
 #ifdef ARM_ALLOW_MULTI_CORE
@@ -259,10 +261,11 @@ private:
   int m_MouseX = 0, m_MouseY = 0;
   int m_MouseReadX = 0, m_MouseReadY = 0;  // position given to the emulator
 
-  // The USB stick plugged in, set on core 0 and read by the emulator on
-  // core 1 (host_usb_stick()): its number, or 0 when there is none.
-  CDevice *m_pUSBStick;
-  volatile unsigned m_USBStick;
+  // The USB sticks plugged in, set on core 0 and read by the emulator on
+  // core 1 (host_usb_stick()): each one's number, or 0 when there is none.
+  CDevice *m_pUSBStick[HOST_USB_STICKS];
+  unsigned m_USBStickIndex[HOST_USB_STICKS];
+  volatile unsigned m_USBStick[HOST_USB_STICKS];
   unsigned m_USBSticks;  // sticks plugged in since boot
 
   bool m_bGPIOJoysticks;

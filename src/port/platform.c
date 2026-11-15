@@ -437,59 +437,84 @@ static void sync_files(void)
 		fsync(fd);
 }
 
-/* ---- USB stick -------------------------------------------------------------- */
+/* ---- USB sticks ------------------------------------------------------------- */
 
 static const char *sd_root(void);
 
-/* The stick the media were loaded from, as host_usb_stick() numbers them. */
-static unsigned usb_stick;
+/* The sticks the media were loaded from, as host_usb_stick() numbers them. */
+static unsigned usb_stick[HOST_USB_STICKS];
 
-static int on_usb_stick(const char *path)
+/* The file selector's names for the drives. */
+static const char *const usb_drive_name[HOST_USB_STICKS] = {"[USB:]", "[USB2:]", "[USB3:]"};
+
+static int on_usb_stick(int n, const char *path)
 {
-	const char *root = host_usb_root();
+	const char *root = host_usb_root(n);
 	return strncasecmp(path, root, strlen(root)) == 0;
+}
+
+static void read_usb_sticks(void)
+{
+	int n;
+	for (n = 0; n < HOST_USB_STICKS; n++)
+		usb_stick[n] = host_usb_stick(n);
 }
 
 /* Disk and cassette images are read from their files while they are in;
    when the stick they are on is pulled out or swapped, they are ejected.
    Cartridges are loaded into memory and stay. */
-static void check_usb_stick(void)
+static void check_usb_sticks(void)
 {
-	unsigned stick = host_usb_stick();
-	int i;
+	int n, i;
 
-	if (stick == usb_stick)
-		return;
-	if (usb_stick != 0) {
-		for (i = 0; i < SIO_MAX_DRIVES; i++) {
-			if ((SIO_drive_status[i] == SIO_READ_ONLY || SIO_drive_status[i] == SIO_READ_WRITE)
-			    && on_usb_stick(SIO_filename[i])) {
-				Log_print("USB stick removed: D%d: ejected", i + 1);
-				SIO_Dismount(i + 1);
+	for (n = 0; n < HOST_USB_STICKS; n++) {
+		unsigned stick = host_usb_stick(n);
+		if (stick == usb_stick[n])
+			continue;
+		if (usb_stick[n] != 0) {
+			for (i = 0; i < SIO_MAX_DRIVES; i++) {
+				if ((SIO_drive_status[i] == SIO_READ_ONLY || SIO_drive_status[i] == SIO_READ_WRITE)
+				    && on_usb_stick(n, SIO_filename[i])) {
+					Log_print("USB stick %s removed: D%d: ejected", host_usb_root(n), i + 1);
+					SIO_Dismount(i + 1);
+				}
+			}
+			if (CASSETTE_status != CASSETTE_STATUS_NONE && on_usb_stick(n, CASSETTE_filename)) {
+				Log_print("USB stick %s removed: cassette ejected", host_usb_root(n));
+				CASSETTE_Remove();
 			}
 		}
-		if (CASSETTE_status != CASSETTE_STATUS_NONE && on_usb_stick(CASSETTE_filename)) {
-			Log_print("USB stick removed: cassette ejected");
-			CASSETTE_Remove();
-		}
+		usb_stick[n] = stick;
 	}
-	usb_stick = stick;
 }
 
+/* [SD:], then the sticks plugged in, while there is at least one. */
 const char *BMA_FileDrive(int i)
 {
-	static const char *const drives[] = {"[SD:]", "[USB:]"};
-	if (host_usb_stick() == 0 || i < 0 || i >= 2)
+	int n;
+
+	if (i < 0)
 		return NULL;
-	return drives[i];
+	for (n = 0; n < HOST_USB_STICKS; n++) {
+		if (host_usb_stick(n) == 0)
+			continue;
+		if (i == 0)
+			return "[SD:]";
+		if (--i == 0)
+			return usb_drive_name[n];
+	}
+	return NULL;
 }
 
 const char *BMA_FileDriveDir(const char *name)
 {
+	int n;
+
 	if (strcmp(name, "[SD:]") == 0)
 		return sd_root();
-	if (strcmp(name, "[USB:]") == 0)
-		return host_usb_root();
+	for (n = 0; n < HOST_USB_STICKS; n++)
+		if (strcmp(name, usb_drive_name[n]) == 0)
+			return host_usb_root(n);
 	return NULL;
 }
 
@@ -814,7 +839,7 @@ void bma800xl_main(void)
 
 	atexit(bma_on_exit);
 
-	usb_stick = host_usb_stick();
+	read_usb_sticks();
 	if (!Atari800_Initialise(&argc, argv)) {
 		host_log("atari800 failed to start; see the serial log");
 		for (;;)
@@ -885,6 +910,6 @@ void bma800xl_main(void)
 			show_network_address();
 		}
 		handle_requests();
-		check_usb_stick();
+		check_usb_sticks();
 	}
 }

@@ -638,16 +638,30 @@ check_log powerkey "power off requested" "the power key powers off"
 run powerkeymenu 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n180 key 0x66 1\n182 key 0x66 0\n250 quit\n'
 check_log powerkeymenu "power off requested" "the power key in the menu powers off"
 
-echo "USB stick"
-# usb/ is the stick. A 720 sector disk on it, started at boot, is ejected
-# when the stick is pulled out. Its boot sector loads at $0700 and loops
-# (JMP $0706), so the Atari keeps running.
+echo "USB sticks"
+# usb/, usb2/ and usb3/ are the sticks. A 720 sector disk on one, started at
+# boot, is ejected when that stick is pulled out. Its boot sector loads at
+# $0700 and loops (JMP $0706), so the Atari keeps running.
 mkdir -p "$OUT/usbeject/usb"
 python3 -c "import sys; boot = bytes([0, 1, 0, 7, 6, 7, 0x4c, 6, 7]); sys.stdout.buffer.write(bytes([0x96, 2, 0x80, 0x16, 0x80, 0]) + bytes(10) + boot + bytes(720 * 128 - len(boot)))" \
     > "$OUT/usbeject/usb/blank.atr"
-(cd "$OUT/usbeject" && printf '150 usb 0\n160 quit\n' \
+(cd "$OUT/usbeject" && printf '150 usb 1 0\n160 quit\n' \
     | BMA_USB=1 BMA_REFRESH=50 BMA_CMDLINE="root=. autostart=usb/blank.atr" timeout 600 "$SIM" > log.txt 2>&1)
-check_log usbeject "D1: ejected" "a disk on the stick is ejected when it is pulled out"
+check_log usbeject "usb/ removed: D1: ejected" "a disk on the stick is ejected when it is pulled out"
+# Two sticks, the disk on the second: pulling out the first leaves it in,
+# pulling out the second ejects it.
+for pull in 1 2; do
+    mkdir -p "$OUT/usbtwo$pull/usb" "$OUT/usbtwo$pull/usb2"
+    cp "$OUT/usbeject/usb/blank.atr" "$OUT/usbtwo$pull/usb2/"
+    (cd "$OUT/usbtwo$pull" && printf "150 usb $pull 0\\n160 quit\\n" \
+        | BMA_USB=2 BMA_REFRESH=50 BMA_CMDLINE="root=. autostart=usb2/blank.atr" timeout 600 "$SIM" > log.txt 2>&1)
+done
+if grep -q "ejected" "$OUT/usbtwo1/log.txt"; then
+    fail "usbtwo1" "a disk on the second stick was ejected when the first was pulled out"
+else
+    pass "usbtwo1: pulling out the first stick leaves the second's disk in"
+fi
+check_log usbtwo2 "usb2/ removed: D1: ejected" "pulling out the second stick ejects its disk"
 # The file selector lists [SD:] and [USB:] first while the stick is in:
 # Alt+D, Return on D1, then Down to [USB:] and Return.
 mkdir -p "$OUT/usbfiles/usb"

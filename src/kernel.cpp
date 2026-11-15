@@ -18,7 +18,7 @@
 // frame buffer and sound handling come from it; the rest is BMA800XL's.
 //
 // Gamepad names and individual buttons use Circle's usb/usbgamepad.h and
-// device.h interfaces. The USB stick follows Circle's
+// device.h interfaces. The USB sticks follow Circle's
 // doc/usb-plug-and-play.txt and addon/fatfs/diskio.cpp.
 //
 
@@ -48,6 +48,10 @@ void bma800xl_main(void);
 }
 
 static const char FromKernel[] = "bma800xl";
+
+// FatFs volumes of the USB sticks umsd1..umsd3 (Circle's
+// addon/fatfs/ffconf.h FF_VOLUME_STRS and diskio.cpp).
+static const char *const kUSBVolume[HOST_USB_STICKS] = {"USB:", "USB2:", "USB3:"};
 
 // Sample rate the VideoCore plays audio at.
 #define HW_SAMPLE_RATE 44100
@@ -152,9 +156,14 @@ CKernel::CKernel(void)
       mAudioOut(VCHIQSoundDestinationAuto),
 #endif
       m_MergedModifiers(0),
-      m_KeyQueueHead(0), m_KeyQueueTail(0), m_pUSBStick(0), m_USBStick(0),
-      m_USBSticks(0), m_bGPIOJoysticks(false) {
+      m_KeyQueueHead(0), m_KeyQueueTail(0), m_USBSticks(0),
+      m_bGPIOJoysticks(false) {
   s_pThis = this;
+  for (unsigned i = 0; i < HOST_USB_STICKS; i++) {
+    m_pUSBStick[i] = 0;
+    m_USBStickIndex[i] = i;
+    m_USBStick[i] = 0;
+  }
   for (unsigned i = 0; i < MAX_KEYBOARDS; i++) {
     m_pKeyboard[i] = 0;
     m_KeyboardIndex[i] = i;
@@ -256,8 +265,10 @@ bool CKernel::Initialize(void) {
   if (!mUSBHCI.Initialize()) {
     return false;
   }
-  if (f_mount(&mUSBFileSystem, "USB:", 0) != FR_OK) {
-    mLogger.Write(FromKernel, LogError, "Cannot mount USB:");
+  for (unsigned i = 0; i < HOST_USB_STICKS; i++) {
+    if (f_mount(&mUSBFileSystem[i], kUSBVolume[i], 0) != FR_OK) {
+      mLogger.Write(FromKernel, LogError, "Cannot mount %s", kUSBVolume[i]);
+    }
   }
   mLog.Flush();
 
@@ -328,7 +339,7 @@ void CKernel::UpdateUSBPlugAndPlay(void) {
     SetupUSBKeyboards();
     SetupUSBGamePads();
     SetupUSBMice();
-    SetupUSBStick();
+    SetupUSBSticks();
   }
 }
 
@@ -336,7 +347,7 @@ TShutdownMode CKernel::Run(void) {
   SetupUSBKeyboards();
   SetupUSBGamePads();
   SetupUSBMice();
-  SetupUSBStick();
+  SetupUSBSticks();
   mLog.Flush();
   mStarting = false;
 
@@ -885,37 +896,42 @@ unsigned CKernel::Mouse(int *dx, int *dy) {
 }
 
 //
-// USB stick
+// USB sticks
 //
 
-// Core 0, task level. The stick's files are read and written by the
-// emulator, through FatFs, as "USB:/"; here it is only noted that one is
-// there.
-void CKernel::SetupUSBStick(void) {
-  if (m_pUSBStick != 0) {
-    return;
+// Core 0, task level. The sticks' files are read and written by the
+// emulator, through FatFs, as "USB:/", "USB2:/" and "USB3:/"; here it is
+// only noted which are there.
+void CKernel::SetupUSBSticks(void) {
+  for (unsigned i = 0; i < HOST_USB_STICKS; i++) {
+    if (m_pUSBStick[i] != 0) {
+      continue;
+    }
+    char name[16];
+    snprintf(name, sizeof name, "umsd%u", i + 1);
+    CDevice *stick = mDeviceNameService.GetDevice(name, TRUE);
+    if (stick == 0) {
+      continue;
+    }
+    stick->RegisterRemovedHandler(USBStickRemovedHandler, &m_USBStickIndex[i]);
+    m_pUSBStick[i] = stick;
+    if (++m_USBSticks == 0) {
+      m_USBSticks = 1;
+    }
+    m_USBStick[i] = m_USBSticks;
+    mLogger.Write(FromKernel, LogNotice, "USB stick connected as %s", kUSBVolume[i]);
   }
-  CDevice *stick = mDeviceNameService.GetDevice("umsd1", TRUE);
-  if (stick == 0) {
-    return;
-  }
-  stick->RegisterRemovedHandler(USBStickRemovedHandler);
-  m_pUSBStick = stick;
-  if (++m_USBSticks == 0) {
-    m_USBSticks = 1;
-  }
-  m_USBStick = m_USBSticks;
-  mLogger.Write(FromKernel, LogNotice, "USB stick connected");
 }
 
 void CKernel::USBStickRemovedHandler(CDevice *pDevice, void *pContext) {
   CKernel *k = s_pThis;
-  if (k == 0 || pDevice != k->m_pUSBStick) {
+  unsigned i = *(unsigned *)pContext;
+  if (k == 0 || i >= HOST_USB_STICKS || pDevice != k->m_pUSBStick[i]) {
     return;
   }
-  k->m_pUSBStick = 0;
-  k->m_USBStick = 0;
-  k->mLogger.Write(FromKernel, LogNotice, "USB stick removed");
+  k->m_pUSBStick[i] = 0;
+  k->m_USBStick[i] = 0;
+  k->mLogger.Write(FromKernel, LogNotice, "USB stick %s removed", kUSBVolume[i]);
 }
 
 //
@@ -1377,9 +1393,12 @@ int host_pad_input(int pad, struct host_pad_input *input) {
 
 unsigned host_mouse(int *dx, int *dy) { return CKernel::Get()->Mouse(dx, dy); }
 
-unsigned host_usb_stick(void) { return CKernel::Get()->USBStick(); }
+unsigned host_usb_stick(int n) { return CKernel::Get()->USBStick(n); }
 
-const char *host_usb_root(void) { return "USB:/"; }
+const char *host_usb_root(int n) {
+  static const char *const kRoot[HOST_USB_STICKS] = {"USB:/", "USB2:/", "USB3:/"};
+  return n >= 0 && n < HOST_USB_STICKS ? kRoot[n] : 0;
+}
 
 int host_gpio_joystick(int port) { return CKernel::Get()->GpioJoystick(port); }
 

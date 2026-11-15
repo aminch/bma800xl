@@ -32,7 +32,8 @@
  *   <frame> padaxis <n> <axis> <value> <min> <max>   set one raw axis
  *   <frame> padhat <n> <bits>     HOST_JOY_* directions, -1 for no D-pad
  *   <frame> gpio <n> <bits>        set GPIO joystick n to HOST_JOY_* bits
- *   <frame> usb <0|1>              pull out or plug in the USB stick (usb/)
+ *   <frame> usb <1-3> <0|1>        pull out or plug in USB stick 1-3 (usb/,
+ *                                  usb2/, usb3/)
  *   <frame> shot <file.ppm>        save the visible screen
  *   <frame> audio                  print audio statistics
  *   <frame> webui <reboot|coldstart>  a request from the web UI
@@ -347,20 +348,35 @@ unsigned host_mouse(int *dx, int *dy)
 	return mouse_buttons;
 }
 
-/* The USB stick is the folder usb/ in the test's directory. BMA_USB=1 has
-   it plugged in from the start; the script's "usb" command plugs it in or
-   pulls it out. */
-static unsigned usb_stick = (unsigned) -1;
+/* The USB sticks are the folders usb/, usb2/ and usb3/ in the test's
+   directory. BMA_USB=N has the first N plugged in from the start; the
+   script's "usb" command plugs one in or pulls it out. */
+static unsigned usb_stick[HOST_USB_STICKS];
 static unsigned usb_sticks;
+static int usb_started;
 
-unsigned host_usb_stick(void)
+static void usb_start(void)
 {
-	if (usb_stick == (unsigned) -1)
-		usb_stick = getenv("BMA_USB") ? ++usb_sticks : 0;
-	return usb_stick;
+	const char *env = getenv("BMA_USB");
+	int n, count = env ? atoi(env) : 0;
+	if (usb_started)
+		return;
+	usb_started = 1;
+	for (n = 0; n < count && n < HOST_USB_STICKS; n++)
+		usb_stick[n] = ++usb_sticks;
 }
 
-const char *host_usb_root(void) { return "usb/"; }
+unsigned host_usb_stick(int n)
+{
+	usb_start();
+	return n >= 0 && n < HOST_USB_STICKS ? usb_stick[n] : 0;
+}
+
+const char *host_usb_root(int n)
+{
+	static const char *const root[HOST_USB_STICKS] = {"usb/", "usb2/", "usb3/"};
+	return n >= 0 && n < HOST_USB_STICKS ? root[n] : NULL;
+}
 
 /* US layout: character to (usage, shift). */
 static int char_usage(int c, int *shift)
@@ -527,9 +543,13 @@ static void run_script(void)
 		} else if (strcmp(cmd, "mouse") == 0) {
 			sscanf(line + n, "%d %d %u", &mouse_dx, &mouse_dy, &mouse_buttons);
 		} else if (strcmp(cmd, "usb") == 0) {
-			int in = atoi(line + n);
-			host_usb_stick();
-			usb_stick = in ? ++usb_sticks : 0;
+			int stick, in;
+			if (sscanf(line + n, "%d %d", &stick, &in) != 2 || stick < 1 || stick > HOST_USB_STICKS) {
+				fprintf(stderr, "[sim] invalid usb command: %s\n", line);
+				exit(1);
+			}
+			usb_start();
+			usb_stick[stick - 1] = in ? ++usb_sticks : 0;
 		} else if (strcmp(cmd, "shot") == 0) {
 			screenshot(line + n + 1);
 		} else if (strcmp(cmd, "webui") == 0) {
