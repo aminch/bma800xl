@@ -121,7 +121,7 @@ async function showReleases() {
 
 async function showCardState() {
   try {
-    const data = await api.listDir("/");
+    const data = await api.listDir(null, "/");
     vol = data.vol || vol;
     const zip = (data.entries || []).find((e) => !e.dir && e.name.toLowerCase() === "bma800xl-update.zip");
     el("up-waiting").hidden = !zip;
@@ -133,7 +133,7 @@ async function showCardState() {
   // The report of the last update is in the one /backup/v<old> folder.
   el("up-last").hidden = true;
   try {
-    const dirs = ((await api.listDir("/backup")).entries || [])
+    const dirs = ((await api.listDir(vol, "/backup")).entries || [])
       .filter((e) => e.dir && /^v\d/.test(e.name))
       .sort((a, b) => compareVersions(b.name, a.name));
     for (const d of dirs) {
@@ -202,7 +202,7 @@ async function checkFile(file) {
     } else {
       info = checkOlderPackage(entries);
       older = true;
-      const root = (await api.listDir("/")).entries || [];
+      const root = (await api.listDir(vol, "/")).entries || [];
       if (!root.some((e) => !e.dir && e.name.toLowerCase() === MANIFEST)) {
         throw new Error("it is a release from before the updater, which BMA800XL recognises " +
                         "from the card's " + MANIFEST + ", and the card has none");
@@ -266,7 +266,7 @@ async function checkFile(file) {
 
   s = step("Space on the SD card");
   try {
-    const sd = ((await api.getVolumes()).volumes || [])[0];
+    const sd = ((await api.getVolumes()).volumes || []).find((v) => v.kind === "sdcard");
     const need = file.size + info.unpackedSize;
     if (sd && sd.free_kb * 1024 < need) {
       throw new Error("needs " + fmtBytes(need) + ", " + fmtBytes(sd.free_kb * 1024) + " free");
@@ -300,7 +300,7 @@ async function uploadPending() {
       overwrite: true,
       onProgress: (f) => { msg.textContent = "Uploading… " + Math.round(f * 100) + "%"; },
     });
-    const data = await api.listDir("/");
+    const data = await api.listDir(vol, "/");
     const zip = (data.entries || []).find((e) => e.name.toLowerCase() === "bma800xl-update.zip");
     if (!zip || zip.size !== file.size) throw new Error("the file on the card has the wrong size");
     msg.textContent = target + " is on the card. It is installed on the next boot.";
