@@ -2,9 +2,8 @@ name: Release
 
 # Pushing a tag starting with v (v1.0.0) builds the SD card files and
 # creates a draft release with them. The tag must match the
-# VERSION file. Each board is built on its own runner, alongside the PC
-# tests, and the release job puts their files together
-# c-cpp.yml does.
+# VERSION file. The PC tests run first, then each board is built on its
+# own runner, and the release job puts their files together.
 
 on:
   push:
@@ -15,12 +14,10 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  tests:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Verify tag matches VERSION
         env:
@@ -32,14 +29,8 @@ jobs:
             exit 1
           fi
 
-  tests:
-    needs: validate
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+      - name: Fetch atari800
+        run: git submodule update --init --depth 1 third_party/atari800
 
       - name: Install build tools
         run: |
@@ -57,7 +48,7 @@ jobs:
           fi
 
   build:
-    needs: validate
+    needs: tests
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -65,9 +56,13 @@ jobs:
         board: [pi0, pi2, pi3, pi4, pi5]
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+
+      # Only the submodules make_all.sh uses.
+      - name: Fetch submodules
+        run: |
+          git submodule update --init --depth 1 third_party/atari800 third_party/circle-stdlib
+          git -C third_party/circle-stdlib submodule update --init --depth 1 libs/circle libs/circle-newlib
+          git -C third_party/circle-stdlib/libs/circle submodule update --init --depth 1 addon/wlan/hostap
 
       - name: Install build tools
         run: |
@@ -91,21 +86,15 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # Needs no submodules: each board's build has already checked its files
+  # against them.
   release:
-    needs: [tests, build]
+    needs: build
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Install build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends zip
 
       - name: Put the boards' files together
         uses: actions/download-artifact@v4

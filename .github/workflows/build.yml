@@ -1,8 +1,8 @@
 name: Build
 
-# Builds each board on its own runner, alongside the PC tests, then puts
+# Runs the PC tests, then builds each board on its own runner, then puts
 # the boards' files together into one SD card that starts on any supported
-# Pi
+# Pi.
 
 on:
   # Tags are built by release.yml.
@@ -17,9 +17,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+
+      - name: Fetch atari800
+        run: git submodule update --init --depth 1 third_party/atari800
 
       - name: Install build tools
         run: |
@@ -37,6 +37,7 @@ jobs:
           fi
 
   build:
+    needs: tests
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -44,9 +45,13 @@ jobs:
         board: [pi0, pi2, pi3, pi4, pi5]
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+
+      # Only the submodules make_all.sh uses.
+      - name: Fetch submodules
+        run: |
+          git submodule update --init --depth 1 third_party/atari800 third_party/circle-stdlib
+          git -C third_party/circle-stdlib submodule update --init --depth 1 libs/circle libs/circle-newlib
+          git -C third_party/circle-stdlib/libs/circle submodule update --init --depth 1 addon/wlan/hostap
 
       - name: Install build tools
         run: |
@@ -71,14 +76,13 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # Needs no submodules: each board's build has already checked its files
+  # against them.
   sdcard:
-    needs: [tests, build]
+    needs: build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
 
       - name: Put the boards' files together
         uses: actions/download-artifact@v4
