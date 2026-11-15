@@ -35,10 +35,11 @@ any time, except in the second after something was written.
 ## USB sticks
 
 Disks, programs, cartridges and tapes can also be loaded from USB sticks
-(FAT32 or FAT16, up to three). While one is plugged in, atari800's file
-browser lists **[SD:]** and the sticks, **[USB:]**, **[USB2:]** and
-**[USB3:]**, first; choose one to go to that drive. The first stick plugged
-in is USB:, the next USB2:, and so on. Pulling a stick out ejects any disk
+(FAT32 or FAT16, up to three). While one is plugged in, the file browser
+has a **[Drives]** entry at the top, for a page listing **[SD:]** and the
+sticks, **[USB:]**, **[USB2:]** and **[USB3:]**; choose one to go to that
+drive.
+The first stick plugged in is USB:, the next USB2:, and so on. Pulling a stick out ejects any disk
 or tape loaded from it. Wait a second after the Atari last wrote to a disk
 on a stick before pulling it out.
 
@@ -71,7 +72,8 @@ to it. **Esc** goes back to the Atari. Settings changed there last until you
 switch off; use *Save Configuration* to keep them in `atari800.cfg`.
 
 In the file browser, use the arrow keys or D-pad, **Return**/**A** to choose,
-**Esc**/**B** to go back. Typing a letter jumps to files starting with it.
+**Esc**/**B** to go back. **[..]** (or **Backspace**) goes up a folder.
+Typing a letter jumps to files starting with it.
 
 ## Keyboard
 

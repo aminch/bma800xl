@@ -1,60 +1,161 @@
 diff --git a/src/ui_basic.c b/src/ui_basic.c
 --- a/src/ui_basic.c
 +++ b/src/ui_basic.c
-@@ -846,6 +846,13 @@
+@@ -846,6 +846,21 @@
  	free((void *) filenames);
  }
  
 +#ifdef BMA800XL
-+/* BMA800XL (src/port/platform.c): drives listed first, as "[SD:]", and the
-+   directory each one opens. */
++/* BMA800XL (src/port/platform.c): folders have a "[..]" entry, and, when
++   there is more than one drive, a "[Drives]" entry for a page listing them
++   ("[SD:]", "[USB:]"...). */
++extern const char *BMA_FileDrivesPage(void);
++extern int BMA_FileIsDrives(const char *dir);
 +extern const char *BMA_FileDrive(int i);
 +extern const char *BMA_FileDriveDir(const char *name);
++extern int BMA_FileParent(const char *dir, char *parent, char *name);
++extern const char *BMA_FileTitle(const char *dir);
++
++/* Where "[Drives]" is in filenames, or -1. */
++static int drives_index = -1;
 +#endif
 +
  static void GetDirectory(const char *directory)
  {
  #ifdef __DJGPP__
-@@ -861,6 +868,15 @@
+@@ -858,9 +873,33 @@
+ 	filenames = (const char **) Util_malloc(FILENAMES_INITIAL_SIZE * sizeof(const char *));
+ 	n_filenames = 0;
+ 
++#ifdef BMA800XL
++	drives_index = -1;
++	if (BMA_FileIsDrives(directory)) {
++		const char *drive;
++		while ((drive = BMA_FileDrive(n_filenames)) != NULL)
++			FilenamesAdd(Util_strdup(drive));
++		return;
++	}
++#endif
++
  	if (BasicUIOpenDir(directory)) {
  		char filename[FILENAME_MAX];
  		int isdir, ishidden;
 +#ifdef BMA800XL
-+		int n_drives = 0;
-+		const char *drive;
++		int n_up = 0;
++		char parent[FILENAME_MAX];
 +
-+		while ((drive = BMA_FileDrive(n_drives)) != NULL) {
-+			FilenamesAdd(Util_strdup(drive));
-+			n_drives++;
++		if (BMA_FileDrive(1) != NULL) {
++			drives_index = n_up;
++			FilenamesAdd(Util_strdup("[Drives]"));
++			n_up++;
++		}
++		if (BMA_FileParent(directory, parent, filename)) {
++			FilenamesAdd(Util_strdup("[..]"));
++			n_up++;
 +		}
 +#endif
  
  		while (BasicUIReadDir(filename, &isdir, &ishidden)) {
  			char *filename2;
-@@ -885,7 +901,11 @@
+@@ -869,6 +908,10 @@
+ 				(filename[0] == '.' && filename[1] == '\0') ||
+ 				(ishidden && !UI_show_hidden_files))
+ 				continue;
++#ifdef BMA800XL
++			if (strcmp(filename, "..") == 0)
++				continue;
++#endif
+ 
+ 			if (isdir) {
+ 				/* add directories as [dir] */
+@@ -885,7 +928,11 @@
  			FilenamesAdd(filename2);
  		}
  
 +#ifdef BMA800XL
-+		FilenamesSort(filenames + n_drives, filenames + n_filenames);
++		FilenamesSort(filenames + n_up, filenames + n_filenames);
 +#else
  		FilenamesSort(filenames, filenames + n_filenames);
 +#endif
  	}
  	else {
  		Log_print("Error opening '%s' directory", directory);
-@@ -1093,6 +1113,11 @@
+@@ -1020,7 +1067,11 @@
+ 			const char *selected_filename;
+ 
+ 			ClearScreen();
++#ifdef BMA800XL
++			TitleScreen(BMA_FileTitle(current_dir));
++#else
+ 			TitleScreen(current_dir);
++#endif
+ 			Box(0x9a, 0x94, 0, 1, 39, 23);
+ 
+ 			index = Select(index, n_filenames, filenames, NULL, NULL, NULL, NULL,
+@@ -1060,8 +1111,12 @@
+ 			if (seltype == UI_USER_DELETE) {
+ 				/* Backspace = parent directory */
+ 				char new_dir[FILENAME_MAX];
++#ifdef BMA800XL
++				if (BMA_FileParent(current_dir, new_dir, highlighted_file + 1)) {
++#else
+ 				Util_splitpath(current_dir, new_dir, highlighted_file + 1);
+ 				if (Util_direxists(new_dir)) {
++#endif
+ 					strcpy(current_dir, new_dir);
+ 					highlighted_file[0] = '[';
+ 					strcatchr(highlighted_file, ']');
+@@ -1070,6 +1125,10 @@
+ 				BasicUIMessage("Cannot enter parent directory", 1);
+ 				continue;
+ 			}
++#ifdef BMA800XL
++			if (seltype == UI_USER_TOGGLE && select_dir && BMA_FileIsDrives(current_dir))
++				continue;
++#endif
+ 			if (seltype == UI_USER_TOGGLE && select_dir) {
+ 				/* Space = select current directory */
+ 				strcpy(path, current_dir);
+@@ -1084,7 +1143,12 @@
+ 				highlighted_file[0] = '\0';
+ 				if (strcmp(selected_filename, "[..]") == 0) {
+ 					/* go up */
++#ifdef BMA800XL
++					if (!BMA_FileParent(current_dir, new_dir, highlighted_file + 1))
++						continue;
++#else
+ 					Util_splitpath(current_dir, new_dir, highlighted_file + 1);
++#endif
+ 					highlighted_file[0] = '[';
+ 					strcatchr(highlighted_file, ']');
+ 				}
+@@ -1093,6 +1157,14 @@
  					strcpy(new_dir, "mc0:/");
  				}
  #endif
 +#ifdef BMA800XL
-+				else if (BMA_FileDriveDir(selected_filename) != NULL) {
++				else if (index == drives_index) {
++					strcpy(new_dir, BMA_FileDrivesPage());
++				}
++				else if (BMA_FileIsDrives(current_dir) && BMA_FileDriveDir(selected_filename) != NULL) {
 +					strcpy(new_dir, BMA_FileDriveDir(selected_filename));
 +				}
 +#endif
  #ifdef DOS_DRIVES
  				else if (selected_filename[2] == ':' && selected_filename[3] == ']') {
  					/* disk selected */
+@@ -1111,7 +1183,11 @@
+ 					Util_catpath(new_dir, current_dir, selected_filename + 1);
+ 				}
+ 				/* check if new directory is valid */
++#ifdef BMA800XL
++				if (BMA_FileIsDrives(new_dir) || Util_direxists(new_dir)) {
++#else
+ 				if (Util_direxists(new_dir)) {
++#endif
+ 					strcpy(current_dir, new_dir);
+ 					break;
+ 				}
 diff --git a/src/util.c b/src/util.c
 --- a/src/util.c
 +++ b/src/util.c

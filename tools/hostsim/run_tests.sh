@@ -662,13 +662,16 @@ else
     pass "usbtwo1: pulling out the first stick leaves the second's disk in"
 fi
 check_log usbtwo2 "usb2/ removed: D1: ejected" "pulling out the second stick ejects its disk"
-# The file selector lists [SD:] and [USB:] first while the stick is in:
-# Alt+D, Return on D1, then Down to [USB:] and Return.
+# The file selector: with a stick in, folders start with [Drives], then
+# [..]; both go to the drive page from a drive's root. It lists [SD:] and
+# [USB:]. Alt+D, Return on D1, Return on [Drives], then Down to [USB:] and
+# Return.
 mkdir -p "$OUT/usbfiles/usb"
 cp "$OUT/usbeject/usb/blank.atr" "$OUT/usbfiles/usb/"
-(cd "$OUT/usbfiles" && printf '150 key 0xe2 1\n152 key 0x07 1\n154 key 0x07 0\n156 key 0xe2 0\n190 key 0x28 1\n192 key 0x28 0\n220 shot sd.ppm\n230 key 0x51 1\n232 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n270 shot usb.ppm\n280 quit\n' \
+(cd "$OUT/usbfiles" && printf '150 key 0xe2 1\n152 key 0x07 1\n154 key 0x07 0\n156 key 0xe2 0\n190 key 0x28 1\n192 key 0x28 0\n220 shot root.ppm\n230 key 0x28 1\n232 key 0x28 0\n260 shot drives.ppm\n270 key 0x51 1\n272 key 0x51 0\n280 key 0x28 1\n282 key 0x28 0\n310 shot usb.ppm\n320 quit\n' \
     | BMA_USB=1 BMA_REFRESH=50 BMA_CMDLINE="root=." timeout 600 "$SIM" > log.txt 2>&1)
-check_image usbfiles sd
+check_image usbfiles root
+check_image usbfiles drives
 check_image usbfiles usb
 
 echo "Configuration saved"

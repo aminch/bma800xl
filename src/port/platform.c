@@ -488,21 +488,71 @@ static void check_usb_sticks(void)
 	}
 }
 
-/* [SD:], then the sticks plugged in, while there is at least one. */
+/* ---- File selector ---------------------------------------------------------- */
+
+/* atari800's file selector (src/patches/atari800_ui_basic_drives.diff):
+   folders have a "[..]" entry and, while a stick is plugged in, a
+   "[Drives]" entry for a page listing the drives, which is also the page
+   above a drive's root. */
+
+/* The drive page's directory name, which no file system path can be. */
+#define DRIVES_PAGE "<drives>"
+
+/* The same directory, ignoring case and trailing slashes. */
+static int same_dir(const char *a, const char *b)
+{
+	size_t la = strlen(a), lb = strlen(b);
+	while (la > 1 && a[la - 1] == '/')
+		la--;
+	while (lb > 1 && b[lb - 1] == '/')
+		lb--;
+	return la == lb && strncasecmp(a, b, la) == 0;
+}
+
+/* The drive page's entry for DIR when it is a drive's root, or NULL. */
+static const char *root_drive(const char *dir)
+{
+	char cwd[FILENAME_MAX];
+	int n;
+
+	if (same_dir(dir, sd_root()) || same_dir(dir, "/") || same_dir(dir, "SD:/")
+	    || (getcwd(cwd, sizeof(cwd)) != NULL && same_dir(dir, cwd)))
+		return "[SD:]";
+	for (n = 0; n < HOST_USB_STICKS; n++)
+		if (same_dir(dir, host_usb_root(n)))
+			return usb_drive_name[n];
+	return NULL;
+}
+
+static int any_usb_stick(void)
+{
+	int n;
+	for (n = 0; n < HOST_USB_STICKS; n++)
+		if (host_usb_stick(n) != 0)
+			return TRUE;
+	return FALSE;
+}
+
+const char *BMA_FileDrivesPage(void)
+{
+	return DRIVES_PAGE;
+}
+
+int BMA_FileIsDrives(const char *dir)
+{
+	return strcmp(dir, DRIVES_PAGE) == 0;
+}
+
+/* [SD:], then the sticks plugged in. */
 const char *BMA_FileDrive(int i)
 {
 	int n;
 
-	if (i < 0)
-		return NULL;
-	for (n = 0; n < HOST_USB_STICKS; n++) {
-		if (host_usb_stick(n) == 0)
-			continue;
-		if (i == 0)
-			return "[SD:]";
-		if (--i == 0)
+	if (i == 0)
+		return "[SD:]";
+	for (n = 0; n < HOST_USB_STICKS; n++)
+		if (host_usb_stick(n) != 0 && --i == 0)
 			return usb_drive_name[n];
-	}
 	return NULL;
 }
 
@@ -516,6 +566,47 @@ const char *BMA_FileDriveDir(const char *name)
 		if (strcmp(name, usb_drive_name[n]) == 0)
 			return host_usb_root(n);
 	return NULL;
+}
+
+/* The folder above DIR in PARENT, and DIR's name in it in NAME (both
+   FILENAME_MAX). A drive's root has the drive page above it while a stick
+   is plugged in. Returns FALSE if there is nothing above. */
+int BMA_FileParent(const char *dir, char *parent, char *name)
+{
+	const char *drive;
+	size_t len;
+
+	if (BMA_FileIsDrives(dir))
+		return FALSE;
+	drive = root_drive(dir);
+	if (drive != NULL) {
+		if (!any_usb_stick())
+			return FALSE;
+		/* "[USB:]" without its brackets */
+		len = strlen(drive) - 2;
+		memcpy(name, drive + 1, len);
+		name[len] = '\0';
+		strcpy(parent, DRIVES_PAGE);
+		return TRUE;
+	}
+	Util_splitpath(dir, parent, name);
+	return parent[0] != '\0';
+}
+
+/* The title: the folder with its drive ("SD:/games"), or "Drives". */
+const char *BMA_FileTitle(const char *dir)
+{
+	static char title[FILENAME_MAX];
+
+	if (BMA_FileIsDrives(dir))
+		return "Drives";
+	if (root_drive(dir) != NULL && strcmp(root_drive(dir), "[SD:]") == 0)
+		return "SD:/";
+	if (dir[0] == '/' && strcmp(sd_root(), "/") == 0) {
+		snprintf(title, sizeof(title), "SD:%s", dir);
+		return title;
+	}
+	return dir;
 }
 
 /* ---- Configuration ---------------------------------------------------------- */
