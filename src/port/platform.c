@@ -35,11 +35,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 
 #include "afile.h"
 #include "akey.h"
 #include "atari.h"
+#include "cassette.h"
 #include "colours.h"
 #include "cpu.h"
 #include "input.h"
@@ -435,6 +437,62 @@ static void sync_files(void)
 		fsync(fd);
 }
 
+/* ---- USB stick -------------------------------------------------------------- */
+
+static const char *sd_root(void);
+
+/* The stick the media were loaded from, as host_usb_stick() numbers them. */
+static unsigned usb_stick;
+
+static int on_usb_stick(const char *path)
+{
+	const char *root = host_usb_root();
+	return strncasecmp(path, root, strlen(root)) == 0;
+}
+
+/* Disk and cassette images are read from their files while they are in;
+   when the stick they are on is pulled out or swapped, they are ejected.
+   Cartridges are loaded into memory and stay. */
+static void check_usb_stick(void)
+{
+	unsigned stick = host_usb_stick();
+	int i;
+
+	if (stick == usb_stick)
+		return;
+	if (usb_stick != 0) {
+		for (i = 0; i < SIO_MAX_DRIVES; i++) {
+			if ((SIO_drive_status[i] == SIO_READ_ONLY || SIO_drive_status[i] == SIO_READ_WRITE)
+			    && on_usb_stick(SIO_filename[i])) {
+				Log_print("USB stick removed: D%d: ejected", i + 1);
+				SIO_Dismount(i + 1);
+			}
+		}
+		if (CASSETTE_status != CASSETTE_STATUS_NONE && on_usb_stick(CASSETTE_filename)) {
+			Log_print("USB stick removed: cassette ejected");
+			CASSETTE_Remove();
+		}
+	}
+	usb_stick = stick;
+}
+
+const char *BMA_FileDrive(int i)
+{
+	static const char *const drives[] = {"[SD:]", "[USB:]"};
+	if (host_usb_stick() == 0 || i < 0 || i >= 2)
+		return NULL;
+	return drives[i];
+}
+
+const char *BMA_FileDriveDir(const char *name)
+{
+	if (strcmp(name, "[SD:]") == 0)
+		return sd_root();
+	if (strcmp(name, "[USB:]") == 0)
+		return host_usb_root();
+	return NULL;
+}
+
 /* ---- Configuration ---------------------------------------------------------- */
 
 void PLATFORM_ConfigInit(void)
@@ -756,6 +814,7 @@ void bma800xl_main(void)
 
 	atexit(bma_on_exit);
 
+	usb_stick = host_usb_stick();
 	if (!Atari800_Initialise(&argc, argv)) {
 		host_log("atari800 failed to start; see the serial log");
 		for (;;)
@@ -826,5 +885,6 @@ void bma800xl_main(void)
 			show_network_address();
 		}
 		handle_requests();
+		check_usb_stick();
 	}
 }

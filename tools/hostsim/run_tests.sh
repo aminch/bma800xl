@@ -638,6 +638,25 @@ check_log powerkey "power off requested" "the power key powers off"
 run powerkeymenu 50 "" '150 key 0x3a 1\n152 key 0x3a 0\n180 key 0x66 1\n182 key 0x66 0\n250 quit\n'
 check_log powerkeymenu "power off requested" "the power key in the menu powers off"
 
+echo "USB stick"
+# usb/ is the stick. A 720 sector disk on it, started at boot, is ejected
+# when the stick is pulled out. Its boot sector loads at $0700 and loops
+# (JMP $0706), so the Atari keeps running.
+mkdir -p "$OUT/usbeject/usb"
+python3 -c "import sys; boot = bytes([0, 1, 0, 7, 6, 7, 0x4c, 6, 7]); sys.stdout.buffer.write(bytes([0x96, 2, 0x80, 0x16, 0x80, 0]) + bytes(10) + boot + bytes(720 * 128 - len(boot)))" \
+    > "$OUT/usbeject/usb/blank.atr"
+(cd "$OUT/usbeject" && printf '150 usb 0\n160 quit\n' \
+    | BMA_USB=1 BMA_REFRESH=50 BMA_CMDLINE="root=. autostart=usb/blank.atr" timeout 600 "$SIM" > log.txt 2>&1)
+check_log usbeject "D1: ejected" "a disk on the stick is ejected when it is pulled out"
+# The file selector lists [SD:] and [USB:] first while the stick is in:
+# Alt+D, Return on D1, then Down to [USB:] and Return.
+mkdir -p "$OUT/usbfiles/usb"
+cp "$OUT/usbeject/usb/blank.atr" "$OUT/usbfiles/usb/"
+(cd "$OUT/usbfiles" && printf '150 key 0xe2 1\n152 key 0x07 1\n154 key 0x07 0\n156 key 0xe2 0\n190 key 0x28 1\n192 key 0x28 0\n220 shot sd.ppm\n230 key 0x51 1\n232 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n270 shot usb.ppm\n280 quit\n' \
+    | BMA_USB=1 BMA_REFRESH=50 BMA_CMDLINE="root=." timeout 600 "$SIM" > log.txt 2>&1)
+check_image usbfiles sd
+check_image usbfiles usb
+
 echo "Configuration saved"
 check_log basic "Writing config file" "atari800.cfg written"
 if grep -q "^DISABLE_BASIC=0" "$OUT/basic/atari800.cfg" 2>/dev/null; then

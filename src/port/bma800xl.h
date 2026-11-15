@@ -39,6 +39,12 @@ int BMA_CapturePadKey(void);
 /* platform.c */
 void bma800xl_main(void);
 const char *BMA_SdRoot(void);
+/* The drives atari800's file selector lists first ("[SD:]", "[USB:]") while
+   a USB stick is in: BMA_FileDrive(i) is the Ith, or NULL after the last;
+   BMA_FileDriveDir() the directory one opens, or NULL if NAME isn't one
+   (src/patches/atari800_ui_basic_drives.diff). */
+const char *BMA_FileDrive(int i);
+const char *BMA_FileDriveDir(const char *name);
 double BMA_RefreshRate(void);
 void BMA_VideoSettingsChanged(void);
 void BMA_DisplayModeChanged(void);

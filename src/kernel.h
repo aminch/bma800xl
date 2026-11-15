@@ -127,6 +127,7 @@ public:
   uint32_t PadButtons(int pad);
   int PadInput(int pad, struct host_pad_input *input);
   unsigned Mouse(int *dx, int *dy);
+  unsigned USBStick(void) const { return m_USBStick; }
   int GpioJoystick(int port);
   double Time(void);
   void Reboot(void);
@@ -149,6 +150,7 @@ private:
                                  int nDisplacementY, int nWheelMove,
                                  void *pArg);
   static void MouseRemovedHandler(CDevice *pDevice, void *pContext);
+  static void USBStickRemovedHandler(CDevice *pDevice, void *pContext);
 
 public:
   // Core 0, task level: sets up USB devices that were plugged in.
@@ -158,6 +160,7 @@ private:
   void SetupUSBKeyboards(void);
   void SetupUSBGamePads(void);
   void SetupUSBMice(void);
+  void SetupUSBStick(void);
   void SetupGPIOJoysticks(void);
   void PushKeyEvent(int usage, int pressed);
   void UpdateMergedKeys(void);
@@ -187,6 +190,11 @@ private:
 #endif
   CEMMCDevice mEMMC;
   FATFS mFileSystem;
+  // The USB stick (umsd1) as the FatFs volume "USB:". Mounted once at boot
+  // without reading it; FatFs reads the stick in when it is first used, and
+  // again after it has been pulled out or swapped (Circle's
+  // addon/fatfs/diskio.cpp drops a removed device).
+  FATFS mUSBFileSystem;
   CUSBHCIDevice mUSBHCI;
   CConsole mConsole;
 #ifdef ARM_ALLOW_MULTI_CORE
@@ -250,6 +258,12 @@ private:
   unsigned m_MouseLastReport = 0;  // clock ticks
   int m_MouseX = 0, m_MouseY = 0;
   int m_MouseReadX = 0, m_MouseReadY = 0;  // position given to the emulator
+
+  // The USB stick plugged in, set on core 0 and read by the emulator on
+  // core 1 (host_usb_stick()): its number, or 0 when there is none.
+  CDevice *m_pUSBStick;
+  volatile unsigned m_USBStick;
+  unsigned m_USBSticks;  // sticks plugged in since boot
 
   bool m_bGPIOJoysticks;
   CGPIOPin *m_pJoyPins[2][5];

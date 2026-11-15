@@ -162,6 +162,14 @@ int host_gpio_joystick(int port);
    All mice are added together. */
 unsigned host_mouse(int *dx, int *dy);
 
+/* ---- USB stick ----------------------------------------------------------- */
+
+/* A number for the USB stick plugged in now, different for each stick
+   plugged in since boot, or 0 when there is none. */
+unsigned host_usb_stick(void);
+/* The directory holding the stick's files ("USB:/"). */
+const char *host_usb_root(void);
+
 /* ---- System -------------------------------------------------------------- */
 
 void host_reboot(void);

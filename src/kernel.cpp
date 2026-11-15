@@ -18,7 +18,8 @@
 // frame buffer and sound handling come from it; the rest is BMA800XL's.
 //
 // Gamepad names and individual buttons use Circle's usb/usbgamepad.h and
-// device.h interfaces.
+// device.h interfaces. The USB stick follows Circle's
+// doc/usb-plug-and-play.txt and addon/fatfs/diskio.cpp.
 //
 
 #include "kernel.h"
@@ -151,7 +152,8 @@ CKernel::CKernel(void)
       mAudioOut(VCHIQSoundDestinationAuto),
 #endif
       m_MergedModifiers(0),
-      m_KeyQueueHead(0), m_KeyQueueTail(0), m_bGPIOJoysticks(false) {
+      m_KeyQueueHead(0), m_KeyQueueTail(0), m_pUSBStick(0), m_USBStick(0),
+      m_USBSticks(0), m_bGPIOJoysticks(false) {
   s_pThis = this;
   for (unsigned i = 0; i < MAX_KEYBOARDS; i++) {
     m_pKeyboard[i] = 0;
@@ -254,6 +256,9 @@ bool CKernel::Initialize(void) {
   if (!mUSBHCI.Initialize()) {
     return false;
   }
+  if (f_mount(&mUSBFileSystem, "USB:", 0) != FR_OK) {
+    mLogger.Write(FromKernel, LogError, "Cannot mount USB:");
+  }
   mLog.Flush();
 
   const char *audio_out = mOptions.Get("audio_out", "auto");
@@ -323,6 +328,7 @@ void CKernel::UpdateUSBPlugAndPlay(void) {
     SetupUSBKeyboards();
     SetupUSBGamePads();
     SetupUSBMice();
+    SetupUSBStick();
   }
 }
 
@@ -330,6 +336,7 @@ TShutdownMode CKernel::Run(void) {
   SetupUSBKeyboards();
   SetupUSBGamePads();
   SetupUSBMice();
+  SetupUSBStick();
   mLog.Flush();
   mStarting = false;
 
@@ -878,6 +885,40 @@ unsigned CKernel::Mouse(int *dx, int *dy) {
 }
 
 //
+// USB stick
+//
+
+// Core 0, task level. The stick's files are read and written by the
+// emulator, through FatFs, as "USB:/"; here it is only noted that one is
+// there.
+void CKernel::SetupUSBStick(void) {
+  if (m_pUSBStick != 0) {
+    return;
+  }
+  CDevice *stick = mDeviceNameService.GetDevice("umsd1", TRUE);
+  if (stick == 0) {
+    return;
+  }
+  stick->RegisterRemovedHandler(USBStickRemovedHandler);
+  m_pUSBStick = stick;
+  if (++m_USBSticks == 0) {
+    m_USBSticks = 1;
+  }
+  m_USBStick = m_USBSticks;
+  mLogger.Write(FromKernel, LogNotice, "USB stick connected");
+}
+
+void CKernel::USBStickRemovedHandler(CDevice *pDevice, void *pContext) {
+  CKernel *k = s_pThis;
+  if (k == 0 || pDevice != k->m_pUSBStick) {
+    return;
+  }
+  k->m_pUSBStick = 0;
+  k->m_USBStick = 0;
+  k->mLogger.Write(FromKernel, LogNotice, "USB stick removed");
+}
+
+//
 // GPIO joysticks
 //
 
@@ -1335,6 +1376,10 @@ int host_pad_input(int pad, struct host_pad_input *input) {
 }
 
 unsigned host_mouse(int *dx, int *dy) { return CKernel::Get()->Mouse(dx, dy); }
+
+unsigned host_usb_stick(void) { return CKernel::Get()->USBStick(); }
+
+const char *host_usb_root(void) { return "USB:/"; }
 
 int host_gpio_joystick(int port) { return CKernel::Get()->GpioJoystick(port); }
 

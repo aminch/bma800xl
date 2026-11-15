@@ -2,6 +2,7 @@
 
 - [BMA800XL User Guide](#bma800xl-user-guide)
   - [The SD card](#the-sd-card)
+  - [USB stick](#usb-stick)
   - [The menu](#the-menu)
   - [Keyboard](#keyboard)
   - [Joysticks](#joysticks)
@@ -30,6 +31,14 @@ The card must be FAT32. BMA800XL writes to it when you save the
 configuration, save state, or write to a disk image from the Atari. Open
 files are flushed to the card every second, so it is safe to switch off at
 any time, except in the second after something was written.
+
+## USB stick
+
+Disks, programs, cartridges and tapes can also be loaded from a USB stick
+(FAT32 or FAT16, one stick). While one is plugged in, atari800's file browser
+lists **[SD:]** and **[USB:]** first; choose one to go to that drive.
+Pulling the stick out ejects any disk or tape loaded from it. Wait a second
+after the Atari last wrote to a disk on the stick before pulling it out.
 
 ## The menu
 

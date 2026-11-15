@@ -1,0 +1,73 @@
+diff --git a/src/ui_basic.c b/src/ui_basic.c
+--- a/src/ui_basic.c
++++ b/src/ui_basic.c
+@@ -846,6 +846,13 @@
+ 	free((void *) filenames);
+ }
+ 
++#ifdef BMA800XL
++/* BMA800XL (src/port/platform.c): drives listed first, as "[SD:]", and the
++   directory each one opens. */
++extern const char *BMA_FileDrive(int i);
++extern const char *BMA_FileDriveDir(const char *name);
++#endif
++
+ static void GetDirectory(const char *directory)
+ {
+ #ifdef __DJGPP__
+@@ -861,6 +868,15 @@
+ 	if (BasicUIOpenDir(directory)) {
+ 		char filename[FILENAME_MAX];
+ 		int isdir, ishidden;
++#ifdef BMA800XL
++		int n_drives = 0;
++		const char *drive;
++
++		while ((drive = BMA_FileDrive(n_drives)) != NULL) {
++			FilenamesAdd(Util_strdup(drive));
++			n_drives++;
++		}
++#endif
+ 
+ 		while (BasicUIReadDir(filename, &isdir, &ishidden)) {
+ 			char *filename2;
+@@ -885,7 +901,11 @@
+ 			FilenamesAdd(filename2);
+ 		}
+ 
++#ifdef BMA800XL
++		FilenamesSort(filenames + n_drives, filenames + n_filenames);
++#else
+ 		FilenamesSort(filenames, filenames + n_filenames);
++#endif
+ 	}
+ 	else {
+ 		Log_print("Error opening '%s' directory", directory);
+@@ -1093,6 +1113,11 @@
+ 					strcpy(new_dir, "mc0:/");
+ 				}
+ #endif
++#ifdef BMA800XL
++				else if (BMA_FileDriveDir(selected_filename) != NULL) {
++					strcpy(new_dir, BMA_FileDriveDir(selected_filename));
++				}
++#endif
+ #ifdef DOS_DRIVES
+ 				else if (selected_filename[2] == ':' && selected_filename[3] == ']') {
+ 					/* disk selected */
+diff --git a/src/util.c b/src/util.c
+--- a/src/util.c
++++ b/src/util.c
+@@ -336,7 +336,12 @@
+ 		   ) {
+ 			if (dir_part != NULL) {
+ 				int len = p - path;
++#ifdef BMA800XL
++				/* a volume such as "USB:/" */
++				if (p == path || p[-1] == ':')
++#else
+ 				if (p == path || (p == path + 2 && path[1] == ':'))
++#endif
+ 					/* root dir: include Util_DIR_SEP_CHAR in dir_part */
+ 					len++;
+ 				memcpy(dir_part, path, len);

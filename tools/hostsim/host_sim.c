@@ -32,6 +32,7 @@
  *   <frame> padaxis <n> <axis> <value> <min> <max>   set one raw axis
  *   <frame> padhat <n> <bits>     HOST_JOY_* directions, -1 for no D-pad
  *   <frame> gpio <n> <bits>        set GPIO joystick n to HOST_JOY_* bits
+ *   <frame> usb <0|1>              pull out or plug in the USB stick (usb/)
  *   <frame> shot <file.ppm>        save the visible screen
  *   <frame> audio                  print audio statistics
  *   <frame> webui <reboot|coldstart>  a request from the web UI
@@ -346,6 +347,21 @@ unsigned host_mouse(int *dx, int *dy)
 	return mouse_buttons;
 }
 
+/* The USB stick is the folder usb/ in the test's directory. BMA_USB=1 has
+   it plugged in from the start; the script's "usb" command plugs it in or
+   pulls it out. */
+static unsigned usb_stick = (unsigned) -1;
+static unsigned usb_sticks;
+
+unsigned host_usb_stick(void)
+{
+	if (usb_stick == (unsigned) -1)
+		usb_stick = getenv("BMA_USB") ? ++usb_sticks : 0;
+	return usb_stick;
+}
+
+const char *host_usb_root(void) { return "usb/"; }
+
 /* US layout: character to (usage, shift). */
 static int char_usage(int c, int *shift)
 {
@@ -510,6 +526,10 @@ static void run_script(void)
 			gpio_joysticks[port] = bits;
 		} else if (strcmp(cmd, "mouse") == 0) {
 			sscanf(line + n, "%d %d %u", &mouse_dx, &mouse_dy, &mouse_buttons);
+		} else if (strcmp(cmd, "usb") == 0) {
+			int in = atoi(line + n);
+			host_usb_stick();
+			usb_stick = in ? ++usb_sticks : 0;
 		} else if (strcmp(cmd, "shot") == 0) {
 			screenshot(line + n + 1);
 		} else if (strcmp(cmd, "webui") == 0) {
