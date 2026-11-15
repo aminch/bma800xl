@@ -20,7 +20,8 @@
 #
 # Modified for BMA800XL from BMC64's tools/webui_dev_server.py: mocks
 # BMA800XL's /api/* (its machine, header, protected and editable files and
-# run types), without BMC64's Profiles page and its tools/webui_test/ run.
+# run types), without BMC64's Profiles page and its tools/webui_test/ run;
+# USB sticks (--usb).
 #
 
 """Local preview server for the BMA800XL web UI.
@@ -32,6 +33,8 @@ without a Raspberry Pi.
 
     python3 tools/webui_dev_server.py            # http://localhost:8000
     python3 tools/webui_dev_server.py --root ~/  # browse a real folder
+    python3 tools/webui_dev_server.py --usb /tmp/stick  # this folder as the USB stick
+    python3 tools/webui_dev_server.py --no-usb   # no USB stick (default: build/webui_dev_usb)
     python3 tools/webui_dev_server.py --no-watch # disable live reload
 
 With live reload on (default) the browser refreshes whenever a file in
@@ -85,6 +88,11 @@ RELOAD_SNIPPET = """
 })();
 </script>
 """
+
+# The USB sticks' volumes (webui_fs.cpp), and the folder that is the stick
+# unless --usb or --no-usb says otherwise.
+USB_VOLUMES = ["USB", "USB2", "USB3"]
+DEFAULT_USB = os.path.join(REPO_ROOT, "build", "webui_dev_usb")
 
 # Largest file the editor will open or save (matches webui_fs.cpp).
 EDIT_MAX = 256 * 1024
@@ -300,18 +308,21 @@ class Handler(BaseHTTPRequestHandler):
         })
 
     def api_volumes(self):
-        usage = os.statvfs(ARGS.root)
-        total_kb = usage.f_blocks * usage.f_frsize // 1024
-        free_kb = usage.f_bavail * usage.f_frsize // 1024
-        self._json(200, {"volumes": [{
-            "id": "SD", "kind": "sdcard",
-            "total_kb": total_kb, "free_kb": free_kb,
-        }]})
+        volumes = []
+        for i, root in enumerate([ARGS.root] + ARGS.usb):
+            usage = os.statvfs(root)
+            volumes.append({
+                "id": "SD" if i == 0 else USB_VOLUMES[i - 1],
+                "kind": "sdcard" if i == 0 else "usb",
+                "total_kb": usage.f_blocks * usage.f_frsize // 1024,
+                "free_kb": usage.f_bavail * usage.f_frsize // 1024,
+            })
+        self._json(200, {"volumes": volumes})
 
     def api_fs_list(self, query):
         q = urllib.parse.parse_qs(query)
         rel = (q.get("path") or ["/"])[0]
-        target = safe_join(ARGS.root, rel)
+        target = self.vol_join(q, rel)
         if target is None or not os.path.isdir(target):
             return self._send(404, "no such directory\n")
         entries = []
@@ -338,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
             if len(entries) >= 6000:
                 break
         self._json(200, {
-            "vol": "SD",
+            "vol": (q.get("vol") or ["SD"])[0],
             "path": "/" + "/".join(p for p in rel.split("/") if p not in ("", ".")),
             "entries": entries,
             "truncated": False,
@@ -347,7 +358,7 @@ class Handler(BaseHTTPRequestHandler):
     def api_fs_download(self, query):
         q = urllib.parse.parse_qs(query)
         rel = (q.get("path") or [""])[0]
-        target = safe_join(ARGS.root, rel)
+        target = self.vol_join(q, rel)
         if target is None or not os.path.isfile(target):
             return self._send(404, "cannot open file\n")
         with open(target, "rb") as fh:
@@ -361,19 +372,33 @@ class Handler(BaseHTTPRequestHandler):
     # editor's save endpoint may change EDITABLE files (root folder only).
     CONFIG_FILES = {"wpa_supplicant.conf", "cmdline.txt", "config.txt"}
     PROTECTED = CONFIG_FILES
+    # Set by vol_join: the request is for the SD card.
+    on_sd = True
     EDITABLE = CONFIG_FILES | {"atari800.cfg", "bma800xl.cfg"}
 
-    @classmethod
-    def is_protected(cls, parts):
-        """parts: the path segments below --root, the name last. The entries
-        the device will not rename or delete."""
-        return bool(parts) and (parts[0].lower() == "firmware"
-                                or parts[-1].lower() in cls.PROTECTED)
+    def is_protected(self, parts):
+        """parts: the path segments below the volume's root, the name last.
+        The entries the device will not rename or delete (on the SD card)."""
+        return self.on_sd and bool(parts) and (parts[0].lower() == "firmware"
+                                               or parts[-1].lower() in self.PROTECTED)
 
-    @classmethod
-    def is_editable(cls, parts):
-        """parts: the path segments below --root, the file name last."""
-        return len(parts) == 1 and parts[0].lower() in cls.EDITABLE
+    def is_editable(self, parts):
+        """parts: the path segments below the volume's root, the file name
+        last. Only on the SD card."""
+        return self.on_sd and len(parts) == 1 and parts[0].lower() in self.EDITABLE
+
+    def vol_join(self, q, rel):
+        """The file for the request's vol and path: the SD card is --root,
+        USB, USB2 and USB3 the --usb folders. None for an unknown volume or
+        an unsafe path."""
+        vol = (q.get("vol") or ["SD"])[0]
+        self.on_sd = vol == "SD"
+        if self.on_sd:
+            return safe_join(ARGS.root, rel)
+        for i, root in enumerate(ARGS.usb):
+            if vol == USB_VOLUMES[i]:
+                return safe_join(root, rel)
+        return None
 
     def api_fs_upload(self, query):
         length = self.headers.get("Content-Length")
@@ -383,13 +408,12 @@ class Handler(BaseHTTPRequestHandler):
         length = int(length)
         q = urllib.parse.parse_qs(query)
         rel = (q.get("path") or [""])[0]
-        target = safe_join(ARGS.root, rel)
+        target = self.vol_join(q, rel)
         if target is None or rel in ("", "/"):
             self._drain_body()
             return self._send(400, "bad path\n")
         parts = [p for p in rel.split("/") if p not in ("", ".")]
-        if (parts and parts[0].lower() == "firmware") or \
-           os.path.basename(target).lower() in self.PROTECTED:
+        if self.is_protected(parts):
             self._drain_body()
             return self._send(403, "that path is protected\n")
         if os.path.isdir(target):
@@ -440,7 +464,7 @@ class Handler(BaseHTTPRequestHandler):
         length = int(length)
         q = urllib.parse.parse_qs(query)
         rel = (q.get("path") or [""])[0]
-        target = safe_join(ARGS.root, rel)
+        target = self.vol_join(q, rel)
         parts = [p for p in rel.split("/") if p not in ("", ".")]
         if target is None or not self.is_editable(parts):
             self._drain_body()
@@ -472,7 +496,7 @@ class Handler(BaseHTTPRequestHandler):
         self._drain_body()
         q = urllib.parse.parse_qs(query)
         rel = (q.get("path") or [""])[0]
-        target = safe_join(ARGS.root, rel)
+        target = self.vol_join(q, rel)
         if target is None or rel in ("", "/"):
             return self._send(400, "bad path\n")
         ext = os.path.splitext(target)[1].lstrip(".").lower()
@@ -487,12 +511,11 @@ class Handler(BaseHTTPRequestHandler):
         self._drain_body()
         q = urllib.parse.parse_qs(query)
         rel = (q.get("path") or [""])[0]
-        target = safe_join(ARGS.root, rel)
+        target = self.vol_join(q, rel)
         if target is None or rel in ("", "/"):
             return self._send(400, "bad path\n")
         parts = [p for p in rel.split("/") if p not in ("", ".")]
-        if (parts and parts[0].lower() == "firmware") or \
-           os.path.basename(target).lower() in self.PROTECTED:
+        if self.is_protected(parts):
             return self._send(403, "that path is protected\n")
         # Like the device: any "recursive" parameter needs the custom header,
         # and =1 deletes a folder together with its contents.
@@ -528,7 +551,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, "missing X-BMA800XL-Web header\n")
         q = urllib.parse.parse_qs(query)
         rel = (q.get("path") or [""])[0]
-        target = safe_join(ARGS.root, rel)
+        target = self.vol_join(q, rel)
         parts = [p for p in rel.split("/") if p not in ("", ".")]
         if target is None or not parts:
             return self._send(400, "bad path\n")
@@ -554,7 +577,7 @@ class Handler(BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(query)
         rel = (q.get("path") or [""])[0]
         new_name = (q.get("to") or [""])[0]
-        target = safe_join(ARGS.root, rel)
+        target = self.vol_join(q, rel)
         parts = [p for p in rel.split("/") if p not in ("", ".")]
         if target is None or not parts:
             return self._send(400, "bad path\n")
@@ -585,6 +608,11 @@ def main():
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--root", default=REPO_ROOT,
                         help="folder the mock file browser serves (default: repo root)")
+    parser.add_argument("--usb", action="append", default=[], metavar="DIR",
+                        help="a folder to serve as a USB stick (up to three; "
+                             "default: build/webui_dev_usb)")
+    parser.add_argument("--no-usb", dest="no_usb", action="store_true",
+                        help="no USB stick")
     parser.add_argument("--throttled", default="0x0",
                         help="mock /get_throttled bitmask, e.g. 0x50000 for past under-voltage")
     parser.add_argument("--pin", default="",
@@ -593,6 +621,12 @@ def main():
                         help="disable browser live reload")
     ARGS = parser.parse_args()
     ARGS.root = os.path.abspath(os.path.expanduser(ARGS.root))
+    if ARGS.no_usb:
+        ARGS.usb = []
+    elif not ARGS.usb:
+        ARGS.usb = [DEFAULT_USB]
+        os.makedirs(DEFAULT_USB, exist_ok=True)
+    ARGS.usb = [os.path.abspath(os.path.expanduser(d)) for d in ARGS.usb[:3]]
 
     if not os.path.isdir(ASSET_DIR):
         sys.exit("asset directory not found: " + ASSET_DIR)
@@ -608,6 +642,8 @@ def main():
     server = ThreadingHTTPServer(("0.0.0.0", ARGS.port), Handler)
     print("  assets : %s" % ASSET_DIR)
     print("  browse : %s" % ARGS.root)
+    for vol, root in zip(USB_VOLUMES, ARGS.usb):
+        print("  %-6s : %s" % (vol.lower(), root))
     print("  reload : %s" % ("on" if ARGS.watch else "off"))
     print("  pin    : %s" % (ARGS.pin if ARGS.pin else "(none)"))
     print("  open   : http://localhost:%d/" % ARGS.port)

@@ -18,7 +18,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //
 // Modified for BMA800XL from BMC64's src/webui/assets/js/api.js:
-// BMA800XL's request header, without profiles.
+// BMA800XL's request header, without profiles; listDir takes the volume.
 //
 // Every call to the device's /api/* endpoints lives here, so the other
 // modules deal only in plain values and ApiError.
@@ -65,9 +65,10 @@ export const disableWebUi = () => post("/api/webui/disable");
 
 // ---- files ----
 
-// No vol: the first listing tells us which volume the device uses.
-export const listDir = (path) =>
-  getJson("/api/fs/list?path=" + encodeURIComponent(path));
+// No vol: the card, whose name the listing gives.
+export const listDir = (vol, path) =>
+  getJson("/api/fs/list?" + (vol ? fsQuery(vol, path)
+                                 : "path=" + encodeURIComponent(path)));
 
 export const downloadUrl = (vol, path) =>
   "/api/fs/download?" + fsQuery(vol, path);

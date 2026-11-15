@@ -26,7 +26,7 @@
 //   util.js       DOM lookup, formatting, path helpers
 //   machine.js    the running machine and what the web UI can do on it
 //   dashboard.js  status polling, hardware / storage meters, reboot & reset
-//   files.js      SD card file browser
+//   files.js      file browser (SD card and USB sticks)
 //   menu.js       pop-up menu for a file row's Actions button
 //   editor.js     overlay editor for config files
 //   ../update/    the Update page (release check, upload of bma800xl-update.zip)

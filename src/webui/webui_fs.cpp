@@ -20,7 +20,8 @@
 // Modified for BMA800XL from BMC64's src/webui/webui_fs.cpp: protects the
 // Atari emulator's configuration files; BMC64's profile and keyboard map
 // files are removed. Uploads fill a 64 KB buffer before each SD write and
-// log their speed.
+// log their speed. The USB sticks are volumes USB, USB2 and USB3 (paths
+// "USB:/..."), while plugged in.
 //
 
 #include "webui_fs.h"
@@ -41,6 +42,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../host.h"
 #include "../sdcard/sd_fs.h"
 
 // Implemented in src/vice_network.cpp.
@@ -62,6 +64,10 @@ const unsigned WEBUI_FS_IO_CHUNK = 64 * 1024;
 // Largest file the editor will open or save (the config files are a few KB;
 // the body is streamed to a temp file, so this is not a RAM limit).
 const unsigned WEBUI_FS_EDIT_MAX = 256 * 1024;
+
+// The USB sticks' volumes, as src/kernel.cpp mounts them; host_usb_stick()
+// says which are plugged in.
+const char *const kUsbVolumes[HOST_USB_STICKS] = {"USB", "USB2", "USB3"};
 
 // One request is handled at a time by the web UI task, so a single file
 // scratch buffer is safe and keeps it off the task stack.
@@ -222,22 +228,39 @@ int SanitizeRelPath(const char *in, char *out, unsigned out_size) {
   return 0;
 }
 
+// The part of a path from ResolveTarget inside its volume: after "USB:" on
+// a stick, all of it on the card.
+const char *InVolume(const char *clean) {
+  return clean[0] == '/' ? clean : strchr(clean, ':') + 1;
+}
+
 // Resolve and validate the vol/path query parameters. Returns 0 on
-// success and fills clean, a path on the card for sd_fs.h; on failure it has
-// already sent an error response and returns -1.
+// success and fills clean, a path for sd_fs.h: "/dir" on the card,
+// "USB:/dir" on a stick. On failure it has already sent an error response
+// and returns -1.
 int ResolveTarget(CSocket *socket, const char *query, char *clean,
                   unsigned clean_size, boolean require_file) {
   char vol[24];
   char raw[560];
   const char *disk = circle_get_disk_volume();
+  unsigned prefix = 0;
 
   if (!webhttp::QueryParam(query, "vol", vol, sizeof(vol)) || vol[0] == '\0') {
     strncpy(vol, disk, sizeof(vol) - 1);
     vol[sizeof(vol) - 1] = '\0';
   }
   if (strcmp(vol, disk) != 0) {
-    webhttp::SendText(socket, 404, "Not Found", "unknown volume\n");
-    return -1;
+    int stick = -1;
+    for (int i = 0; i < HOST_USB_STICKS; i++) {
+      if (strcmp(vol, kUsbVolumes[i]) == 0 && host_usb_stick(i) != 0) {
+        stick = i;
+      }
+    }
+    if (stick < 0) {
+      webhttp::SendText(socket, 404, "Not Found", "unknown volume\n");
+      return -1;
+    }
+    prefix = (unsigned) snprintf(clean, clean_size, "%s:", kUsbVolumes[stick]);
   }
   if (!webhttp::QueryParam(query, "path", raw, sizeof(raw))) {
     if (query != 0 &&
@@ -247,11 +270,11 @@ int ResolveTarget(CSocket *socket, const char *query, char *clean,
     }
     strcpy(raw, "/");
   }
-  if (SanitizeRelPath(raw, clean, clean_size) != 0) {
+  if (SanitizeRelPath(raw, clean + prefix, clean_size - prefix) != 0) {
     webhttp::SendText(socket, 400, "Bad Request", "bad path\n");
     return -1;
   }
-  if (require_file && strcmp(clean, "/") == 0) {
+  if (require_file && strcmp(InVolume(clean), "/") == 0) {
     webhttp::SendText(socket, 400, "Bad Request", "not a file\n");
     return -1;
   }
@@ -309,8 +332,9 @@ boolean IsEditablePath(const char *clean) {
 }
 
 // Uploads must not clobber the boot configuration or the Wi-Fi firmware
-// directory.
+// directory on the card.
 boolean IsProtectedPath(const char *clean) {
+  if (clean[0] != '/') return FALSE;
   const char *seg = clean;
   while (*seg == '/') seg++;
   const char *seg_end = seg;
@@ -578,6 +602,8 @@ int ListEntry(void *ctx, const sd_info *info) {
 
 }  // namespace
 
+// The card, then the sticks plugged in. A stick that can't be read (not
+// FAT) is listed without its size.
 void WebUiFsVolumes(CSocket *socket) {
   const char *vol = circle_get_disk_volume();
   uint32_t total_kb = 0;
@@ -586,11 +612,29 @@ void WebUiFsVolumes(CSocket *socket) {
 
   CChunkedResponse r(socket, 200, "OK", "application/json");
   r.Write("{\"volumes\":[");
+  boolean first = TRUE;
   if (rc == SD_OK) {
     r.Write("{\"id\":");
     JsonString(&r, vol);
     r.Printf(",\"kind\":\"sdcard\",\"total_kb\":%lu,\"free_kb\":%lu}",
              (unsigned long) total_kb, (unsigned long) free_kb);
+    first = FALSE;
+  }
+  for (int i = 0; i < HOST_USB_STICKS; i++) {
+    if (host_usb_stick(i) == 0) {
+      continue;
+    }
+    char root[8];
+    snprintf(root, sizeof(root), "%s:/", kUsbVolumes[i]);
+    r.Write(first ? "{\"id\":" : ",{\"id\":");
+    first = FALSE;
+    JsonString(&r, kUsbVolumes[i]);
+    r.Write(",\"kind\":\"usb\"");
+    if (sd_path_space_kb(root, &total_kb, &free_kb) == SD_OK) {
+      r.Printf(",\"total_kb\":%lu,\"free_kb\":%lu",
+               (unsigned long) total_kb, (unsigned long) free_kb);
+    }
+    r.Write("}");
   }
   r.Write("]}");
   r.Finish();
@@ -603,7 +647,7 @@ void WebUiFsList(CSocket *socket, const char *query) {
   }
 
   // The root always exists; anything else must be a folder.
-  if (strcmp(clean, "/") != 0) {
+  if (strcmp(InVolume(clean), "/") != 0) {
     sd_info info;
     int rc = sd_stat_info(clean, &info);
     if (rc == SD_NOT_FOUND || rc == SD_INVALID || (rc == SD_OK && !info.is_dir)) {
@@ -617,17 +661,24 @@ void WebUiFsList(CSocket *socket, const char *query) {
     }
   }
 
+  char vol[8];
+  if (clean[0] == '/') {
+    snprintf(vol, sizeof(vol), "%s", circle_get_disk_volume());
+  } else {
+    snprintf(vol, sizeof(vol), "%.*s", (int) (strchr(clean, ':') - clean), clean);
+  }
+
   CChunkedResponse r(socket, 200, "OK", "application/json");
   r.Write("{\"vol\":");
-  JsonString(&r, circle_get_disk_volume());
+  JsonString(&r, vol);
   r.Write(",\"path\":");
-  JsonString(&r, clean);
+  JsonString(&r, InVolume(clean));
   r.Write(",\"entries\":[");
 
   ListState state;
   state.r = &r;
   state.clean = clean;
-  state.at_root = strcmp(clean, "/") == 0;
+  state.at_root = strcmp(InVolume(clean), "/") == 0;
   state.first = TRUE;
   state.truncated = FALSE;
   state.count = 0;
@@ -1030,10 +1081,12 @@ void WebUiFsAutostart(CSocket *socket, const char *query) {
   }
 
   // Runs later on the emulator core, through stdio, so it gets the path
-  // with the card's volume ("SD:/games/x.d64").
+  // with its volume ("SD:/games/x.atr", "USB:/games/x.atr").
   char volume_path[600];
-  if ((unsigned) snprintf(volume_path, sizeof(volume_path), "%s:%s",
-                          circle_get_disk_volume(), clean) >=
+  if ((unsigned) (clean[0] == '/'
+                      ? snprintf(volume_path, sizeof(volume_path), "%s:%s",
+                                 circle_get_disk_volume(), clean)
+                      : snprintf(volume_path, sizeof(volume_path), "%s", clean)) >=
       sizeof(volume_path)) {
     webhttp::SendText(socket, 400, "Bad Request", "path too long\n");
     return;

@@ -301,8 +301,10 @@ The web UI has:
   Pi halts; switch it off, then on again to restart; a Pi 400 switches
   itself off, and its power key starts it again), and **Disable Web UI**
   until the next reboot.
-- **Files**: browse the SD card; upload (or drag and drop) files into a
-  folder, download, rename, delete, and create folders. Clicking a disk
+- **Files**: browse the SD card and USB sticks (a button for each drive,
+  while a stick is plugged in; reload the page after plugging one in);
+  upload (or drag and drop) files into a folder, download, rename, delete,
+  and create folders. Clicking a disk
   image, program, cartridge or tape **starts it** on the Atari, the same as
   *Run Atari Program*. `cmdline.txt`, `config.txt`, `bma800xl.cfg`,
   `atari800.cfg` and `wpa_supplicant.conf` can be **edited** in the browser; changes take

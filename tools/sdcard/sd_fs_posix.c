@@ -17,7 +17,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //
-// From BMC64's tools/sdcard/sd_fs_posix.c, unchanged.
+// Modified for BMA800XL from BMC64's tools/sdcard/sd_fs_posix.c:
+// sd_path_space_kb().
 //
 // sd_fs.h on a PC folder, for the host tests (updater and profiles). The
 // "card" is the folder in SD_TEST_ROOT. Setting SD_TEST_CRASH_AFTER=N makes
@@ -274,9 +275,13 @@ int sd_remove_tree(const char *path, unsigned *removed,
 }
 
 int sd_space_kb(uint32_t *total_kb, uint32_t *free_kb) {
+  return sd_path_space_kb("/", total_kb, free_kb);
+}
+
+int sd_path_space_kb(const char *path, uint32_t *total_kb, uint32_t *free_kb) {
   char p[1024];
   struct statvfs st;
-  full("/", p, sizeof(p));
+  full(path, p, sizeof(p));
   if (statvfs(p, &st) != 0) {
     return SD_ERROR;
   }
