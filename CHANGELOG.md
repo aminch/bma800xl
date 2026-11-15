@@ -1,6 +1,9 @@
 ## 1.4.6
 
 - Fix web UI uploads stopping with "upload truncated", from BMC64
+- Support for up to 3 USB sticks
+- Add `[Drives]` switcher and `[..]` parent folder to every folder in OSD menu file browser for easy navigation
+- Web UI: Add support for USB stick in the sidebar
 
 ## 1.4.5
 
