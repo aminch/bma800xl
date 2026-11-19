@@ -1,3 +1,7 @@
+## 1.4.7
+
+- Fix the web UI failing in Safari: idle connections stay open until a request arrives
+
 ## 1.4.6
 
 - Fix web UI uploads stopping with "upload truncated", from BMC64
