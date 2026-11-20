@@ -35,9 +35,29 @@ mkdir -p "$HERE/out"
 echo
 # ThreadSanitizer stops on some newer Linux kernels' address layout; run it
 # without address space randomisation where setarch is available.
-if command -v setarch > /dev/null
+run_share_test() {
+    if command -v setarch > /dev/null
+    then
+        setarch "$(uname -m)" -R "$1"
+    else
+        "$1"
+    fi
+}
+
+# Kernels with an address space size ThreadSanitizer does not support (the
+# Pi 5's 64-bit Raspberry Pi OS kernel) run the test without it instead.
+LOG="$HERE/build/share_test.log"
+STATUS=0
+run_share_test "$HERE/build/share_test" > "$LOG" 2>&1 || STATUS=$?
+cat "$LOG"
+if [ "$STATUS" -ne 0 ]
 then
-    setarch "$(uname -m)" -R "$HERE/build/share_test"
-else
-    "$HERE/build/share_test"
+    if ! grep -q "ThreadSanitizer: unsupported VMA range" "$LOG"
+    then
+        exit "$STATUS"
+    fi
+    echo
+    echo "ThreadSanitizer does not support this kernel's address space;"
+    echo "running the frame sharing test without it."
+    run_share_test "$HERE/build/share_test_plain"
 fi
