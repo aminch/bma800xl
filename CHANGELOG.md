@@ -1,6 +1,7 @@
 ## 1.4.7
 
 - Fix the web UI failing in Safari: idle connections stay open until a request arrives
+- Fix Pi 4/5 sound breaking up when using a 20ms sound buffer by forcing at least 40 ms on the Pi 5 and 32 ms on the Pi 4
 
 ## 1.4.6
 
