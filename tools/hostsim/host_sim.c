@@ -194,6 +194,13 @@ unsigned host_sound_free_frames(void)
 	return snd_buffered >= cap ? 0 : (unsigned) (cap - snd_buffered);
 }
 
+/* BMA_SOUND_MIN_MS sets the board's shortest buffer (none by default). */
+unsigned host_sound_min_buffer_ms(void)
+{
+	const char *ms = getenv("BMA_SOUND_MIN_MS");
+	return ms ? (unsigned) atoi(ms) : 0;
+}
+
 void host_sound_write(const int16_t *samples, unsigned frames)
 {
 	(void) samples;

@@ -1033,6 +1033,8 @@ void CKernel::SoundClose(void) {
 
 unsigned CKernel::SoundFreeFrames(void) { return mPi4Sound.FreeFrames(); }
 
+unsigned CKernel::SoundMinBufferMs(void) { return Pi4Sound::MinLatencyMs(); }
+
 void CKernel::SoundWrite(const int16_t *samples, unsigned frames) {
   Core1Beat("writing sound (HDMI)");
   mPi4Sound.Write(samples, frames);
@@ -1150,6 +1152,8 @@ void CKernel::SoundClose(void) {
 unsigned CKernel::SoundFreeFrames(void) {
   return mSound != 0 && mSound->PlaybackActive() ? mSound->FreeFrames() : 0;
 }
+
+unsigned CKernel::SoundMinBufferMs(void) { return 0; }
 
 void CKernel::SoundWrite(const int16_t *samples, unsigned frames) {
   if (mSound != 0 && mSound->PlaybackActive()) {
@@ -1368,6 +1372,10 @@ void host_sound_close(void) { CKernel::Get()->SoundClose(); }
 
 unsigned host_sound_free_frames(void) {
   return CKernel::Get()->SoundFreeFrames();
+}
+
+unsigned host_sound_min_buffer_ms(void) {
+  return CKernel::Get()->SoundMinBufferMs();
 }
 
 void host_sound_write(const int16_t *samples, unsigned frames) {

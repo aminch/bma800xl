@@ -415,6 +415,21 @@ else
 fi
 check_image logging menu
 
+echo "A sound buffer shorter than the board's shortest"
+# audio_buffer_ms=20 on a board whose shortest is 40 (as the Pi 5): the
+# sound opens at 40 ms, and the menu's Buffer starts at 40 ms. Sound (three
+# down from Emulator Menu), Buffer (one down), then one down from 40 ms.
+mkdir -p "$OUT/soundmin"
+(cd "$OUT/soundmin" && printf '150 key 0x3a 1\n152 key 0x3a 0\n170 key 0x51 1\n172 key 0x51 0\n180 key 0x51 1\n182 key 0x51 0\n190 key 0x51 1\n192 key 0x51 0\n210 key 0x28 1\n212 key 0x28 0\n230 key 0x51 1\n232 key 0x51 0\n240 key 0x28 1\n242 key 0x28 0\n260 key 0x51 1\n262 key 0x51 0\n270 key 0x28 1\n272 key 0x28 0\n290 quit\n' \
+    | BMA_SOUND_MIN_MS=40 BMA_REFRESH=50 BMA_CMDLINE="root=. audio_buffer_ms=20" timeout 600 "$SIM" > log.txt 2>&1)
+check_log soundmin "Sound buffer 20 ms is too short on this Pi; using 40 ms" "the short buffer is logged"
+check_log soundmin "sound open: [0-9] channel\(s\), 1764 frames" "the sound opens at 40 ms"
+if grep -q "^audio_buffer_ms=60" "$OUT/soundmin/bma800xl.cfg" 2>/dev/null; then
+    pass "soundmin: the menu offers 40 ms first"
+else
+    fail "soundmin" "audio_buffer_ms=60 not saved to bma800xl.cfg (see out/soundmin)"
+fi
+
 echo "Menu and file browser with a gamepad"
 mkdir -p "$OUT/pad/games"
 # Home, then A for the Emulator Menu and A for Run Atari Program.

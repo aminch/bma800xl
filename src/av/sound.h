@@ -68,6 +68,9 @@ public:
   // Core 1, from the emulator (see host.h). LATENCY_FRAMES is how much
   // sound to keep queued, in frames at 44100 Hz.
   unsigned Open(int channels, unsigned latency_frames);
+  // The shortest latency, in ms, that keeps a whole DMA transfer queued
+  // between the emulator's writes (once an Atari frame, at most 20 ms).
+  static unsigned MinLatencyMs(void);
   unsigned FreeFrames(void);
   void Write(const int16_t *samples, unsigned frames);
 

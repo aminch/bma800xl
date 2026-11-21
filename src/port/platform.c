@@ -258,8 +258,21 @@ int PLATFORM_SoundSetup(Sound_setup_t *setup)
 	                     : (unsigned) host_option_int("audio_buffer_ms", 40);
 	unsigned frames;
 
+	unsigned min_ms = host_sound_min_buffer_ms();
+
 	if (buffer_ms < 10)
 		buffer_ms = 10;
+	if (buffer_ms < min_ms) {
+		static unsigned logged;
+		if (logged != buffer_ms) {
+			char msg[80];
+			snprintf(msg, sizeof(msg), "Sound buffer %u ms is too short on this Pi; using %u ms",
+			         buffer_ms, min_ms);
+			host_log(msg);
+			logged = buffer_ms;
+		}
+		buffer_ms = min_ms;
+	}
 	if (setup->channels < 1)
 		setup->channels = 1;
 	if (setup->channels > 2)

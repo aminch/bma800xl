@@ -645,15 +645,18 @@ static void sound_menu(void)
 		UI_MENU_END
 	};
 	int option = S_OUTPUT;
+	/* Only the buffers this board plays cleanly. */
+	unsigned min_ms = host_sound_min_buffer_ms();
+	int first = 0;
+	while (buffers[first + 1] != NULL && (unsigned) atoi(buffers[first]) < min_ms)
+		first++;
 
 	for (;;) {
 		const char *out = host_option("audio_out", "auto");
 		int output_index = strcmp(out, "analog") == 0 ? 2 : BMA_MenuValueIndex(outputs, out);
-		int buffer_index = BMA_MenuValueIndex(buffers, host_option("audio_buffer_ms", "40"));
-		if (host_option("audio_buffer_ms", NULL) == NULL)
-			buffer_index = 1;
+		int buffer_index = BMA_MenuValueIndex(buffers + first, host_option("audio_buffer_ms", "40"));
 		Util_strlcpy(output, output_names[output_index], sizeof(output));
-		Util_strlcpy(buffer, buffer_names[buffer_index], sizeof(buffer));
+		Util_strlcpy(buffer, buffer_names[first + buffer_index], sizeof(buffer));
 
 		option = UI_driver->fSelect("Sound", 0, option, items, NULL);
 		switch (option) {
@@ -666,9 +669,9 @@ static void sound_menu(void)
 			break;
 		}
 		case S_BUFFER: {
-			int i = BMA_MenuChoose("Sound Buffer", buffer_names, buffer_index);
+			int i = BMA_MenuChoose("Sound Buffer", buffer_names + first, buffer_index);
 			if (i >= 0 && i != buffer_index) {
-				BMA_MenuSaveSetting("audio_buffer_ms", buffers[i]);
+				BMA_MenuSaveSetting("audio_buffer_ms", buffers[first + i]);
 				reboot_needed = TRUE;
 			}
 			break;

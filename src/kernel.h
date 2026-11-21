@@ -118,6 +118,7 @@ public:
   unsigned SoundOpen(unsigned freq, int channels, unsigned latency_frames);
   void SoundClose(void);
   unsigned SoundFreeFrames(void);
+  unsigned SoundMinBufferMs(void);
   void SoundWrite(const int16_t *samples, unsigned frames);
   int KeyEvent(int *usage, int *pressed);
   int KeyDown(int usage);

@@ -358,7 +358,7 @@ edited from the web UI.
 | `video_driver`      | `kms`, `hvs`, `firmware`     | `kms`      | Pi 4 only: `kms` runs the display at the Atari's exact frame rate; `hvs` leaves the mode set in `config.txt`; `firmware` uses the firmware's framebuffer, if the others give trouble (see [PI4.md](PI4.md)) |
 | `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes (`auto`: HDMI, or the headphone jack if the display takes no sound) |
 | `volume`            | 0 to 100                     | `100`    | Sound volume |
-| `audio_buffer_ms`   | 10 or more                   | `40`     | Sound buffer; raise it if the sound breaks up |
+| `audio_buffer_ms`   | 10 or more                   | `40`     | Sound buffer; raise it if the sound breaks up. At least 32 on the Pi 4 and 40 on the Pi 5: shorter ones play at that |
 | `keyboard`          | `us`, `uk`, `no`             | `us`     | PC keyboard layout |
 | `joy1_pad` ... `joy4_pad` | `0` automatic, `1`-`4` a gamepad, `-1` none | `0` | Gamepad for each Atari joystick port |
 | `joy1_mode` ... `joy4_mode` | `joystick`, `paddles` | `joystick` | Joystick or a pair of paddles on each Atari joystick port |

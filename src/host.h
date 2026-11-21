@@ -73,6 +73,9 @@ unsigned host_sound_open(unsigned freq, int channels, unsigned latency_frames);
 void host_sound_close(void);
 /* Frames that can be written without exceeding the latency. */
 unsigned host_sound_free_frames(void);
+/* The shortest sound buffer (audio_buffer_ms) that plays cleanly on this
+   board, in ms; 0 if any will do. */
+unsigned host_sound_min_buffer_ms(void);
 void host_sound_write(const int16_t *samples, unsigned frames);
 
 /* ---- Input --------------------------------------------------------------- */

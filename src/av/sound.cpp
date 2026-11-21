@@ -112,10 +112,19 @@ unsigned Pi4Sound::Open(int channels, unsigned latency_frames) {
   m_nChannels = channels == 2 ? 2 : 1;
   m_nLatency = (unsigned)((unsigned long)latency_frames * SAMPLE_RATE / 44100);
   unsigned max = SAMPLE_RATE * QUEUE_MS / 1000;
-  if (m_nLatency > max - CHUNK_SIZE) {
-    m_nLatency = max - CHUNK_SIZE;
+  if (m_nLatency > max - CHUNK_SIZE / 2) {
+    m_nLatency = max - CHUNK_SIZE / 2;
   }
   return SAMPLE_RATE;
+}
+
+// The transfers taken in one PAL frame (20 ms), whole, plus 8 ms: 40 ms on
+// the Pi 5 (one 1536-frame transfer), 32 ms on the Pi 4 (three of 384).
+unsigned Pi4Sound::MinLatencyMs(void) {
+  const unsigned block = CHUNK_SIZE / 2;
+  const unsigned frame = SAMPLE_RATE / 50;
+  unsigned frames = (frame + block - 1) / block * block + SAMPLE_RATE * 8 / 1000;
+  return (frames * 1000 + SAMPLE_RATE - 1) / SAMPLE_RATE;
 }
 
 unsigned Pi4Sound::FreeFrames(void) {
